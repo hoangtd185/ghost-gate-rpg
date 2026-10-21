@@ -1,0 +1,17 @@
+{
+  "name": "quy-mon-quan",
+  "version": "1.0.0",
+  "description": "Game nhập vai 2D màn hình ngang phong cách kiếm hiệp ma quái (một người chơi, có bot)",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "node --watch server/src/index.js --dev",
+    "build": "node tools/build.mjs",
+    "start": "node server/src/index.js",
+    "check": "node tools/check-secrets.mjs",
+    "hooks": "node tools/check-secrets.mjs --install-hook"
+  }
+}

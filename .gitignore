@@ -1,0 +1,26 @@
+# Thư viện, bản build
+node_modules/
+client/dist/
+
+# Dữ liệu người chơi + khoá bí mật (data/game.db, data/secret.key) — tuyệt đối không commit
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.key
+*.pem
+*.p12
+
+# Biến môi trường chứa bí mật (giữ lại file mẫu)
+.env
+.env.*
+!.env.example
+
+# Linh tinh
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
