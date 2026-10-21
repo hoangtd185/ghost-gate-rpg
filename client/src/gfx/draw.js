@@ -1,6 +1,6 @@
-// Công cụ vẽ dùng chung. Mọi hình đều được vẽ bằng đường cong ở độ phân giải cao (SS lần),
-// lưu sẵn thành ảnh, rồi thu nhỏ khi vẽ lên màn hình nên trông mịn, không vỡ hạt.
-export const SS = 3;          // độ nét của nhân vật, quái, icon
+// Shared drawing tools. Every shape is drawn with curves at high resolution (SS times),
+// cached as an image, then scaled down on screen so it looks smooth instead of pixelated.
+export const SS = 3;          // sharpness of characters, monsters and icons
 export const OUTLINE = '#22141c';
 
 export function makeCanvas(w, h) {
@@ -10,7 +10,7 @@ export function makeCanvas(w, h) {
   return { c, ctx };
 }
 
-// Canvas có kích thước logic w×h nhưng thực tế lớn gấp s lần
+// Canvas with logical size w×h but actually s times larger
 export function makeHi(w, h, s = SS) {
   const { c, ctx } = makeCanvas(w * s, h * s);
   ctx.scale(s, s);
@@ -18,7 +18,7 @@ export function makeHi(w, h, s = SS) {
   return { c, ctx, w, h, s };
 }
 
-// Làm tối (amt < 0) hoặc sáng (amt > 0) màu hex
+// Darken (amt < 0) or lighten (amt > 0) a hex color
 export function shade(hex, amt) {
   const n = parseInt(hex.slice(1, 7), 16);
   let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
@@ -32,13 +32,13 @@ export function rgba(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-// Tô + viền một path. fill có thể là màu hoặc gradient.
+// Fill + stroke a path. fill can be a color or a gradient.
 export function paint(ctx, path, fill, line = OUTLINE, lw = 1) {
   if (fill) { ctx.fillStyle = fill; ctx.fill(path); }
   if (line) { ctx.strokeStyle = line; ctx.lineWidth = lw; ctx.stroke(path); }
 }
 
-// Đổ bóng/ánh sáng bên trong một path (cel shading): vẽ hình `inner` bị cắt theo `path`
+// Inner shadow/highlight for a path (cel shading): draws shape `inner` clipped to `path`
 export function shadeIn(ctx, path, inner, color) {
   ctx.save();
   ctx.clip(path);
@@ -59,7 +59,7 @@ export function rrect(x, y, w, h, r) {
   return p;
 }
 
-// Path từ danh sách điểm, có thể bo cong bằng quadratic qua trung điểm
+// Path from a list of points, optionally smoothed with quadratics through the midpoints
 export function poly(pts, smooth = false, close = true) {
   const p = new Path2D();
   if (!smooth) {
@@ -92,7 +92,7 @@ export function linear(ctx, x0, y0, x1, y1, stops) {
   return g;
 }
 
-// Một sprite sheet: nhiều khung xếp ngang, mỗi khung fw×fh đơn vị logic
+// A sprite sheet: frames laid out horizontally, each fw×fh logical units
 export function makeSheet(fw, fh, count, drawFn, frames) {
   const { c, ctx } = makeHi(fw * count, fh);
   for (let i = 0; i < count; i++) {
@@ -105,7 +105,7 @@ export function makeSheet(fw, fh, count, drawFn, frames) {
   return { img: c, fw, fh, s: SS, frames };
 }
 
-// Vẽ một khung của sheet tại (dx, dy) theo đơn vị logic, có thể lật ngang
+// Draws one frame of the sheet at (dx, dy) in logical units, optionally flipped
 export function drawFrame(ctx, sheet, f, dx, dy, flip = false) {
   const { img, fw, fh, s } = sheet;
   if (flip) {

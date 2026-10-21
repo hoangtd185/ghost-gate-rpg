@@ -1,10 +1,10 @@
-// Pet Tiểu Quỷ: bay theo người chơi, thấy đồ rơi trong tầm thì bay tới nhặt giúp
+// Imp pet: follows the player and flies over to pick up drops in range
 import { petSheet } from '../gfx/pet.js';
 import { drawFrame } from '../gfx/draw.js';
 import { pick, rand } from '../engine/util.js';
 
 export const PET_NAME = 'Tiểu Quỷ';
-const PICK_RANGE = 330;   // tầm nhặt tính từ người chơi
+const PICK_RANGE = 330;   // pickup range, measured from the player
 const FLY_SPEED = 240;
 const PET_LINES = ['Để em nhặt cho!', 'Của chủ nhân nè~', 'Hihi, lấp lánh quá', 'Đồ rơi kìa!', 'Em giỏi không?'];
 
@@ -17,7 +17,7 @@ export class Pet {
     this.warp();
   }
 
-  // Đặt pet cạnh người chơi (khi vào bản đồ mới hoặc bị bỏ quá xa)
+  // Place the pet next to the player (on map change or when left too far behind)
   warp() {
     const p = this.w.player;
     this.x = p.cx - p.facing * 20; this.y = p.y - 6;
@@ -54,7 +54,7 @@ export class Pet {
     const dist = Math.hypot(dx, dy);
     if (dist > 600) { this.warp(); return; }
     if (dist > 0.5) {
-      // bay mềm: chậm lại khi gần đích
+      // smooth flight: slow down near the target
       const step = Math.min(dist, speed * dt * Math.min(1, dist / 30 + 0.35));
       this.x += (dx / dist) * step; this.y += (dy / dist) * step;
       if (Math.abs(dx) > 2) this.facing = dx > 0 ? 1 : -1;
@@ -68,10 +68,10 @@ export class Pet {
       } else this.target.petSkip = true;
       this.target = null;
     }
-    // thỉnh thoảng nói chuyện
+    // talks now and then
     this.chatT -= dt;
     if (this.chatT <= 0) { this.chatT = rand(30, 60); if (!this.say) this.say = { text: pick(['Chủ nhân cố lên!', 'Đánh quái vui ghê', 'Em đói…', '♪ la la ♪']), t: 2.5 }; }
-    // lấp lánh nhẹ
+    // light sparkle
     if (Math.random() < dt * 4) this.w.spark(this.x + rand(-6, 6), this.y + rand(0, 10), { vy: rand(-12, -4), color: '#e8dcff', size: rand(1, 2), life: 0.6, shape: 'star', drag: 0.97 });
   }
 

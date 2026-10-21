@@ -1,4 +1,4 @@
-// Màn hình ngoài game: đăng nhập, chọn nhân vật, tạo nhân vật
+// Out-of-game screens: login, character select, character creation
 import { CLASSES, SKILLS } from '../data/classes.js';
 import { MAPS } from '../data/maps.js';
 import { STAT_NAMES } from '../data/items.js';
@@ -84,7 +84,7 @@ export class Screens {
   }
 
   showCreate(first) {
-    let cls = this.pickCls || 'kiem';
+    let cls = this.pickCls || 'swordsman';
     const render = () => {
       this.previews = [];
       const c = CLASSES[cls];

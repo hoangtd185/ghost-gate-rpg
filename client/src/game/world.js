@@ -1,4 +1,4 @@
-// Thế giới game: cập nhật logic, chiến đấu, quái, đồ rơi và vẽ mọi thứ lên canvas
+// Game world: logic updates, combat, monsters, drops, and drawing everything on the canvas
 import { MAPS, GROUND_Y } from '../data/maps.js';
 import { MONSTERS, BOSS_RESPAWN } from '../data/monsters.js';
 import { CLASSES, SKILLS } from '../data/classes.js';
@@ -18,24 +18,24 @@ import { npcLine, pickBanter } from './chatter.js';
 import { BotManager } from './bots.js';
 import { clamp, rand, randInt, chance, overlap, centerDist, pick } from '../engine/util.js';
 
-// quái bay né đạn: bay lên nếu còn chỗ, không thì sà xuống
+// flying monsters dodge projectiles: fly up if there is room, otherwise swoop down
 const pr_up = (m) => m.y > 90;
 const dist2 = (a, b) => Math.abs(a.cx - b.cx);
-// '#rrggbb' + độ trong suốt
+// '#rrggbb' + alpha
 const rbg = (hex, a) => rgbaHex(hex, a);
 function rgbaHex(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
 
-// Nhảy của người chơi: lực bật ban đầu, thời gian giữ Space còn được đẩy thêm, và lực đẩy thêm
+// Player jump: initial impulse, how long holding Space keeps pushing, and the extra push
 const PLAYER_JUMP = -330;
 const JUMP_HOLD_TIME = 0.2;
 const JUMP_HOLD_ACCEL = 620;
 
-// Quầng sáng sau đạn: [màu tâm, bán kính]
+// Glow behind projectiles: [core color, radius]
 const PROJ_GLOW = {
   talisman: ['rgba(255,220,90,0.55)', 14], fire: ['rgba(255,140,40,0.7)', 26], wave: ['rgba(140,200,255,0.6)', 26],
   dart: ['rgba(220,240,255,0.35)', 9], ember: ['rgba(255,110,40,0.6)', 14], ghostfire: ['rgba(200,80,255,0.6)', 16], bloodtalisman: ['rgba(255,40,70,0.6)', 18], fireball: ['rgba(255,140,40,0.7)', 22], waterbolt: ['rgba(110,170,255,0.6)', 14],
 };
-// Vệt đuôi: [bảng màu, cỡ hạt tối đa, xác suất mỗi khung]
+// Trails: [palette, max particle size, chance per frame]
 const PROJ_TRAIL = {
   talisman: [['#ffe27a', '#fff6c0', '#ff9a3c'], 2.2, 0.6], fire: [['#ffb04a', '#ff6a2a', '#fff0a0'], 3.2, 1],
   wave: [['#bfe6ff', '#ffffff', '#7ab8ff'], 2.6, 0.9], dart: [['#e8f0ff'], 1.4, 0.35],
@@ -43,11 +43,11 @@ const PROJ_TRAIL = {
   bloodtalisman: [['#ff4a5a', '#ffb0b8', '#a8142a'], 2.4, 0.8],
   fireball: [['#ffb04a', '#ff6a2a', '#fff0a0'], 3.4, 1], waterbolt: [['#bfe0ff', '#ffffff'], 2, 0.6],
 };
-// Màu chủ đạo của từng kỹ năng (vòng phép, hạt)
+// Main color of each skill (magic circle, particles)
 const SKILL_FX = {
-  k_combo: '#8fd0ff', k_wave: '#bfe6ff', k_guard: '#ffd84a',
-  d_thunder: '#a8d4ff', d_fire: '#ff9a3c', d_heal: '#7dff9a',
-  t_triple: '#c8f0a0', t_dash: '#c08aff', t_poison: '#8fe06a',
+  sw_combo: '#8fd0ff', sw_wave: '#bfe6ff', sw_guard: '#ffd84a',
+  ta_thunder: '#a8d4ff', ta_fire: '#ff9a3c', ta_heal: '#7dff9a',
+  as_triple: '#c8f0a0', as_dash: '#c08aff', as_poison: '#8fe06a',
 };
 
 export class GameWorld {
@@ -59,7 +59,7 @@ export class GameWorld {
     this.bots = new BotManager(this);
     this.pet = null;
     this.recalc();
-    this.loadMap(ch.map in MAPS ? ch.map : 'lang', ch.x);
+    this.loadMap(ch.map in MAPS ? ch.map : 'village', ch.x);
     if (ch.pet && ch.pet.on) this.pet = new Pet(this);
   }
 
@@ -90,7 +90,7 @@ export class GameWorld {
     this.hooks.mapChanged && this.hooks.mapChanged(map);
   }
 
-  // NPC và cổng theo cốt truyện: có NPC chỉ xuất hiện/biến mất theo nhiệm vụ, có cổng chỉ mở khi xong nhiệm vụ
+  // Story-driven NPCs and portals: some NPCs appear/disappear with quests, some portals open only after a quest
   refreshNpcs() {
     const old = Object.fromEntries((this.npcs || []).map((n) => [n.id, n]));
     this.npcs = (this.map.npcs || []).filter((n) => npcPresent(this.ch, n)).map((n) => {
@@ -103,12 +103,12 @@ export class GameWorld {
     this.portals = this.map.portals.filter((pt) => !pt.req || questStatus(this.ch, pt.req) === 'done');
   }
 
-  // ===== Quái có tên: boss truyện (khi đang làm nhiệm vụ) và boss dã ngoại (theo giờ) =====
+  // ===== Named monsters: story bosses (while the quest is active) and field bosses (on a timer) =====
   updateNamed(dt) {
     this.namedCheckT -= dt;
     for (const [id, n] of Object.entries(NAMED)) {
       if (n.map !== this.mapId || !n.every) continue;
-      if (this.namedT[id] === undefined) this.namedT[id] = rand(45, 120); // lần đầu vào bản đồ
+      if (this.namedT[id] === undefined) this.namedT[id] = rand(45, 120); // first visit to the map
       if (this.monsters.some((m) => m.named === id && !m.dead)) continue;
       this.namedT[id] -= dt;
       if (this.namedT[id] <= 0) { this.namedT[id] = rand(n.every[0], n.every[1]); this.spawnNamed(id); }
@@ -138,12 +138,12 @@ export class GameWorld {
     }
   }
 
-  // Sự kiện thao tác cho nhiệm vụ hướng dẫn
+  // Action events for tutorial quests
   event(name, n = 1) {
     for (const qid of questEvent(this.ch, name, n)) this.hooks.questProgress(qid);
   }
 
-  // NPC tự nói chuyện khi người chơi ở gần, chào khi người chơi đi tới, và trò chuyện với nhau
+  // NPCs talk on their own when the player is near, greet the player on approach, and chat with each other
   updateNpcChatter(dt) {
     const p = this.player, ch = this.ch;
     if (this.banter) {
@@ -176,7 +176,7 @@ export class GameWorld {
         n.hiCd = rand(50, 90); n.chatT = Math.max(n.chatT, 8);
         continue;
       }
-      if (d > 70) n.hiCd = Math.max(n.hiCd, 4); // phải đi xa rồi quay lại mới chào tiếp
+      if (d > 70) n.hiCd = Math.max(n.hiCd, 4); // must walk away and come back before being greeted again
       n.chatT -= dt;
       if (n.chatT <= 0) {
         n.chatT = rand(16, 34);
@@ -206,7 +206,7 @@ export class GameWorld {
     if (delay <= 0) make(); else this.timers.push({ t: delay, fn: make });
   }
 
-  // ================= VÒNG LẶP =================
+  // ================= LOOP =================
   update(dt, input) {
     this.time += dt;
     this.ch.playTime += dt;
@@ -243,7 +243,7 @@ export class GameWorld {
     if (p.atkT > 0) p.atkT -= dt;
     if (this.portalCd > 0) this.portalCd -= dt;
     if (p.say) { p.say.t -= dt; if (p.say.t <= 0) p.say = null; }
-    // buff hết hạn
+    // buff expired
     const before = p.buffs.length;
     p.buffs.forEach((b) => (b.t -= dt));
     p.buffs = p.buffs.filter((b) => b.t > 0);
@@ -251,7 +251,7 @@ export class GameWorld {
 
     if (p.dead) { p.vx = 0; stepBody(p, dt, this.map.platforms, this.map.width); return; }
 
-    // Lướt (Ảnh Sát)
+    // Dash (Ảnh Sát)
     if (p.dashT > 0) {
       p.dashT -= dt;
       p.vx = p.dashVx; p.vy = 0;
@@ -261,7 +261,7 @@ export class GameWorld {
       return;
     }
 
-    // trạng thái xấu do đặc tính quái: trúng độc (mất máu, không chết vì độc) và bị làm chậm
+    // debuffs from monster traits: poison (drains HP, never kills) and slow
     if (p.poisonT > 0) {
       p.poisonT -= dt; p.poisonTick = (p.poisonTick || 0) - dt;
       if (p.poisonTick <= 0) {
@@ -277,13 +277,13 @@ export class GameWorld {
     if (input.isDown('left')) move -= 1;
     if (input.isDown('right')) move += 1;
     p.sitting = false;
-    if (p.hurtT > 0.15) { /* bị đánh bật */ }
+    if (p.hurtT > 0.15) { /* knocked back */ }
     else if (busy) p.vx *= 0.7;
     else {
       p.vx = move * MOVE_SPEED * spd;
       if (move) p.facing = move;
     }
-    // Nhảy: nhấn nhanh = nhảy thấp, giữ = nhảy cao, nhấn lần nữa trên không = nhảy đôi
+    // Jump: tap = short hop, hold = high jump, press again in the air = double jump
     if (p.onGround) p.jumps = 0;
     if (input.wasPressed('jump')) {
       if (p.onGround) {
@@ -299,7 +299,7 @@ export class GameWorld {
     if (p.jumpHold > 0) {
       if (input.isDown('jump') && p.vy < 0) { p.vy -= JUMP_HOLD_ACCEL * dt; p.jumpHold -= dt; }
       else {
-        if (p.vy < -140) p.vy *= 0.5; // nhả sớm thì hụt lực
+        if (p.vy < -140) p.vy *= 0.5; // releasing early cuts the jump short
         p.jumpHold = 0;
       }
     }
@@ -307,7 +307,7 @@ export class GameWorld {
     stepBody(p, dt, this.map.platforms, this.map.width);
     p.updateAnim(dt);
 
-    // Kỹ năng
+    // Skills
     if (input.isDown('attack')) this.castSkill(0);
     if (input.wasPressed('skill1')) this.castSkill(1);
     if (input.wasPressed('skill2')) this.castSkill(2);
@@ -315,7 +315,7 @@ export class GameWorld {
     if (input.wasPressed('potHp')) this.usePotion('hp');
     if (input.wasPressed('potMp')) this.usePotion('mp');
 
-    // Cổng dịch chuyển + NPC
+    // Portals + NPCs
     this.nearPortal = this.portals.find((pt) => Math.abs(pt.x - p.cx) < 30 && p.standY === GROUND_Y);
     this.nearNpc = this.npcs.find((n) => Math.abs(n.cx - p.cx) < 36 && Math.abs(n.y - p.y) < 20);
     if (input.wasPressed('up') || input.wasPressed('interact')) {
@@ -323,7 +323,7 @@ export class GameWorld {
       if (this.nearNpc) { this.hooks.openNpc(this.nearNpc.id); input.clear(); }
     }
 
-    // Hồi máu/nội lực tự nhiên (ngồi xuống hồi nhanh gấp 3)
+    // Natural HP/MP regen (3× faster while sitting)
     p.regenT += dt;
     const regenEvery = p.sitting ? 1 : 3;
     if (p.regenT >= regenEvery) {
@@ -335,7 +335,7 @@ export class GameWorld {
       if (oldHp !== ch.hp || oldMp !== ch.mp) this.hooks.changed('bars');
     }
 
-    // Va chạm với quái
+    // Collision with monsters
     if (p.invuln <= 0) {
       for (const m of this.monsters) {
         if (m.dead || m.alpha < 0.8) continue;
@@ -364,11 +364,11 @@ export class GameWorld {
   }
 
   goHome() {
-    this.loadMap('lang', MAPS.lang.spawnX);
+    this.loadMap('village', MAPS.village.spawnX);
     this.hooks.save();
   }
 
-  // ================= KỸ NĂNG =================
+  // ================= SKILLS =================
   castSkill(idx) {
     const p = this.player, ch = this.ch;
     if (p.dead || p.dashT > 0) return;
@@ -378,7 +378,7 @@ export class GameWorld {
     if ((p.cooldowns[sid] || 0) > 0) return;
     if (idx === 0 && p.atkT > 0) return;
     if (this.map.safe && sk.type !== 'buff' && sk.type !== 'heal') {
-      if (idx === 0) { p.cooldowns[sid] = 0.6; p.atkT = p.atkDur; } // vẫn vung vũ khí cho vui
+      if (idx === 0) { p.cooldowns[sid] = 0.6; p.atkT = p.atkDur; } // still swing the weapon for fun
       return;
     }
     const mpCost = Math.ceil(sk.mp * (1 - this.stats.pas.mpCost / 100));
@@ -391,7 +391,7 @@ export class GameWorld {
       for (let i = 0; i < 6; i++) this.spark(p.cx + rand(-14, 14), p.y + p.h - 2, { vy: rand(-60, -30), color: SKILL_FX[sid], size: rand(1.5, 2.5), life: rand(0.4, 0.7), shape: 'star', drag: 0.95 });
     }
     const lvMul = 1 + 0.12 * ((ch.skills[sid] || 1) - 1);
-    const el = sk.el || this.stats.el || null; // hệ của chiêu: chiêu có hệ riêng, không thì theo vũ khí
+    const el = sk.el || this.stats.el || null; // skill element: the skill's own element, otherwise the weapon's
     const mult = (sk.mult || 0) * lvMul;
     const dir = p.facing;
     switch (sk.type) {
@@ -493,7 +493,7 @@ export class GameWorld {
     let crit = false;
     if (isPlayer && Math.random() * 100 < st.crit) { dmg *= 1.6 + pas.critDmg / 100; crit = true; }
     if (isPlayer && el) dmg *= 1 + pas.elemDmg / 100;
-    // khắc chế nguyên tố
+    // elemental weakness/resistance
     const em = elementMult(el, m.def.res);
     dmg *= em;
     if (isPlayer && el && (m.elTextT || 0) < this.time) {
@@ -502,7 +502,7 @@ export class GameWorld {
     }
     if (isPlayer && el && em > 1) this.burst(m.cx, m.cy, ELEMENTS[el].color, 5, 80, { shape: 'star' });
     dmg = Math.max(1, Math.round(dmg));
-    // lá chắn Hộ Thể đỡ trước
+    // Guard shield absorbs first
     if (m.shield > 0) {
       const ab = Math.min(m.shield, dmg);
       m.shield -= ab; dmg -= ab; m.shieldT = 0;
@@ -517,16 +517,16 @@ export class GameWorld {
       const first = !m.aggro;
       m.hitByPlayer = true;
       m.aggro = this.player; m.aggroT = 8;
-      // quái khôn gọi đồng bọn gần đó
+      // smart monsters call nearby allies
       if (first && m.tier >= 2) {
         for (const o of this.monsters) if (o !== m && !o.dead && !o.aggro && !o.def.boss && Math.abs(o.cx - m.cx) < 220) { o.aggro = this.player; o.aggroT = 8; this.floatText(o.cx, o.y - 10, '!', '#ffdd55', false, true); }
       }
-      // hút máu (nội công)
+      // lifesteal (passive)
       if (pas.lifesteal) {
         const heal = Math.min(dmg * pas.lifesteal / 100, st.maxHp * 0.04);
         if (heal >= 1) { this.ch.hp = Math.min(st.maxHp, this.ch.hp + heal); this.hooks.changed('bars'); }
       }
-      // Phản Đòn: dội sát thương về người chơi
+      // Reflect: bounce damage back to the player
       if (m.affix.has('reflect')) {
         const r = Math.round(Math.min(dmg * 0.18, st.maxHp * 0.07));
         if (r > 0) this.reflectPlayer(r);
@@ -541,7 +541,7 @@ export class GameWorld {
     if (m.hp <= 0) this.killMonster(m, owner, botName);
   }
 
-  // Sát thương phản đòn: bỏ qua phòng thủ và thời gian bất tử
+  // Reflected damage: ignores defense and invulnerability frames
   reflectPlayer(r) {
     const p = this.player, ch = this.ch;
     if (p.dead) return;
@@ -562,7 +562,7 @@ export class GameWorld {
 
   killMonster(m, owner, botName) {
     m.dead = true; m.fadeT = 0.4; m.hp = 0;
-    // Tự Bạo: vòng đỏ cảnh báo rồi nổ
+    // Self-destruct: red warning ring, then explode
     if (m.affix.has('explode')) {
       const bx = m.cx, by = m.cy, r = 64 * Math.max(1, m.scale * 0.8), atk = m.def.atk * 1.8, el = m.def.el;
       this.addFx('danger', bx, by, 1, { r });
@@ -601,10 +601,10 @@ export class GameWorld {
     if (diff >= 10) mul = 0.2; else if (diff >= 6) mul = 0.5; else if (diff <= -3) mul = 1.25;
     const exp = Math.max(1, Math.round(m.def.exp * mul));
     this.giveExp(exp);
-    // vàng
+    // gold
     const gold = randInt(m.def.gold[0], m.def.gold[1]);
     this.drops.push(new Drop(m.cx - 6, m.cy, 'gold', gold));
-    // đồ
+    // items
     for (const [id0, p] of m.def.drops) {
       if (!chance(p)) continue;
       const id = resolveItemId(id0, ch.cls);
@@ -620,7 +620,7 @@ export class GameWorld {
       }
       this.drops.push(new Drop(m.cx - 6 + rand(-10, 10), m.cy, 'item', data));
     }
-    // vật phẩm nhiệm vụ
+    // quest items
     for (const id of questDropsFor(ch, m.id)) {
       this.drops.push(new Drop(m.cx - 6 + rand(-8, 8), m.cy, 'item', { id, qty: 1, r: 0, b: {} }));
       this.addFx('ring', m.cx, m.cy, 0.5, { color: '#ffd84a', r: 22 });
@@ -652,11 +652,11 @@ export class GameWorld {
     let def = st.def;
     if (st.pas.lowHp && ch.hp < st.maxHp * 0.35) def *= 1 + st.pas.lowHp / 100;
     let dmg = rawAtk * rand(0.9, 1.1) - def * 0.6;
-    if (el) dmg *= 1 - (this.stats.res[el] || 0) / 100; // kháng nguyên tố từ trang bị
+    if (el) dmg *= 1 - (this.stats.res[el] || 0) / 100; // elemental resistance from gear
     dmg = Math.max(1, Math.round(dmg));
     if (chance(0.04 + st.pas.dodge / 100)) { this.floatText(p.cx, p.y - 4, 'NÉ', '#e8e8f8'); p.invuln = 0.6; return; }
     ch.hp -= dmg;
-    // đặc tính của kẻ đánh
+    // attacker's traits
     if (src && src.affix && !src.dead) {
       if (src.affix.has('vampire')) { const h = Math.round(dmg * 0.6); src.hp = Math.min(src.maxHp, src.hp + h); this.floatText(src.cx, src.y - 6, '+' + h, '#ff6a7a', false, true); }
       if (src.affix.has('frost')) { p.slowT = 2; this.burst(p.cx, p.cy, '#bfe8ff', 8, 60, { shape: 'star' }); }
@@ -675,7 +675,7 @@ export class GameWorld {
     p.dead = false; p.invuln = 2;
     this.ch.hp = Math.floor(this.stats.maxHp * 0.5);
     this.ch.mp = Math.floor(this.stats.maxMp * 0.5);
-    this.loadMap('lang', MAPS.lang.spawnX);
+    this.loadMap('village', MAPS.village.spawnX);
     this.hooks.changed();
     this.hooks.save();
   }
@@ -703,8 +703,8 @@ export class GameWorld {
     if (it.home) this.timers.push({ t: 0.2, fn: () => this.goHome() });
   }
 
-  // ================= QUÁI =================
-  // AI theo bậc trí khôn (m.tier, xem data/affixes.js) + đặc tính (m.affix)
+  // ================= MONSTERS =================
+  // AI by smartness tier (m.tier, see data/affixes.js) + traits (m.affix)
   updateMonster(m, dt) {
     if (m.dead) { m.fadeT -= dt; return; }
     m.animT += dt;
@@ -715,32 +715,32 @@ export class GameWorld {
     if (p.dead) m.aggro = null;
     const d = m.def;
     const dist = Math.abs(p.cx - m.cx);
-    // độc
+    // poison
     if (m.poison > 0) {
       m.poison -= dt; m.poisonT -= dt;
-      if (m.poisonT <= 0) { m.poisonT = 0.5; this.damageMonster(m, m.poisonDmg, 'player', undefined, undefined, 'doc'); if (m.dead) return; }
+      if (m.poisonT <= 0) { m.poisonT = 0.5; this.damageMonster(m, m.poisonDmg, 'player', undefined, undefined, 'poison'); if (m.dead) return; }
     }
-    // Hộ Thể hồi khiên, Tự Hồi hồi máu khi không bị đánh
+    // Guard regenerates its shield, Regen heals when not being hit
     if (m.maxShield && m.shield <= 0) { m.shieldT += dt; if (m.shieldT >= 10) { m.shield = m.maxShield; m.shieldT = 0; this.addFx('ring', m.cx, m.cy, 0.5, { color: '#ffd84a', r: m.w * 0.8 }); } }
     if (m.affix.has('regen') && this.time - m.lastHitT > 3 && m.hp < m.maxHp) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.03 * dt);
     if (d.behavior === 'boss') return this.updateBoss(m, dt, dist);
     const sameFloor = Math.abs(p.standY - m.standY) < 12 && p.onGround;
-    // thấy người là lao vào (từ bậc 1)
+    // charges on sight (tier 1+)
     if (!m.aggro && !p.dead && m.tier >= 1 && m.alpha >= 1) {
       const sight = 100 + m.tier * 35;
       const sees = d.behavior === 'float' ? dist < sight + 20 && Math.abs(p.cy - m.cy) < 110 : sameFloor && dist < sight;
       if (sees) { m.aggro = p; m.aggroT = 6; this.floatText(m.cx, m.y - 8, '!', '#ffdd55', false, true); }
     }
     const fast = (m.enraged ? 1.5 : 1) * (m.tier >= 3 ? 1.1 : 1);
-    // lùi lại hồi sức khi máu thấp (bậc 3)
+    // backs off to recover at low HP (tier 3)
     if (m.tier >= 3 && !m.retreated && m.hp < m.maxHp * 0.25 && m.aggro && !m.named) { m.retreated = true; m.retreatT = 2; }
     if (m.retreatT > 0) { m.retreatT -= dt; m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.025 * dt); }
-    // Thuấn Di: biến mất rồi hiện ra cạnh người chơi
+    // Blink: vanishes and reappears next to the player
     if (m.affix.has('blink') && m.aggro && !p.dead) {
       m.blinkT -= dt;
       if (m.blinkT <= 0 && dist > 50) {
         m.blinkT = rand(4, 7);
-        const side = p.facing > 0 ? -1 : 1; // hiện sau lưng
+        const side = p.facing > 0 ? -1 : 1; // appear behind the player
         const nx = p.cx + side * 34 - m.w / 2;
         const ok = d.behavior === 'float' || (sameFloor && nx >= m.range[0] - 1 && nx <= m.range[1] + 1);
         if (ok) {
@@ -752,7 +752,7 @@ export class GameWorld {
         }
       }
     }
-    // né đạn (bậc 2+)
+    // dodge projectiles (tier 2+)
     m.dodgeT -= dt;
     if (m.tier >= 2 && m.dodgeT <= 0 && m.aggro) {
       const threat = this.projs.find((pr) => pr.owner === 'player' && !pr.pierce && Math.sign(m.cx - pr.x) === Math.sign(pr.vx) && Math.abs(m.cx - pr.x) < 70 && Math.abs(pr.y - m.cy) < m.h);
@@ -770,7 +770,7 @@ export class GameWorld {
       let tx = m.homeX, ty = m.homeY;
       if (m.retreatT > 0) { tx = m.cx < p.cx ? m.homeX - 120 : m.homeX + 120; ty = m.homeY - 20; }
       else if (m.aggro && Math.abs(m.homeX - p.cx) < 360 + m.tier * 40) {
-        // quái bắn xa giữ khoảng cách, càng khôn càng giữ xa
+        // ranged monsters keep their distance; smarter ones stay further away
         const keep = d.ranged ? (m.tier >= 1 ? 110 : 90) : 0;
         tx = p.cx - m.w / 2 + (d.ranged ? (m.cx < p.cx ? -keep : keep) : 0); ty = p.y - (d.ranged ? 30 : 4);
       } else {
@@ -791,17 +791,17 @@ export class GameWorld {
         m.facing = p.cx > m.cx ? 1 : -1;
         if (m.atkCd <= 0 && dist < 240 + m.tier * 20) {
           m.atkCd = rand(2.2, 3) * (m.tier >= 3 ? 0.7 : 1) * (m.enraged ? 0.7 : 1);
-          // bậc 3 bắn đón đầu theo hướng người chơi đang chạy
+          // tier 3 leads its shots in the direction the player is running
           const lead = m.tier >= 3 ? (dist / 160) * p.vx * 0.8 : 0;
           const ang = Math.atan2(p.cy - m.cy, p.cx + lead - m.cx);
           const sp2 = 150 + m.tier * 12;
-          this.projs.push(new Projectile({ owner: 'monster', kind: d.proj2 || (d.el === 'bang' ? 'waterbolt' : 'ember'), x: m.cx - 6, y: m.cy - 6, vx: Math.cos(ang) * sp2, vy: Math.sin(ang) * sp2, range: 300, atk: d.atk * (m.enraged ? 1.5 : 1), el: d.el, w: 10, h: 10, src: m }));
+          this.projs.push(new Projectile({ owner: 'monster', kind: d.proj2 || (d.el === 'ice' ? 'waterbolt' : 'ember'), x: m.cx - 6, y: m.cy - 6, vx: Math.cos(ang) * sp2, vy: Math.sin(ang) * sp2, range: 300, atk: d.atk * (m.enraged ? 1.5 : 1), el: d.el, w: 10, h: 10, src: m }));
           m.attacking = true; this.timers.push({ t: 0.3, fn: () => { m.attacking = false; } });
         }
       }
       return;
     }
-    // walk / hop: đi trên bục của mình
+    // walk / hop: move along its own platform
     if (m.knock) { m.x += m.knock * dt; m.knock *= 0.85; if (Math.abs(m.knock) < 3) m.knock = 0; }
     m.thinkT -= dt;
     let want = 0;
@@ -812,7 +812,7 @@ export class GameWorld {
       if (m.thinkT <= 0) { m.thinkT = rand(1.5, 4); m.walkDir = chance(0.35) ? 0 : chance(0.5) ? 1 : -1; }
       want = m.walkDir || 0;
     }
-    // lao húc (bậc 2+): khựng lại báo hiệu rồi lao tới
+    // charge (tier 2+): pauses as a tell, then rushes in
     if (m.tier >= 2 && m.aggro && sameFloor && !(m.retreatT > 0)) {
       if (m.windup > 0) {
         m.windup -= dt; want = 0;
@@ -837,7 +837,7 @@ export class GameWorld {
     } else {
       m.vx = m.windup > 0 ? 0 : want * d.speed * (m.aggro ? 1.5 : 1) * fast;
     }
-    // nhảy (nhảy cóc, hoặc nhảy né đạn)
+    // jump (hopping, or jumping to dodge projectiles)
     if (m.jvy > 0 || m.jy > 0) {
       m.jy += m.jvy * dt; m.jvy -= 900 * dt;
       if (m.jy <= 0) { m.jy = 0; m.jvy = 0; }
@@ -902,7 +902,7 @@ export class GameWorld {
     }
   }
 
-  // ================= ĐẠN / VÙNG / ĐỒ RƠI =================
+  // ================= PROJECTILES / AREAS / DROPS =================
   updateProjectiles(dt) {
     const p = this.player;
     for (const pr of this.projs) {
@@ -933,7 +933,7 @@ export class GameWorld {
         for (const m of this.monsters) {
           if (m.dead) continue;
           if (Math.hypot(m.cx - z.x, m.cy - z.y) < z.r + m.w / 2) {
-            this.damageMonster(m, z.mult, 'player', undefined, undefined, z.el || 'doc');
+            this.damageMonster(m, z.mult, 'player', undefined, undefined, z.el || 'poison');
             if (!m.dead) { m.poison = 2; m.poisonDmg = z.mult * 0.3; }
           }
         }
@@ -953,7 +953,7 @@ export class GameWorld {
     this.drops = this.drops.filter((d) => !d.taken && d.t < d.life);
   }
 
-  // Có còn chỗ trong túi cho món đồ rơi này không
+  // Is there room in the bag for this drop?
   canTake(d) {
     if (d.kind === 'gold') return true;
     const it = ITEMS[d.data.id];
@@ -961,7 +961,7 @@ export class GameWorld {
     return this.ch.inventory.length < INV_SIZE;
   }
 
-  // Nhặt một món (người chơi hoặc pet). Trả về true nếu nhặt được.
+  // Pick up an item (player or pet). Returns true if it was picked up.
   pickupDrop(d, tx, ty) {
     if (d.taken) return false;
     if (d.kind === 'gold') {
@@ -977,7 +977,7 @@ export class GameWorld {
     return d.taken;
   }
 
-  // Gọi hoặc cất pet
+  // Summon or dismiss the pet
   setPet(on) {
     if (!this.ch.pet) return;
     this.ch.pet.on = on;
@@ -985,10 +985,10 @@ export class GameWorld {
     if (!on && this.pet) { this.addFx('poof', this.pet.x, this.pet.y, 0.5, { color: '#e8dcff' }); this.pet = null; }
   }
 
-  // ================= HIỆU ỨNG =================
+  // ================= EFFECTS =================
   addFx(kind, x, y, dur, data) { this.effects.push({ kind, x, y, t: 0, dur, data }); }
 
-  // Hạt sáng: o = { vx, vy, life, size, color, grav, drag, shape: 'dot'|'star'|'petal', glow }
+  // Particles: o = { vx, vy, life, size, color, grav, drag, shape: 'dot'|'star'|'petal', glow }
   spark(x, y, o = {}) {
     if (this.particles.length > (o.weather ? 260 : 480)) return;
     this.particles.push({ x, y, vx: 0, vy: 0, t: 0, life: 0.6, size: 2, color: '#fff', grav: 0, drag: 0.9, shape: 'dot', glow: true, spin: rand(-6, 6), ...o });
@@ -1001,7 +1001,7 @@ export class GameWorld {
     }
   }
 
-  // Thời tiết theo vùng: tuyết rơi, đom đóm, tàn lửa, tinh thể băng
+  // Weather per region: snowfall, fireflies, embers, ice crystals
   updateWeather(dt) {
     const th = this.map.theme, cx = this.camX;
     const rate = { snow: 34, swamp: 4, forest: 2.5, icecave: 6, volcano: 12, hell: 6, temple: 9 }[th];
@@ -1013,7 +1013,7 @@ export class GameWorld {
       const x = cx + rand(-20, VIEW_W + 20);
       if (th === 'snow') this.spark(x, -6, { vx: rand(-14, 6), vy: rand(22, 42), color: '#ffffff', size: rand(1.2, 2.8), life: 9, glow: false, drag: 1, shape: 'dot', weather: true });
       else if (th === 'swamp' || th === 'forest') this.spark(x, rand(120, 290), { vx: rand(-10, 10), vy: rand(-8, 8), color: th === 'swamp' ? '#d8ff7a' : '#9affd8', size: rand(1.2, 2.2), life: rand(2.5, 4.5), drag: 1, shape: 'dot', weather: true });
-      else if (th === 'temple') { // tro đỏ bay lên và cánh hoa rơi
+      else if (th === 'temple') { // red ash rising and petals falling
         if (Math.random() < 0.4) this.spark(x, -6, { vx: rand(-16, 4), vy: rand(16, 30), color: pick(['#ff8a9a', '#e04a5a', '#ffc0c8']), size: rand(1.6, 2.8), life: 10, glow: false, drag: 1, shape: 'petal', weather: true });
         else this.spark(x, VIEW_H - rand(0, 60), { vx: rand(-8, 8), vy: rand(-36, -18), color: pick(['#ff4a5a', '#ff9aa8']), size: rand(1, 2), life: rand(2.5, 4), drag: 1, shape: 'dot', weather: true });
       }
@@ -1032,7 +1032,7 @@ export class GameWorld {
       p.x += p.vx * dt; p.y += p.vy * dt;
     }
     this.particles = this.particles.filter((p) => p.t < p.life);
-    // vệt đuôi của đạn
+    // projectile trails
     for (const pr of this.projs) {
       const tr = PROJ_TRAIL[pr.kind];
       if (!tr || Math.random() > tr[2]) continue;
@@ -1040,7 +1040,7 @@ export class GameWorld {
         vx: -pr.vx * 0.08 + rand(-12, 12), vy: rand(-18, 8), color: pick(tr[0]), size: rand(1, tr[1]), life: rand(0.25, 0.5), shape: pr.kind === 'talisman' ? 'star' : 'dot',
       });
     }
-    // lấp lánh quanh người khi đang có buff
+    // sparkles around the player while a buff is active
     const p = this.player;
     const aura = p.look && p.look.aura;
     if (aura && !p.dead && Math.random() < dt * 10) {
@@ -1048,11 +1048,11 @@ export class GameWorld {
     }
     for (const b of p.buffs) {
       if (Math.random() < dt * 9) {
-        const col = b.sid === 'd_heal' ? '#9dffb4' : '#ffe27a';
+        const col = b.sid === 'ta_heal' ? '#9dffb4' : '#ffe27a';
         this.spark(p.cx + rand(-10, 10), p.y + p.h - rand(0, 6), { vy: rand(-40, -25), vx: rand(-4, 4), color: col, size: rand(1, 2.4), life: rand(0.6, 1), drag: 0.98, shape: 'star' });
       }
     }
-    // mây độc sủi bọt
+    // bubbling poison cloud
     for (const z of this.zones) {
       if (Math.random() < dt * 14) this.spark(z.x + rand(-z.r, z.r) * 0.7, z.y + rand(-6, 10), { vy: rand(-30, -14), color: pick(['#8fe06a', '#c4ff7a', '#5ab84a']), size: rand(1.5, 3.5), life: rand(0.5, 0.9), drag: 0.97, glow: false, shape: 'bubble' });
     }
@@ -1085,7 +1085,7 @@ export class GameWorld {
     this.texts.push({ x: x + rand(-4, 4), y, text: String(text), color, big, small, hurt, t: 0 });
   }
 
-  // ================= VẼ =================
+  // ================= DRAWING =================
   render(ctx) {
     const cam = Math.round(this.camX + (this.shakeT > 0 ? rand(-3, 3) : 0));
     const g = this.gfx;
@@ -1100,7 +1100,7 @@ export class GameWorld {
       if (locked) this.drawSeal(ctx, pt.x - cam, GROUND_Y - 22);
     }
 
-    // vùng độc
+    // poison areas
     for (const z of this.zones) {
       const a = Math.min(1, (z.dur - z.t) * 2) * 0.55;
       for (let i = 0; i < 5; i++) {
@@ -1109,7 +1109,7 @@ export class GameWorld {
       }
     }
     for (const n of this.npcs) n.draw(ctx, cam);
-    // đồ rơi
+    // drops
     for (const d of this.drops) {
       const bob = d.onGround ? Math.sin(t * 4 + d.x) * 1.5 : 0;
       const blink = d.life - d.t < 6 && Math.floor(t * 6) % 2;
@@ -1117,7 +1117,7 @@ export class GameWorld {
       let ic;
       if (d.kind === 'gold') ic = itemIcon('gold', '#e8c35a').canvas;
       else ic = iconForItem(ITEMS[d.data.id]).canvas;
-      if (d.kind === 'item' && d.data.rare) { // cột sáng cho đồ hiếm
+      if (d.kind === 'item' && d.data.rare) { // light pillar for rare drops
         const bx = d.x + 6 - cam, a = 0.35 + Math.sin(t * 5) * 0.12;
         const g = ctx.createLinearGradient(0, d.y - 90, 0, d.y + 10);
         g.addColorStop(0, 'rgba(255,215,90,0)'); g.addColorStop(1, `rgba(255,215,90,${a})`);
@@ -1134,7 +1134,7 @@ export class GameWorld {
     this.bots.render(ctx, cam);
     const p = this.player;
     const look = p.look || {};
-    if (look.aura && !p.dead) { // hào quang ngoại trang
+    if (look.aura && !p.dead) { // outfit aura
       const g = ctx.createRadialGradient(p.cx - cam, p.y + p.h - 2, 2, p.cx - cam, p.y + p.h - 2, 26);
       g.addColorStop(0, rgbaHex(look.aura, 0.35 + Math.sin(t * 3) * 0.1)); g.addColorStop(1, rgbaHex(look.aura, 0));
       ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.cx - cam, p.y + p.h - 2, 26, 8, 0, 0, Math.PI * 2); ctx.fill();
@@ -1143,7 +1143,7 @@ export class GameWorld {
     if (look.ribbons && !p.dead && !blinkP) this.drawRibbons(ctx, p, cam, look.ribbons, false);
     if (!blinkP) p.draw(ctx, cam, p.dead ? 0.5 : 1);
     if (look.ribbons && !p.dead && !blinkP) this.drawRibbons(ctx, p, cam, look.ribbons, true);
-    if (look.wisps && !p.dead) for (let i = 0; i < 2; i++) { // hai đốm ma trơi bay quanh
+    if (look.wisps && !p.dead) for (let i = 0; i < 2; i++) { // two will-o'-wisps circling around
       const a = t * 2.2 + i * Math.PI, wx = p.cx - cam + Math.cos(a) * 18, wy = p.cy - 6 + Math.sin(a * 1.3) * 7;
       const g = ctx.createRadialGradient(wx, wy, 0.5, wx, wy, 6);
       g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, rgbaHex(look.wisps, 0.9)); g.addColorStop(1, rgbaHex(look.wisps, 0));
@@ -1151,7 +1151,7 @@ export class GameWorld {
     }
     if (p.dashT > 0) { ctx.globalAlpha = 0.3; p.draw(ctx, cam + p.dashVx * 0.03); ctx.globalAlpha = 1; }
     if (this.pet) this.pet.draw(ctx, cam);
-    // đạn: quầng sáng phía sau rồi mới tới hình
+    // projectiles: glow behind first, then the sprite
     for (const pr of this.projs) {
       const ps = projSprite(pr.kind);
       const glow = PROJ_GLOW[pr.kind];
@@ -1173,7 +1173,7 @@ export class GameWorld {
     }
     for (const e of this.effects) this.drawFx(ctx, e, cam);
     this.drawParticles(ctx, cam);
-    // tên & thanh máu
+    // name & HP bar
     ctx.textAlign = 'center';
     for (const m of this.monsters) {
       if (m.dead) continue;
@@ -1200,13 +1200,13 @@ export class GameWorld {
     if (this.ch.title) this.nameTag(ctx, '「' + this.ch.title + '」', p.cx - cam, p.y - 24, '#ffd36a', 7);
     if (this.pet) this.pet.drawLabel(ctx, cam);
     if (p.say) this.bubble(ctx, p.say.text, p.cx - cam, p.y - (this.ch.title ? 34 : 24));
-    // gợi ý tương tác
+    // interaction hint
     if (this.nearPortal && !p.dead) {
       const lk = this.nearPortal.lock && questStatus(this.ch, this.nearPortal.lock) !== 'done';
       this.hint(ctx, lk ? `🔒 ${this.nearPortal.label} · Phong ấn` : `↑  ${this.nearPortal.label}`, this.nearPortal.x - cam, GROUND_Y - 66);
     }
     else if (this.nearNpc && !p.dead) this.hint(ctx, 'E / ↑  Nói chuyện', this.nearNpc.cx - cam, this.nearNpc.y - 38);
-    // số sát thương
+    // damage numbers
     for (const tx of this.texts) {
       const k = tx.t / 1.1;
       ctx.globalAlpha = 1 - Math.max(0, k - 0.6) / 0.4;
@@ -1218,12 +1218,12 @@ export class GameWorld {
       ctx.fillStyle = tx.color; ctx.fillText(tx.text, tx.x - cam, tx.y);
       ctx.globalAlpha = 1;
     }
-    // trạng thái xấu trên người chơi
+    // player debuffs
     const sts = [];
     if (p.poisonT > 0) sts.push(['☠ Trúng độc', '#8fe06a']);
     if (p.slowT > 0) sts.push(['❄ Chậm', '#9fd8ff']);
     sts.forEach(([txt, c], i) => this.nameTag(ctx, txt, p.cx - cam, p.y - (this.ch.title ? 44 : 34) - i * 10, c, 7));
-    // thanh máu boss (kể cả boss có tên)
+    // boss HP bar (named bosses included)
     const boss = this.monsters.find((m) => (m.def.boss || m.named) && !m.dead && m.aggro) || this.monsters.find((m) => m.def.boss && !m.dead);
     if (boss && boss.aggro) {
       const bw = 300, bx = (VIEW_W - bw) / 2, by = 74;
@@ -1237,11 +1237,11 @@ export class GameWorld {
       if (boss.shield > 0) { ctx.fillStyle = '#ffd84a'; ctx.fillRect(bx, by + 7, bw * boss.shield / boss.maxShield, 2); }
       if (boss.affix.size) this.affixTags(ctx, boss, VIEW_W / 2, by + 18);
     }
-    // phủ mờ khi chết
+    // dim overlay on death
     if (p.dead) { ctx.fillStyle = 'rgba(20,0,10,0.45)'; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }
   }
 
-  // Nhãn đặc tính dưới tên quái
+  // Trait tags under monster names
   affixTags(ctx, m, x, y) {
     const tags = [...m.affix].map((a) => AFFIXES[a]);
     ctx.font = '700 6.5px "Be Vietnam Pro", system-ui, sans-serif';
@@ -1257,7 +1257,7 @@ export class GameWorld {
     });
   }
 
-  // Dải lụa tiên bay vòng quanh người: nửa sau vẽ trước nhân vật, nửa trước vẽ sau, hai đuôi lụa bay theo gió
+  // Fairy ribbons circling the body: back half drawn before the character, front half after, two ribbon tails flowing in the wind
   drawRibbons(ctx, p, cam, rb, front) {
     const t = this.time, cx = p.cx - cam, cy = p.y + p.h * 0.5;
     const moving = Math.abs(p.vx) > 5;
@@ -1285,10 +1285,10 @@ export class GameWorld {
       ctx.beginPath(); top.forEach(([x, y], i) => (i ? ctx.lineTo(x, y + 0.6) : ctx.moveTo(x, y + 0.6))); ctx.stroke();
     };
     ctx.save();
-    // vòng lụa: a ∈ (0, π) là nửa phía trước người
+    // ribbon loop: a ∈ (0, π) is the half in front of the body
     if (front) band(0.05, Math.PI - 0.05, 1.7);
     else {
-      // vòng lụa cong sau đầu, hai đầu rủ xuống ngang khuỷu tay
+      // ribbon arch curving behind the head, both ends hanging down to elbow height
       const arch = new Path2D(), sway = Math.sin(t * 1.8) * 1.5;
       arch.moveTo(cx - 17, cy + 4);
       arch.bezierCurveTo(cx - 30 + sway, cy - 46, cx + 30 + sway, cy - 46, cx + 17, cy + 4);
@@ -1301,7 +1301,7 @@ export class GameWorld {
       ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 0.7; ctx.stroke(arch);
       ctx.restore();
       band(Math.PI + 0.05, Math.PI * 2 - 0.05, 1.5);
-      // hai đuôi lụa bay về phía sau lưng
+      // two ribbon tails flowing behind the back
       const dir = -p.facing;
       for (let k = 0; k < 2; k++) {
         const sx = cx + dir * 14, sy = cy + 2 + k * 5;
@@ -1312,7 +1312,7 @@ export class GameWorld {
           const u = i / 12;
           pts.push([sx + dir * u * len, sy + u * (moving ? 2 : 14) + Math.sin(u * 5 - t * 5 + k * 1.5) * 3 * u]);
         }
-        const wd = (i) => 1.5 * (1 - (i / 12) * 0.6); // đuôi lụa thon dần
+        const wd = (i) => 1.5 * (1 - (i / 12) * 0.6); // ribbon tail tapers off
         pts.forEach(([x, y], i) => (i ? path.lineTo(x, y - wd(i)) : path.moveTo(x, y - wd(i))));
         for (let i = pts.length - 1; i >= 0; i--) path.lineTo(pts[i][0], pts[i][1] + wd(i));
         path.closePath();
@@ -1323,7 +1323,7 @@ export class GameWorld {
     ctx.restore();
   }
 
-  // Phong ấn trên cổng chưa mở
+  // Seal on a portal that is not open yet
   drawSeal(ctx, x, y) {
     ctx.save();
     ctx.strokeStyle = 'rgba(200,170,120,0.85)'; ctx.lineWidth = 1.5;
@@ -1334,7 +1334,7 @@ export class GameWorld {
     ctx.restore();
   }
 
-  // Dấu ! (nhiệm vụ mới, vàng; !! = cốt truyện, đỏ) và ? (trả nhiệm vụ) nhún nhảy trên đầu NPC
+  // ! marker (new quest, gold; !! = story, red) and ? (turn in) bouncing above NPCs
   drawMarker(ctx, mk, x, y) {
     const bob = Math.sin(this.time * 4) * 2;
     const story = mk === '!!';
@@ -1387,7 +1387,7 @@ export class GameWorld {
     const k = e.t / e.dur, x = e.x - cam, y = e.y, d = e.data;
     ctx.save();
     switch (e.kind) {
-      case 'danger': { // vòng đỏ cảnh báo sắp nổ
+      case 'danger': { // red warning ring before exploding
         const pulse = 0.5 + Math.sin(e.t * 22) * 0.5;
         ctx.fillStyle = `rgba(255,60,40,${0.12 + pulse * 0.16})`;
         ctx.beginPath(); ctx.ellipse(x, y, d.r, d.r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
@@ -1396,7 +1396,7 @@ export class GameWorld {
         ctx.beginPath(); ctx.ellipse(x, y, d.r, d.r * 0.6, 0, 0, Math.PI * 2); ctx.stroke();
         break;
       }
-      case 'slash': { // vệt chém hình trăng khuyết
+      case 'slash': { // crescent-shaped slash trail
         const r = d.big ? 26 : 21;
         const off = ((d.i || 0) % 2 ? -0.5 : 0.35);
         const grow = 0.55 + Math.min(1, k * 4) * 0.45;
@@ -1431,7 +1431,7 @@ export class GameWorld {
         ctx.fillStyle = rg; ctx.beginPath(); ctx.ellipse(x, y - 2, 30 * (1 - k * 0.5), 12, 0, 0, 7); ctx.fill();
         break;
       }
-      case 'circle': { // vòng phép dưới chân khi tung chiêu
+      case 'circle': { // magic circle under the feet when casting
         const a = k < 0.2 ? k / 0.2 : 1 - (k - 0.2) / 0.8;
         ctx.globalAlpha = a * 0.9;
         ctx.globalCompositeOperation = 'lighter';
@@ -1450,7 +1450,7 @@ export class GameWorld {
         for (let i = 0; i < 8; i++) { const ang = (i / 8) * Math.PI * 2; ctx.fillRect(Math.cos(ang) * (R0 - 3) - 1.5, Math.sin(ang) * (R0 - 3) - 1.5, 3, 3); }
         break;
       }
-      case 'ring': { // vòng sáng toả ra khi trúng đòn mạnh
+      case 'ring': { // light ring bursting out on a heavy hit
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = (1 - k) * 0.8;
         ctx.strokeStyle = d.color; ctx.lineWidth = 2 * (1 - k) + 0.5;

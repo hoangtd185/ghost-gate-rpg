@@ -1,4 +1,4 @@
-// Điểm khởi động game
+// Game entry point
 import { Input } from './engine/input.js';
 import { GameWorld } from './game/world.js';
 import { lookFor, Monster } from './game/entities.js';
@@ -21,7 +21,7 @@ const input = new Input();
 let world = null, ui = null, saver = null, storage = null, autoSaveT = 0;
 let scale = 1;
 
-// Giữ tỉ lệ 16:9, canvas nét theo mật độ điểm ảnh
+// Keep 16:9, sharp canvas for the device pixel ratio
 function resize() {
   const vw = window.innerWidth, vh = window.innerHeight;
   let w = vw, h = (vw * 9) / 16;
@@ -35,8 +35,8 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// Nền động cho màn hình tiêu đề
-const titleMap = MAPS.nghiadia;
+// Animated background for the title screen
+const titleMap = MAPS.graveyard;
 const titleGfx = buildMapGraphics(titleMap);
 let titleT = 0;
 function renderTitle(dt) {
@@ -88,7 +88,7 @@ function enterGame(ch, isNew) {
   ui.addChat('Hệ thống', `Chào mừng ${ch.name} đến với Quỷ Môn Quan!`, 'system');
   if (isNew) {
     ui.addChat('Hệ thống', 'Đến gặp Trưởng Làng (bên trái) để nhận nhiệm vụ đầu tiên. Nhấn Esc để xem phím.', 'system');
-    world.timers.push({ t: 1.2, fn: () => { const n = world.npcs.find((x) => x.id === 'truonglang'); if (n) n.say = { text: 'Lại đây, người trẻ tuổi!', t: 4 }; } });
+    world.timers.push({ t: 1.2, fn: () => { const n = world.npcs.find((x) => x.id === 'elder'); if (n) n.say = { text: 'Lại đây, người trẻ tuổi!', t: 4 }; } });
   }
 }
 
@@ -114,7 +114,7 @@ async function boot() {
   document.getElementById('boot').remove();
 }
 
-// Vòng lặp game: cập nhật logic theo bước cố định 1/60 giây
+// Game loop: logic updates at a fixed 1/60 s step
 let last = performance.now(), acc = 0;
 const STEP = 1 / 60;
 function frame(now) {
@@ -138,8 +138,8 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-// Công cụ thử nghiệm: chỉ bật khi chạy trên máy (file://, localhost) hoặc thêm ?debug vào địa chỉ.
-// Mở DevTools gõ __game() để xem/chỉnh thế giới game.
+// Debug tools: only on locally (file://, localhost) or with ?debug in the URL.
+// Open DevTools and type __game() to inspect/tweak the game world.
 const DEBUG = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname) || new URLSearchParams(location.search).has('debug');
 if (DEBUG) {
   window.__game = () => world;

@@ -1,20 +1,20 @@
-// Bot giả làm người chơi: đi săn quái, ngồi nghỉ, chat, chuyển bản đồ
+// Bots pretending to be players: hunt monsters, rest, chat, change maps
 import { MAPS, GROUND_Y } from '../data/maps.js';
 import { CLASSES } from '../data/classes.js';
 import { BOT_NAMES, BOT_CHAT, BOT_LOOKS } from '../data/bots.js';
 import { Humanoid, Projectile, stepBody, MOVE_SPEED, JUMP_V } from './entities.js';
 import { pick, rand, randInt, chance, clamp } from '../engine/util.js';
 
-const MAP_ORDER = ['lang', 'rung', 'dong', 'nghiadia', 'quymon', 'tuyetson', 'bangdong', 'hoason', 'kylan'];
+const MAP_ORDER = ['village', 'forest', 'field', 'graveyard', 'ghost_gate', 'snow_peak', 'ice_cave', 'volcano', 'qilin_altar'];
 
 function mapForLevel(lv) {
-  if (chance(0.15)) return 'lang';
-  if (lv < 5) return 'rung';
-  if (lv < 8) return chance(0.7) ? 'dong' : 'rung';
-  if (lv < 11) return pick(['nghiadia', 'dam', 'dam']);
-  if (lv < 14) return pick(['nghiadia', 'dam', 'quymon']);
-  if (lv < 18) return pick(['tuyetson', 'tuyetson', 'bangdong']);
-  return pick(['bangdong', 'hoason', 'hoason', 'kylan']);
+  if (chance(0.15)) return 'village';
+  if (lv < 5) return 'forest';
+  if (lv < 8) return chance(0.7) ? 'field' : 'forest';
+  if (lv < 11) return pick(['graveyard', 'swamp', 'swamp']);
+  if (lv < 14) return pick(['graveyard', 'swamp', 'ghost_gate']);
+  if (lv < 18) return pick(['snow_peak', 'snow_peak', 'ice_cave']);
+  return pick(['ice_cave', 'volcano', 'volcano', 'qilin_altar']);
 }
 
 function makePersona(name) {
@@ -71,7 +71,7 @@ export class BotManager {
   update(dt) {
     const W = this.world;
     for (const b of [...this.list]) this.updateBot(b, dt);
-    // chat thế giới
+    // world chat
     this.chatT -= dt;
     if (this.chatT <= 0) {
       this.chatT = rand(9, 22);
@@ -81,7 +81,7 @@ export class BotManager {
       if (ent && chance(0.6)) { this.say(ent, msg); W.hooks.chat(p.name, msg, 'local'); }
       else W.hooks.chat(p.name, msg, 'world');
     }
-    // bot chuyển bản đồ
+    // bot changes map
     this.moveT -= dt;
     if (this.moveT <= 0) {
       this.moveT = rand(18, 40);
@@ -90,7 +90,7 @@ export class BotManager {
       const next = MAP_ORDER[clamp(idx + (chance(0.5) ? 1 : -1), 0, MAP_ORDER.length - 1)];
       if (next !== p.map) this.movePersona(p, next);
     }
-    // bot lên cấp
+    // bot levels up
     this.levelT -= dt;
     if (this.levelT <= 0) {
       this.levelT = rand(50, 110);
@@ -176,7 +176,7 @@ export class BotManager {
     }
     const t = b.target;
     const dx = t.cx - b.cx;
-    const melee = b.p.cls === 'kiem';
+    const melee = b.p.cls === 'swordsman';
     const range = melee ? 26 + t.w / 2 : 150;
     const vdiff = (t.y + t.h) - (b.y + b.h);
     if (Math.abs(dx) < range && Math.abs(vdiff) < (melee ? 30 : 46)) {
@@ -198,7 +198,7 @@ export class BotManager {
     } else if (vdiff > 30 && b.standY < GROUND_Y) {
       b.dropTimer = 0.3; b.y += 2;
     }
-    if (chance(dt * 0.15)) b.vy = JUMP_V; // thỉnh thoảng nhảy cho giống người
+    if (chance(dt * 0.15)) b.vy = JUMP_V; // jump now and then to look human
   }
 
   attack(b, t) {
@@ -207,18 +207,18 @@ export class BotManager {
     b.atkT = b.atkDur;
     const atk = 8 + b.p.level * 4.2;
     const dir = b.facing;
-    if (b.p.cls === 'kiem') {
+    if (b.p.cls === 'swordsman') {
       W.hitArea({ x: dir > 0 ? b.cx : b.cx - 36, y: b.y - 4, w: 36, h: b.h + 8 }, 1, 2, 'bot', atk);
       W.addFx('slash', b.cx + dir * 16, b.cy - 2, 0.18, { dir });
     } else {
-      const kind = b.p.cls === 'dao' ? 'talisman' : 'dart';
+      const kind = b.p.cls === 'taoist' ? 'talisman' : 'dart';
       const ang = Math.atan2(t.cy - b.cy, Math.abs(t.cx - b.cx)) * 0.6;
       W.projs.push(new Projectile({ owner: 'bot', botName: b.p.name, kind, x: b.cx - 6, y: b.cy - 6, vx: Math.cos(ang) * 320 * dir, vy: Math.sin(ang) * 320, range: 220, mult: 1, maxTargets: 1, atk }));
     }
     if (t.hp - atk <= 0 && chance(0.3)) { b.restT = rand(1.5, 5); if (chance(0.15)) this.say(b, pick(BOT_CHAT.kill)); }
   }
 
-  // Bot trả lời khi người chơi chat
+  // Bot replies when the player chats
   onPlayerChat(text) {
     const W = this.world;
     const t = text.toLowerCase();

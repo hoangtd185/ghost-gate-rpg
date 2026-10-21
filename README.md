@@ -1,130 +1,127 @@
-# Quỷ Môn Quan
+# Quỷ Môn Quan (Ghost Gate)
 
-Game nhập vai 2D màn hình ngang (kiểu Ghost Online / MapleStory), bối cảnh kiếm hiệp ma quái châu Á.
-Một người chơi, thế giới có bot giả làm người chơi khác (đi săn, ngồi nghỉ, chat, trả lời khi bạn chat).
+A 2D side-scrolling RPG in the style of Ghost Online / MapleStory, set in an Asian wuxia world full of ghosts and demons.
+It plays like an MMO, but it is single-player: the world is populated by bots that pretend to be other players (they hunt, rest, chat, and reply when you talk).
 
-- 3 môn phái: **Kiếm Khách** (cận chiến), **Đạo Sĩ** (bùa chú), **Thích Khách** (phi tiêu)
-- 4 kỹ năng mỗi phái, nâng cấp bằng điểm kỹ năng
-- 10 bản đồ, mỗi vùng có phông nền và thời tiết riêng (tuyết rơi, đom đóm, tàn lửa…):
-  Làng Trúc Lâm → Rừng Ma Trơi → Cánh Đồng Hoang (→ nhánh Đầm Lầy Sương Mù) → Nghĩa Địa Cổ → Quỷ Môn Quan (boss)
-  → Tuyết Sơn → Huyền Băng Động → Hỏa Diệm Sơn → Kỳ Lân Đài (boss)
-- 14 loại quái + 2 boss (Hắc Quỷ Vương, Hỏa Kỳ Lân), trang bị rơi ra có độ hiếm và chỉ số ngẫu nhiên
-- **Nguyên tố Hỏa / Băng / Lôi / Độc**: quái có điểm yếu và kháng riêng, trang bị cho kháng, khảm ngọc nguyên tố vào vũ khí
-- **Cường hóa trang bị +1 → +10** ở Thợ Rèn (Đá Cường Hóa + ngân lượng, có tỉ lệ thất bại, Bùa Bảo Hộ chống tụt cấp)
-- **Cốt truyện "Huyền Môn Phong Ấn"** 2 chương, 12 nhiệm vụ có hội thoại kèm chân dung nhân vật; NPC có dấu ! / ? trên đầu
-- 34 nhiệm vụ: cốt truyện, chuỗi phụ ở từng vùng, 4 nhiệm vụ hằng ngày ở Bảng Truy Nã, quà mỗi ngày của Tiểu Lan; phần thưởng gồm đá cường hóa, ngọc, trang bị kháng, danh hiệu
-- Cửa hàng mua bán, cộng điểm tiềm năng, danh hiệu hiện trên đầu nhân vật
-- Pet **Tiểu Quỷ** bay theo và tự nhặt đồ rơi trong tầm, kể cả trên bục cao (nhận qua nhiệm vụ tân thủ ở Trưởng Làng)
-- Nhảy đôi, giữ phím nhảy để nhảy cao hơn
-- Nhân vật chibi đầu to mắt to, toàn bộ hình ảnh tự vẽ bằng code (không dùng hình của game nào khác)
-- **Không dùng thư viện ngoài nào**: engine game viết bằng JavaScript thuần (canvas), server dùng `node:http` và `node:sqlite` có sẵn trong Node
+- **3 classes**: Kiếm Khách (swordsman, melee), Đạo Sĩ (taoist, talismans and elements), Thích Khách (assassin, throwing darts)
+- **4 active skills + 4 passive skills per class**, arranged in a skill tree, with a respec option
+- **12 maps**, each with its own parallax background and weather (snow, fireflies, embers, blood-moon petals…):
+  Làng Trúc Lâm (village) → Rừng Ma Trơi → Cánh Đồng Hoang (→ side branch Đầm Lầy Sương Mù) → Nghĩa Địa Cổ → Quỷ Môn Quan (boss)
+  → Tuyết Sơn → Huyền Băng Động → Hỏa Diệm Sơn → Kỳ Lân Đài (boss) · hidden zone Huyền Môn Cổ Tự → Chính Điện (final boss)
+- **15 monster types, 3 chapter bosses, 4 story bosses, 5 field bosses**. Monsters scale with their level, get smarter at higher levels, and can roll Elite variants with affixes such as damage reflect, life steal, self-destruct, teleport, slow, poison and shields
+- **Elements Fire / Ice / Lightning / Poison**: monsters have weaknesses and resistances, gear gives resistances, element orbs can be socketed into weapons
+- **Equipment enhancement +1 → +10** at the blacksmith, with failure chance and protection charms
+- **Gem sockets**: 5 gem types × 3 grades, socket, unsocket and fuse gems
+- **Crafting** at the embroiderer NPC: outfits and consumables from farmed materials
+- **9 outfits (cosmetic slot)** with capes, crowns, fox ears and tails, animated silk ribbons and auras. Rare drops from bosses, some craftable
+- **Main story "Huyền Môn Phong Ấn"**: a prologue + 3 chapters (32 quests), voiced-style dialogue with character portraits, an in-story choice that changes the ending, story-gated zones that require leveling up
+- Tutorial quests, side quests, daily bounty quests, daily gifts, titles shown above the character
+- Context-aware NPC dialogue (story progress, time of day, class, pet, gear…) and NPCs that chat with each other
+- A pet ghost (Tiểu Quỷ) that follows you and picks up loot in range, even on high platforms
+- Double jump and variable jump height
+- Chibi characters with big heads and big eyes. Every graphic is drawn in code; no art from any other game is used
+- **Zero dependencies**: the game engine is plain JavaScript on a canvas, and the server only uses Node built-ins (`node:http`, `node:sqlite`, `node:crypto`)
 
-## Bắt đầu nhanh trên Windows
+## Quick start on Windows
 
-**Bước 1. Cài Node.js** (chỉ làm một lần)
+**Step 1. Install Node.js** (one time only)
 
-Vào https://nodejs.org, tải bản **LTS** (22 hoặc 24) rồi cài như phần mềm bình thường, cứ bấm Next.
-Mở **PowerShell** hoặc **Terminal** mới và gõ:
+Go to https://nodejs.org, download the **LTS** build (22 or 24) and install it like any other program.
+Open a new **PowerShell** or **Terminal** window and run:
 
 ```powershell
 node -v
 ```
 
-Ra `v22.13.0` trở lên là được.
+Anything from `v22.13.0` upwards works.
 
-**Bước 2. Mở terminal trong thư mục game**
+**Step 2. Open a terminal in the project folder**
 
-Cách dễ nhất: mở thư mục `H:\Projects\quy-mon-quan` bằng **VS Code**, rồi bấm `` Ctrl + ` `` để mở terminal.
-Hoặc trong PowerShell gõ:
+The easiest way is to open the project folder in **VS Code** and press `` Ctrl + ` `` to open the built-in terminal.
+Or, in PowerShell:
 
 ```powershell
-cd H:\Projects\quy-mon-quan
+cd path\to\quy-mon-quan
 ```
 
-**Bước 3. Chạy game**
+**Step 3. Run the game**
 
 ```powershell
+copy .env.example .env
 npm run dev
 ```
 
-Thấy dòng `Quỷ Môn Quan đang chạy: http://localhost:3000` thì mở trình duyệt vào địa chỉ đó.
-Lần đầu bấm "Tạo tài khoản", đặt tên, tạo nhân vật rồi chơi.
-Muốn tắt server: bấm `Ctrl + C` trong terminal.
+When you see `Quỷ Môn Quan đang chạy: http://localhost:3000`, open that address in your browser.
+The first time, click "Tạo tài khoản" (create account), pick a name, create a character and play.
+Press `Ctrl + C` in the terminal to stop the server.
 
-Dòng `ExperimentalWarning: SQLite is an experimental feature` là cảnh báo bình thường của Node, không phải lỗi.
+The line `ExperimentalWarning: SQLite is an experimental feature` is a normal Node warning, not an error.
 
-**Bước 4. Sửa game**
+**Step 4. Edit the game**
 
-- Sửa file trong `client/src/` → lưu → **F5** trên trình duyệt là thấy.
-- Sửa file trong `server/src/` → server tự khởi động lại.
+- Edit files in `client/src/` → save → press **F5** in the browser.
+- Edit files in `server/src/` → the server restarts by itself.
 
-**Bước 5. Build bản chính thức**
+**Step 5. Production build**
 
 ```powershell
 npm run build
 npm start
 ```
 
-`npm run build` tạo ra `client/dist/index.html` (1 file chứa cả game).
-`npm start` chạy server dùng bản đã build. Đây cũng là lệnh mà các dịch vụ hosting sẽ chạy.
+`npm run build` creates `client/dist/index.html` (a single file containing the whole game).
+`npm start` runs the server against the built file. This is also the command hosting platforms run.
 
-## Yêu cầu
+## Requirements
 
-- **Node.js 22.13 trở lên** (để có `node:sqlite`). Kiểm tra: `node -v`
-- Không cần `npm install`.
+- **Node.js 22.13 or newer** (for `node:sqlite`). Check with `node -v`.
+- No `npm install` needed.
 
-## Chạy trên máy
+## Scripts
 
-```bash
-npm run dev      # chế độ phát triển: chạy thẳng mã nguồn client/src, sửa code rồi F5 là thấy
-```
-
-Mở http://localhost:3000, tạo tài khoản, tạo nhân vật và chơi.
-Dữ liệu được lưu trong file `data/game.db` (SQLite).
-
-Chế độ dev tự khởi động lại server khi bạn sửa file trong `server/src` (dùng `node --watch`).
-Với code client, chỉ cần tải lại trang.
+| Command | What it does |
+|---|---|
+| `npm run dev` | Development mode: serves `client/src` directly, restarts the server when `server/src` changes |
+| `npm run build` | Bundles the whole client into `client/dist/index.html` |
+| `npm start` | Runs the server in production mode, serving the built file |
+| `npm run check` | Scans the files that would be committed for leaked secrets |
+| `npm run hooks` | Installs a git pre-commit hook that runs `npm run check` on every commit |
 
 ## Build
 
-```bash
-npm run build    # gộp toàn bộ client thành 1 file: client/dist/index.html
-npm start        # chạy server ở chế độ production (phục vụ bản đã build)
-```
+`tools/build.mjs` is a tiny hand-written bundler. It follows the `import`s starting at `client/src/main.js`,
+concatenates the modules in dependency order, and inlines the JS and CSS into a single HTML file.
+Because everything ends up in one scope, two modules must not declare the same top-level name; the build fails if they do.
 
-`tools/build.mjs` là một "bundler" nhỏ tự viết. Nó lần theo các `import` từ `client/src/main.js`,
-ghép các module theo đúng thứ tự, rồi nhúng JS + CSS vào một file HTML duy nhất.
-Vì gộp chung phạm vi, hai module không được khai báo trùng tên ở cấp cao nhất; build sẽ báo lỗi nếu có.
+`client/dist/index.html` also works when opened directly from disk (no server).
+In that case the game saves to the browser's localStorage.
 
-`client/dist/index.html` cũng chạy được khi mở trực tiếp bằng trình duyệt (không có server).
-Khi đó game tự lưu vào trình duyệt (localStorage).
+## Where the game saves
 
-## Game tự chọn nơi lưu dữ liệu
+`client/src/storage/storage.js` tries, in order:
 
-`client/src/storage/storage.js` thử lần lượt:
-
-| Tình huống | Nơi lưu | Đăng nhập |
+| Situation | Storage | Login |
 |---|---|---|
-| Có server (`npm start`) | SQLite qua REST API | Có (tài khoản + mật khẩu) |
-| Chạy trong link Claude | Database của artifact (theo tài khoản Claude) | Không cần |
-| Mở file HTML trực tiếp | localStorage của trình duyệt | Không cần |
+| A server is running (`npm start`) | SQLite through the REST API | Yes (username + password) |
+| Running inside a Claude artifact link | The artifact's database (per Claude account) | No |
+| HTML file opened directly | Browser localStorage | No |
 
-## Deploy lên mạng
+## Deployment
 
-Server là một tiến trình Node bình thường, nghe cổng `PORT` và lưu database vào thư mục `DATA_DIR`.
-**SQLite cần ổ đĩa không bị xoá** khi deploy lại, nên hãy chọn nơi có volume/persistent disk.
+The server is a plain Node process that listens on `PORT` and keeps its database in `DATA_DIR`.
+**SQLite needs a disk that survives redeploys**, so pick a host with a volume / persistent disk.
 
-### Cách 1: VPS (DigitalOcean, Vultr, máy chủ riêng…)
+### Option 1: VPS (DigitalOcean, Vultr, your own machine…)
 
 ```bash
-git clone <repo của bạn> quy-mon-quan && cd quy-mon-quan
+git clone <your repo> quy-mon-quan && cd quy-mon-quan
 npm run build
 cp .env.example .env
-# sửa .env: NODE_ENV=production, DATA_DIR=/var/lib/quymonquan, TOKEN_SECRET=<chuỗi ngẫu nhiên>, TRUST_PROXY=true nếu có Nginx/Caddy phía trước
+# edit .env: NODE_ENV=production, DATA_DIR=/var/lib/quymonquan, TOKEN_SECRET=<random string>, TRUST_PROXY=true if Nginx/Caddy sits in front
 node server/src/index.js
 ```
 
-Để server chạy nền và tự bật lại khi máy khởi động, dùng pm2:
+To keep it running in the background and restart it on boot, use pm2:
 
 ```bash
 npm i -g pm2
@@ -132,338 +129,350 @@ pm2 start server/src/index.js --name quymonquan
 pm2 save && pm2 startup
 ```
 
-Muốn có tên miền + HTTPS thì đặt Nginx hoặc Caddy phía trước, trỏ về `localhost:3000`.
+For a domain name and HTTPS, put Nginx or Caddy in front and proxy to `localhost:3000`.
 
-### Cách 2: Docker
+### Option 2: Docker
 
 ```bash
 docker build -t quymonquan .
-docker run -d -p 3000:3000 -v quymonquan-data:/data -e TOKEN_SECRET=<chuỗi-ngẫu-nhiên-64-ký-tự> --name quymonquan quymonquan
+docker run -d -p 3000:3000 -v quymonquan-data:/data -e TOKEN_SECRET=<random-64-char-string> --name quymonquan quymonquan
 ```
 
-Image chạy ở chế độ production nên bắt buộc truyền `TOKEN_SECRET`. Không dùng `--env-file .env` của bản dev vì nó sẽ ghi đè `DATA_DIR` và `NODE_ENV`.
+The image runs in production mode, so `TOKEN_SECRET` is required. Do not pass your dev `.env` with `--env-file`, because it would override `DATA_DIR` and `NODE_ENV`.
 
-### Cách 3: Railway (dễ nhất nếu mới làm lần đầu)
+### Option 3: Railway (easiest for a first deploy)
 
-**3a. Đưa code lên GitHub**
+**3a. Push the code to GitHub**
 
-1. Tạo tài khoản ở https://github.com, bấm **New repository**, đặt tên `quy-mon-quan`, để **Private**, bấm Create.
-2. Cài Git cho Windows ở https://git-scm.com (cứ Next).
-3. Trong terminal ở thư mục game:
+1. Create an account at https://github.com, click **New repository**, name it, keep it **Private**, click Create.
+2. Install Git for Windows from https://git-scm.com.
+3. In a terminal in the project folder:
 
 ```powershell
 git init
+npm run hooks
+npm run check
 git add .
-git commit -m "Quỷ Môn Quan bản đầu tiên"
+git status
+git commit -m "First version"
 git branch -M main
-git remote add origin https://github.com/<tên-của-bạn>/quy-mon-quan.git
+git remote add origin https://github.com/<your-name>/<repo-name>.git
 git push -u origin main
 ```
 
-Lần đầu push, Git sẽ mở cửa sổ đăng nhập GitHub, bạn đăng nhập là xong.
-File `.gitignore` đã loại sẵn `data/` (database) và `client/dist/`, nên không đẩy nhầm dữ liệu lên.
+Git opens a GitHub login window on the first push. `git status` must not show `.env` or `data/`.
 
-**3b. Deploy lên Railway**
+**3b. Deploy on Railway**
 
-1. Vào https://railway.com, đăng nhập bằng GitHub.
-2. **New Project → Deploy from GitHub repo** → chọn `quy-mon-quan`. Railway tự thấy `Dockerfile` và build.
-3. Mở service vừa tạo → **Settings → Volumes → Add Volume**, Mount path: `/data`.
-   Bước này bắt buộc. Không có volume thì mỗi lần deploy lại sẽ mất hết tài khoản và nhân vật.
-4. Tab **Variables**: thêm `NODE_ENV=production`, `TRUST_PROXY=true` và `TOKEN_SECRET` = chuỗi ngẫu nhiên ít nhất 32 ký tự (tạo bằng lệnh ở mục Biến môi trường).
-   `DATA_DIR=/data` và `PORT` đã có sẵn trong Dockerfile, Railway tự gán cổng.
-5. **Settings → Networking → Generate Domain**. Bạn sẽ có link dạng `quy-mon-quan-production.up.railway.app`.
+1. Go to https://railway.com and sign in with GitHub.
+2. **New Project → Deploy from GitHub repo** → pick your repo. Railway detects the `Dockerfile` and builds it.
+3. Open the new service → **Settings → Volumes → Add Volume**, mount path `/data`.
+   This step is required. Without a volume, every redeploy wipes all accounts and characters.
+4. **Variables** tab: add `NODE_ENV=production`, `TRUST_PROXY=true` and `TOKEN_SECRET` = a random string of at least 32 characters (see the command under Environment variables).
+   `DATA_DIR=/data` and `PORT` already come from the Dockerfile; Railway assigns the port.
+5. **Settings → Networking → Generate Domain** gives you a link like `your-app.up.railway.app`.
 
-Sau này mỗi lần sửa game, chỉ cần:
+After that, every change is just:
 
 ```powershell
 git add .
-git commit -m "mô tả thay đổi"
+git commit -m "describe the change"
 git push
 ```
 
-Railway sẽ tự build và deploy lại, dữ liệu trong volume vẫn giữ nguyên.
+Railway rebuilds and redeploys automatically; the data in the volume is kept.
 
-### Cách 3 (khác): Render / Fly.io
+### Option 3b: Render / Fly.io
 
-Làm tương tự Railway: tạo dịch vụ từ repo GitHub, nền tảng tự nhận `Dockerfile`.
-Nếu không dùng Docker: Build command `npm run build`, Start command `npm start`.
-Gắn **Persistent Disk** vào `/data`, đặt `DATA_DIR=/data`, `NODE_ENV=production`, `TRUST_PROXY=true` và `TOKEN_SECRET`.
-Lưu ý: gói miễn phí của Render không có ổ đĩa lưu trữ, nên dữ liệu sẽ mất mỗi khi deploy lại.
+Same idea as Railway: create a service from the GitHub repo and let the platform pick up the `Dockerfile`.
+Without Docker: build command `npm run build`, start command `npm start`.
+Attach a **Persistent Disk** at `/data` and set `DATA_DIR=/data`, `NODE_ENV=production`, `TRUST_PROXY=true` and `TOKEN_SECRET`.
+Note: Render's free tier has no persistent disk, so data is lost on every redeploy.
 
-### Cách 4: Chỉ host file tĩnh (không có backend)
+### Option 4: Static hosting only (no backend)
 
-Upload riêng `client/dist/index.html` lên GitHub Pages, Netlify hoặc Vercel.
-Game vẫn chơi được, dữ liệu lưu trong trình duyệt của người chơi.
+Upload just `client/dist/index.html` to GitHub Pages, Netlify or Vercel.
+The game still works; progress is stored in each player's browser.
 
-## Biến môi trường (.env)
+## Environment variables (.env)
 
-Copy file mẫu rồi sửa:
+Copy the template and edit it:
 
 ```bash
 cp .env.example .env        # Windows: copy .env.example .env
 ```
 
-Server tự đọc `.env` khi khởi động (dùng `process.loadEnvFile` có sẵn của Node, không cần thư viện dotenv). Biến đặt thật trên Railway/Docker luôn được ưu tiên hơn `.env`.
+The server loads `.env` on startup with Node's built-in `process.loadEnvFile` (no dotenv package). Variables set by the platform (Railway, Docker…) always win over `.env`.
 
-| Biến | Mặc định | Ý nghĩa |
+| Variable | Default | Meaning |
 |---|---|---|
-| `NODE_ENV` | `development` | `production` thì bắt buộc có `TOKEN_SECRET` ≥ 32 ký tự, thiếu là server không chạy |
-| `PORT` / `HOST` | `3000` / `0.0.0.0` | Cổng và địa chỉ lắng nghe |
-| `DATA_DIR` | `./data` | Thư mục chứa `game.db` |
-| `TOKEN_SECRET` | tự tạo khi dev | Khoá ký token đăng nhập. Tạo: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-| `TOKEN_DAYS` | `30` | Token hết hạn sau bao nhiêu ngày |
-| `ALLOW_REGISTER` | `true` | `false` = khoá đăng ký tài khoản mới (chỉ mình bạn chơi) |
-| `MAX_CHARS_PER_USER` | `6` | Số nhân vật mỗi tài khoản |
-| `LOGIN_LIMIT_PER_MIN` | `10` | Số lần đăng nhập/đăng ký tối đa mỗi phút mỗi IP |
-| `API_LIMIT_PER_MIN` | `240` | Số request API tối đa mỗi phút mỗi IP |
-| `TRUST_PROXY` | `false` | Bật khi chạy sau proxy (Railway, Render, Nginx) để giới hạn theo đúng IP người chơi |
-| `CORS_ORIGIN` | trống | Chỉ điền khi trang game và API ở hai địa chỉ khác nhau |
+| `NODE_ENV` | `development` | With `production`, a `TOKEN_SECRET` of 32+ characters is mandatory; the server refuses to start without it |
+| `PORT` / `HOST` | `3000` / `0.0.0.0` | Port and address to listen on |
+| `DATA_DIR` | `./data` | Folder holding `game.db` |
+| `TOKEN_SECRET` | auto-generated in dev | Key used to sign login tokens. Generate one: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `TOKEN_DAYS` | `30` | Login token lifetime in days |
+| `ALLOW_REGISTER` | `true` | `false` blocks new account sign-ups (handy when only you play) |
+| `MAX_CHARS_PER_USER` | `6` | Characters per account |
+| `LOGIN_LIMIT_PER_MIN` | `10` | Max login / register attempts per minute per IP |
+| `API_LIMIT_PER_MIN` | `240` | Max API requests per minute per IP |
+| `TRUST_PROXY` | `false` | Turn on behind a proxy (Railway, Render, Nginx) so rate limits use the real player IP |
+| `CORS_ORIGIN` | empty | Only set when the game page and the API live on different origins |
 
-## Bảo mật và đưa lên GitHub
+## Security and publishing to GitHub
 
-**Những thứ không bao giờ lên git** (đã có trong `.gitignore`): `.env`, thư mục `data/` (database người chơi và `secret.key`), mọi file `*.db`, `*.key`, `*.pem`. Chỉ `.env.example` được commit.
+**Never committed** (already in `.gitignore`): `.env`, the `data/` folder (player database and `secret.key`), any `*.db`, `*.key`, `*.pem`. Only `.env.example` is committed.
 
-**Trước khi push lần đầu:**
+**Before the first push:**
 
 ```bash
 git init
-npm run hooks      # cài pre-commit: mỗi lần commit tự quét bí mật
-npm run check      # quét thử ngay
+npm run hooks      # install the pre-commit hook: every commit is scanned for secrets
+npm run check      # scan right now
 git add .
-git status         # kiểm tra lại: không được thấy .env hay data/
+git status         # double-check: no .env, no data/
 git commit -m "Quỷ Môn Quan"
 ```
 
-`npm run check` (`tools/check-secrets.mjs`) chặn: file `.env`, database, khoá, và nội dung trông như token GitHub/AWS/Google/OpenAI, private key, biến `SECRET=`/`PASSWORD=` có giá trị. GitHub Actions (`.github/workflows/ci.yml`) cũng chạy lại bước này, build client và khởi động thử server mỗi lần push.
+`npm run check` (`tools/check-secrets.mjs`) blocks `.env` files, databases, key files, and content that looks like GitHub / AWS / Google / OpenAI tokens, private keys, or `SECRET=` / `PASSWORD=` assignments with a value. GitHub Actions (`.github/workflows/ci.yml`) runs the same scan, builds the client and boots the server on every push.
 
-**Nếu lỡ đẩy bí mật lên:** xoá khỏi commit vẫn chưa đủ vì lịch sử git còn giữ. Hãy đổi `TOKEN_SECRET` mới ngay (mọi người chỉ phải đăng nhập lại), rồi mới dọn lịch sử.
+**If a secret was pushed by mistake:** deleting it in a new commit is not enough, because git history still has it. Rotate `TOKEN_SECRET` immediately (players just have to log in again), then clean the history.
 
-**Server đã có sẵn:**
+**What the server already does:**
 
-- Mật khẩu băm bằng scrypt có salt, so sánh chống timing attack. Token ký HMAC-SHA256, có hạn dùng.
-- Giới hạn đăng nhập/đăng ký và tổng số request theo IP.
-- Header bảo mật: Content-Security-Policy (không cho tải script từ trang khác), nosniff, chống nhúng iframe lạ, HSTS khi production.
-- Chỉ nhận JSON, giới hạn 256 KB mỗi request, hết thời gian chờ để chống giữ kết nối treo.
-- File tĩnh: chặn `../` và mọi file ẩn (`.env`, `.git`…).
-- Kiểm tra dữ liệu lưu: chặn cấp > 50, ngân lượng âm hoặc quá lớn, điểm tiềm năng và điểm kỹ năng vượt mức có thể có, vật phẩm vô lý. Mỗi tài khoản chỉ sửa được nhân vật của chính mình.
-- Docker chạy bằng user thường, không phải root.
+- Passwords hashed with salted scrypt and compared in constant time. Login tokens signed with HMAC-SHA256 and expiring.
+- Rate limits on login / register and on total API requests per IP.
+- Security headers: Content-Security-Policy (no scripts from other origins), `nosniff`, framing restricted, HSTS in production.
+- JSON-only request bodies, 256 KB limit per request, header and request timeouts against slow-connection attacks.
+- Static files: `../` path traversal and all dotfiles (`.env`, `.git`…) are blocked.
+- Save validation: rejects level > 50, negative or absurd gold, stat or skill points above what the level allows, and malformed items. An account can only modify its own characters.
+- The Docker image runs as a non-root user.
 
-**Giới hạn cần biết:**
+**Limits to keep in mind:**
 
-- Code client (thư mục `client/`) luôn xem được trong trình duyệt, kể cả khi repo để private. Đừng bao giờ đặt bí mật trong code client.
-- Game tính toán ở trình duyệt rồi gửi kết quả lên, nên server chỉ chặn được số liệu vô lý chứ không chống gian lận hoàn toàn. Với game một người chơi thì đủ dùng.
-- Công cụ thử nghiệm `__game()` chỉ bật khi chạy ở `localhost`/file trên máy, hoặc khi thêm `?debug` vào địa chỉ.
-- Muốn giấu mã nguồn thì để repo ở chế độ **Private** trên GitHub. Nếu để Public, nên thêm file LICENSE để nói rõ người khác được dùng code thế nào.
+- Client code (`client/`) is always visible in the browser, even if the repo is private. Never put secrets in client code.
+- Game logic runs in the browser and the result is sent to the server, so the server rejects impossible values but cannot fully prevent cheating. That is fine for a single-player game.
+- The `__game()` debug helpers are only exposed on `localhost`, when opening the file locally, or with `?debug` in the URL.
+- To keep the source private, set the GitHub repo to **Private**. If you make it public, add a LICENSE file stating how others may use the code.
 
-## Cấu trúc thư mục
+## Project structure
 
 ```
 client/
-  index.html            trang dev (nạp src/main.js dạng ES module)
+  index.html            dev page (loads src/main.js as an ES module)
   src/
-    main.js             khởi động, vòng lặp game, nối UI với thế giới game
-    engine/             input bàn phím/cảm ứng, hàm tiện ích
-    data/               DỮ LIỆU GAME: môn phái, kỹ năng, đồ, quái, bản đồ, NPC, nhiệm vụ, bot
-      story.js          cốt truyện chính, nhiệm vụ hướng dẫn, cảnh có lựa chọn
-      chatter.js        thoại thường ngày của NPC, NPC nói chuyện với nhau
-      affixes.js        đặc tính quái, bậc trí khôn, quái Tinh Anh, boss truyện và boss dã ngoại
+    main.js             startup, game loop, wires the UI to the game world
+    engine/             keyboard / touch input, utilities
+    data/               GAME DATA: classes, skills, items, monsters, maps, NPCs, quests, bots
+      story.js          main story, tutorial quests, scenes with choices
+      chatter.js        everyday NPC lines and NPC-to-NPC conversations
+      affixes.js        monster affixes, intelligence tiers, elites, story and field bosses
+      recipes.js        crafting recipes
+      legacy.js         old (pre-English) id map, migrates saves made before the rename
     gfx/
-      draw.js           công cụ vẽ: canvas độ phân giải cao, viền, đổ bóng, gradient
-      humanoid.js       nhân vật chibi (tóc, mắt, áo, mũ, vũ khí, 14 khung hình)
-      monsters.js       6 loại quái + boss
-      icons.js          icon vật phẩm và hình đạn
-      backgrounds.js    phông nền nhiều lớp của từng bản đồ
+      draw.js           drawing toolkit: hi-res canvases, outlines, shading, gradients
+      humanoid.js       chibi characters (hair, eyes, robes, hats, weapons, outfit parts, 14 frames)
+      monsters.js       monster and boss sprites
+      icons.js          item icons and projectiles
+      backgrounds.js    layered backgrounds for every map
     game/
-      character.js      chỉ số, EXP, túi đồ, trang bị, trạng thái nhiệm vụ
-      entities.js       vật lý (trọng lực, bục một chiều), người chơi, quái, đạn
-      world.js          logic chính: chiến đấu, AI quái, boss, đồ rơi, vẽ khung hình
-      bots.js           AI bot giả người chơi + chat
-      chatter.js        chọn câu thoại NPC theo ngữ cảnh, không lặp
-    ui/                 HUD, cửa sổ túi đồ/kỹ năng/nhiệm vụ/cửa hàng, màn hình đăng nhập
-    storage/            3 cách lưu dữ liệu (API / Claude / trình duyệt)
+      character.js      stats, EXP, inventory, equipment, gems, crafting, passives, quest state
+      entities.js       physics (gravity, one-way platforms), player, monsters, projectiles
+      world.js          core logic: combat, monster AI, bosses, drops, rendering
+      bots.js           fake-player bot AI and chat
+      chatter.js        picks context-aware NPC lines without repeating
+    ui/                 HUD, inventory / skills / quests / shop / forge / crafting windows, login screens
+    storage/            the 3 storage backends (API / Claude / browser)
     style.css
 server/src/
-  index.js              HTTP server, định tuyến API, phục vụ file tĩnh
-  db.js                 schema SQLite + đọc/ghi nhân vật
-  auth.js               băm mật khẩu (scrypt), token đăng nhập (HMAC)
-tools/build.mjs         đóng gói client thành 1 file HTML
+  index.js              HTTP server, API routing, security headers, rate limits, static files
+  config.js             reads environment variables and .env
+  db.js                 SQLite schema, migrations, character read / write
+  auth.js               password hashing (scrypt), login tokens (HMAC)
+tools/
+  build.mjs             bundles the client into one HTML file
+  check-secrets.mjs     secret scanner used by `npm run check` and the pre-commit hook
+.env.example            configuration template
+Dockerfile              production image
 ```
 
 ## Database
 
-4 bảng (xem `server/src/db.js`):
+4 tables (see `server/src/db.js`):
 
-- `users`: tài khoản, mật khẩu đã băm
-- `characters`: chỉ số, cấp, vàng, vị trí, kỹ năng (JSON), pet, danh hiệu, `flags` (JSON: lựa chọn trong cốt truyện)
-- `items`: mỗi món đồ một dòng, `equip_slot` khác NULL nghĩa là đang mặc; `enhance` là cấp cường hóa, `el` là nguyên tố đã khảm, `gems` (JSON) là ngọc đã ép
-- `quests`: tiến độ từng nhiệm vụ, `day` là ngày hoàn thành (cho nhiệm vụ hằng ngày)
+- `users`: accounts and password hashes
+- `characters`: stats, level, gold, position, skills (JSON), pet, title, `flags` (JSON: story choices)
+- `items`: one row per item; a non-NULL `equip_slot` means equipped; `enhance` is the enhancement level, `el` the socketed element, `gems` (JSON) the socketed gems
+- `quests`: progress per quest; `day` is the completion date (for daily quests)
 
-Khi thêm cột mới (ví dụ cột `pet`), hàm `migrate()` trong `db.js` tự `ALTER TABLE` cho database cũ lúc server khởi động, nên dữ liệu cũ không bị mất.
+When a new column is added (for example `pet`), `migrate()` in `db.js` runs `ALTER TABLE` on old databases at startup, so existing data is never lost.
 
-Muốn xem dữ liệu: mở `data/game.db` bằng [DB Browser for SQLite](https://sqlitebrowser.org/).
+To inspect the data, open `data/game.db` with [DB Browser for SQLite](https://sqlitebrowser.org/).
 
 ## API
 
-| Method | Đường dẫn | Mô tả |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/api/health` | Kiểm tra server |
+| GET | `/api/health` | Health check |
 | POST | `/api/auth/register` | `{username, password}` → `{token}` |
 | POST | `/api/auth/login` | `{username, password}` → `{token}` |
-| GET | `/api/characters` | Danh sách nhân vật (cần token) |
-| POST | `/api/characters` | Tạo nhân vật `{character}` |
-| PUT | `/api/characters/:id` | Lưu tiến trình `{character}` |
-| DELETE | `/api/characters/:id` | Xoá nhân vật |
-| GET | `/api/leaderboard` | Top 10 cấp cao nhất |
+| GET | `/api/characters` | List characters (token required) |
+| POST | `/api/characters` | Create a character `{character}` |
+| PUT | `/api/characters/:id` | Save progress `{character}` |
+| DELETE | `/api/characters/:id` | Delete a character |
+| GET | `/api/leaderboard` | Top 10 by level |
 
-Gửi token qua header `Authorization: Bearer <token>`.
+Send the token in the `Authorization: Bearer <token>` header. Request bodies must be `Content-Type: application/json`.
 
-## Tự mở rộng game
+## Extending the game
 
-Hầu hết nội dung nằm trong `client/src/data/`, chỉ cần sửa dữ liệu:
+**Conventions.** Code, ids and comments are in English. Only player-facing text (dialogue, item and map names, UI labels, error messages shown on screen) is Vietnamese. Ids are lowercase snake_case: classes `swordsman` / `taoist` / `assassin`, elements `fire` / `ice` / `thunder` / `poison`, maps such as `village` or `ghost_gate`. If you rename an id that can be stored in a save, add the old name to `client/src/data/legacy.js` so existing characters keep loading.
 
-- **Thêm quái**: thêm vào `data/monsters.js`, vẽ hình trong `gfx/monsters.js` (thêm hàm vẽ vào `MAKERS`), rồi đặt vào `spawns` của một bản đồ.
-- **Thêm bản đồ**: thêm vào `maps.js` (bục, cổng, điểm sinh quái, NPC), chọn `theme` có sẵn (`village`, `forest`, `field`, `graveyard`, `hell`, `swamp`, `snow`, `icecave`, `volcano`, `temple`) hoặc thêm theme mới trong `gfx/backgrounds.js`. Nhớ thêm cổng nối hai chiều. Thời tiết của theme nằm trong `updateWeather` (`game/world.js`).
-- **Thêm boss**: khai báo `behavior: 'boss'`, `proj` (loại đạn), `summon` (quái triệu hồi) và `lines` (câu thoại) trong `data/monsters.js`.
-- **Thêm đồ**: thêm vào `items.js`, rồi cho vào bảng rơi đồ của quái hoặc cửa hàng NPC trong `npcs.js`.
-- **Thêm nhiệm vụ**: thêm vào `QUESTS` trong `npcs.js` (nhiệm vụ phụ) hoặc `story.js` (cốt truyện, hướng dẫn) và ghi id vào danh sách `quests` của NPC.
-- **Thêm thoại NPC**: thêm câu vào `data/chatter.js`. Câu có điều kiện viết `['lời thoại', { a: 'st7' }]` (chỉ nói sau khi xong st7).
-- **Cân bằng game**: công thức chỉ số ở `calcStats`, EXP ở `expToNext` (`game/character.js`), sát thương ở `damageMonster` (`game/world.js`).
+Almost all content lives in `client/src/data/`, so most changes are data edits:
 
-Khi thử nghiệm, mở DevTools (F12) và gõ:
+- **New monster**: add it to `data/monsters.js`, draw it in `gfx/monsters.js` (register the draw function in `MAKERS`), then place it in a map's `spawns`.
+- **New map**: add it to `maps.js` (platforms, portals, spawns, NPCs) and pick an existing `theme` (`village`, `forest`, `field`, `graveyard`, `hell`, `swamp`, `snow`, `icecave`, `volcano`, `temple`) or add a theme in `gfx/backgrounds.js`. Remember to add portals in both directions. Weather per theme lives in `updateWeather` (`game/world.js`).
+- **New boss**: set `behavior: 'boss'`, `proj` (projectile), `summon` (summoned minion) and `lines` (dialogue) in `data/monsters.js`.
+- **New named / field boss**: add an entry to `NAMED` in `data/affixes.js` based on an existing monster, with multipliers, affixes, drops and either a `quest` (story boss) or an `every` respawn timer (field boss).
+- **New item**: add it to `items.js`, then to a monster's drop table, an NPC shop in `npcs.js`, or a recipe in `recipes.js`.
+- **New quest**: add it to `QUESTS` in `npcs.js` (side quests) or to `story.js` (story, tutorials), then add its id to the NPC's `quests` list.
+- **New NPC line**: add it to `data/chatter.js`. Conditional lines are written as `['line', { a: 'st7' }]` (only said after quest st7 is done).
+- **Balancing**: stat formulas in `calcStats`, EXP curve in `expToNext` (`game/character.js`), damage in `damageMonster` (`game/world.js`).
+
+While testing, open DevTools (F12) and type:
 
 ```js
-__game().giveExp(5000)          // cộng EXP
-__game().ch.gold += 10000       // thêm vàng
-__game().loadMap('quymon', 200) // dịch chuyển tới boss
+__game().giveExp(5000)          // add EXP
+__game().ch.gold += 10000       // add gold
+__game().loadMap('ghost_gate', 200) // teleport to the first boss
 ```
 
-## Điều khiển
+## Controls
 
-| Phím | Tác dụng |
+| Key | Action |
 |---|---|
-| ← → | Di chuyển |
-| Space / X | Nhảy (giữ = nhảy cao, nhấn thêm lần nữa trên không = nhảy đôi) |
-| ↓ + Space | Nhảy xuống khỏi bục |
-| ↓ (đứng yên) | Ngồi nghỉ, hồi máu nhanh gấp 3 |
-| Z / J (giữ) | Đánh thường |
-| A S D | Kỹ năng |
-| 1 / 2 | Bình máu / bình linh khí |
-| ↑ / E | Qua cổng, nói chuyện với NPC |
-| I C K L | Túi đồ, Nhân vật, Kỹ năng, Nhiệm vụ |
-| Enter | Chat (bot sẽ trả lời) |
-| P | Gọi / cất pet Tiểu Quỷ |
-| Esc | Đóng cửa sổ / menu hệ thống |
+| ← → | Move |
+| Space / X | Jump (hold = higher, press again in the air = double jump) |
+| ↓ + Space | Drop down through a platform |
+| ↓ (standing still) | Sit and rest, regenerates 3× faster |
+| Z / J (hold) | Basic attack |
+| A S D | Skills |
+| 1 / 2 | HP potion / MP potion |
+| ↑ / E | Use portal, talk to NPC |
+| I C K L | Inventory, Character, Skills, Quests |
+| Enter | Chat (bots reply) |
+| P | Summon / dismiss the pet |
+| Esc | Close window / system menu |
 
-Trên điện thoại, nút cảm ứng tự hiện khi bạn chạm màn hình.
+On phones, touch buttons appear automatically the first time you touch the screen.
 
-## Hệ thống trong game
+## Game systems
 
-**Nguyên tố** (`data/elements.js`)
+**Elements** (`data/elements.js`)
 
-- Quái có bảng `res`: số dương là kháng, số âm là yếu. Ví dụ Quỷ Rơm `res: { hoa: -0.5 }` nhận thêm 50% sát thương Hỏa.
-- Đòn đánh lấy hệ từ kỹ năng (Lôi Phù = Lôi, Hỏa Long Phù = Hỏa, Độc Vụ = Độc). Kỹ năng không có hệ riêng thì theo hệ của vũ khí.
-- Vũ khí có hệ từ ngọc đã khảm (Hỏa/Băng/Lôi/Độc Châu, dùng trong túi đồ), hoặc hệ sẵn có (vũ khí bậc 5 là Băng, bậc 6 là Hỏa).
-- Người chơi có kháng từ trang bị (`r_hoa`, `r_bang`…), tối đa 75%. Xem ở cửa sổ Nhân vật (phím C).
+- Monsters have a `res` table: positive values resist, negative values are weaknesses. For example the scarecrow's `res: { fire: -0.5 }` takes 50% extra fire damage.
+- An attack takes its element from the skill (Lôi Phù = lightning, Hỏa Long Phù = fire, Độc Vụ = poison). Skills without an element use the weapon's element.
+- Weapons get an element from a socketed orb (fire / ice / lightning / poison orb, used from the inventory) or have one built in (tier 5 weapons are ice, tier 6 are fire).
+- Players get resistances from gear (`res_fire`, `res_ice`…), capped at 75%. See the Character window (C).
 
-**Cường hóa** (`data/items.js` → `ENHANCE_*`, `game/character.js` → `enhanceEntry`)
+**Enhancement** (`data/items.js` → `ENHANCE_*`, `game/character.js` → `enhanceEntry`)
 
-- Mỗi cấp cộng 10% chỉ số gốc của món đồ.
-- Tỉ lệ thành công giảm dần: +1 là 100%, +10 là 22%. Từ +5 trở lên, thất bại sẽ tụt 1 cấp, trừ khi dùng Bùa Bảo Hộ.
-- Chi phí: `1 + cấp/3` Đá Cường Hóa và ngân lượng tăng theo cấp đồ.
+- Each level adds 10% of the item's base stats.
+- Success rate drops with level: +1 is 100%, +10 is 22%. From +5 upwards a failure drops the item one level unless a protection charm is used.
+- Cost: `1 + level/3` enhancement stones plus gold that scales with item level.
 
-**Nhiệm vụ hằng ngày**: nhiệm vụ có `daily: true` lưu ngày hoàn thành; sang ngày mới (giờ máy) là nhận lại được.
+**Daily quests**: quests with `daily: true` store the completion date and can be taken again the next day (local time).
 
-**Danh hiệu**: phần thưởng `title` của nhiệm vụ, hiện phía trên đầu nhân vật.
+**Titles**: a quest reward `title`, shown above the character's head.
 
-**Nội công (kỹ năng bị động)** (`data/classes.js` → `PASSIVES`)
+**Passive skills** (`data/classes.js` → `PASSIVES`)
 
-- Mỗi môn phái 4 nội công xếp thành cây, mở ở cấp 5 / 10 / 16 / 22, tầng dưới cần tầng trên đạt cấp yêu cầu. Tối đa cấp 5.
-- Dùng chung điểm kỹ năng với chiêu chủ động (+1 điểm mỗi cấp), nên phải chọn hướng cộng.
-- Kiếm Khách: máu/thủ → công/sát thương chí mạng → hút máu → mạnh lên khi máu thấp. Đạo Sĩ: nội lực → sát thương hệ → giảm nội lực tốn → kháng mọi hệ. Thích Khách: né/tốc chạy → chí mạng → sát thương chí mạng → hồi máu khi hạ quái.
-- Tẩy điểm ở cửa sổ Kỹ năng, tốn `cấp × 150` lượng.
+- Each class has 4 passives in a tree, unlocking at levels 5 / 10 / 16 / 22. Each node requires the previous one at a certain level. Max level 5.
+- Passives share skill points with active skills (+1 point per level), so you have to choose a build.
+- Swordsman: HP/defense → attack/crit damage → life steal → bonus when low on HP. Taoist: MP → elemental damage → lower MP cost → all resistances. Assassin: dodge/move speed → crit chance → crit damage → heal on kill.
+- Respec from the Skills window costs `level × 150` gold.
 
-**Quái theo cấp** (`data/affixes.js`, `game/entities.js` → `Monster`)
+**Monster scaling** (`data/affixes.js`, `game/entities.js` → `Monster`)
 
-- Mỗi con có cấp riêng, dao động 0–3 cấp trên cấp gốc của loài. Mỗi cấp thêm: máu +12%, công +7%, thủ +5%, EXP +15%.
-- Bậc trí khôn theo cấp: 1–5 bị đánh mới đuổi · 6–12 thấy là lao vào, quái bắn xa giữ khoảng cách · 13–20 né đạn, gọi đồng bọn, khựng lại rồi lao húc · 21+ bắn đón đầu, đánh dồn dập, máu thấp thì lùi lại hồi sức.
-- **Tinh Anh** (★, tên vàng, có hào quang): 3–7% tùy cấp vùng. Máu ×4, công ×1.4, thêm 1–2 đặc tính ngẫu nhiên, rơi đồ tốt hơn.
-- **Đặc tính**: Phản Đòn (dội 18% sát thương về bạn), Hút Huyết, Tự Hồi, Cuồng Nộ, Tự Bạo (vòng đỏ rồi nổ), Thuấn Di, Hàn Băng (làm chậm), Kịch Độc, Hộ Thể (khiên). Một số loài có sẵn: Băng Tinh Thạch phản đòn, Ếch Độc kịch độc, Nham Thạch Thú tự bạo, Băng Dực hàn băng…
+- Every monster rolls its own level, 0–3 above its species level. Per level: HP +12%, attack +7%, defense +5%, EXP +15%.
+- Intelligence tiers by level: 1–5 only chase after being hit · 6–12 aggro on sight, ranged monsters keep their distance · 13–20 dodge projectiles, call nearby allies, wind up and charge · 21+ lead their shots, attack faster, retreat to heal when low.
+- **Elites** (★, gold name, glow): 3–7% depending on zone level. HP ×4, attack ×1.4, 1–2 random affixes, better drops.
+- **Affixes**: Reflect (bounces 18% of your damage back), Life Steal, Regeneration, Enrage, Self-Destruct (red warning circle, then explodes), Teleport, Frost (slows you), Poison, Shield. Some species always have one: ice golems reflect, poison frogs poison, lava beasts explode, ice bats slow…
 
-**Boss có tên** (`NAMED` trong `data/affixes.js`)
+**Named bosses** (`NAMED` in `data/affixes.js`)
 
-- Boss truyện: Bù Nhìn Đầu Đàn, Lão Đăng Quỷ, Băng Dực Vương, Huyết Thi Tướng. Chỉ xuất hiện khi đang làm nhiệm vụ tương ứng.
-- Boss dã ngoại: Cửu Vĩ Hồ Vương (Rừng Ma Trơi), Cương Thi Vương (Nghĩa Địa Cổ), Tuyết Sơn Ma Vương (Tuyết Sơn), Nham Ma Hỏa Thú (Hỏa Diệm Sơn), Bạch Diện Quỷ Chủ (Cổ Tự). Xuất hiện lại sau 4–10 phút khi bạn đang ở bản đồ đó, có thông báo trên kênh chat.
+- Story bosses: Bù Nhìn Đầu Đàn, Lão Đăng Quỷ, Băng Dực Vương, Huyết Thi Tướng. They only appear while the matching quest is active.
+- Field bosses: Cửu Vĩ Hồ Vương (Rừng Ma Trơi), Cương Thi Vương (Nghĩa Địa Cổ), Tuyết Sơn Ma Vương (Tuyết Sơn), Nham Ma Hỏa Thú (Hỏa Diệm Sơn), Bạch Diện Quỷ Chủ (Cổ Tự). They respawn every 4–10 minutes while you are on that map, with an announcement in chat.
 
-**Ngoại trang** (ô trang bị thứ 5, `slot: 'outfit'` trong `data/items.js`)
+**Outfits** (5th equipment slot, `slot: 'outfit'` in `data/items.js`)
 
-| Bộ | Cấp | Rơi từ |
+| Outfit | Level | Source |
 |---|---|---|
-| Ma Trơi Tinh Nghịch | 1 | Ma Trơi (cực hiếm), Cửu Vĩ Hồ Vương, quái Tinh Anh |
-| Hồ Ly Y | 10 | Cửu Vĩ Hồ Vương 7% |
+| Ma Trơi Tinh Nghịch | 1 | Wisps (extremely rare), Cửu Vĩ Hồ Vương, elites |
+| Hồ Ly Y | 10 | Cửu Vĩ Hồ Vương 7%, crafting |
 | Hắc Long Bào | 14 | Hắc Quỷ Vương 3%, Cương Thi Vương 6% |
-| Thanh Liên Tiên Y | 18 | Băng Dực Vương 8%, Bạch Diện Quỷ Chủ 4%, quái Tinh Anh 0.4% |
-| Nghê Thường Tiên Y (trắng) | 15 | Chế tạo ở Tú Nương · rơi 1.5–2% từ Tuyết Sơn Ma Vương, Băng Dực Vương, Bạch Diện Quỷ Chủ |
-| Đào Hoa Tiên Y (hồng nhạt) | 15 | Chế tạo ở Tú Nương · rơi 1.5–2% từ Cửu Vĩ Hồ Vương, Cương Thi Vương |
+| Nghê Thường Tiên Y (white fairy) | 15 | Crafting · 1.5–2% from Tuyết Sơn Ma Vương, Băng Dực Vương, Bạch Diện Quỷ Chủ |
+| Đào Hoa Tiên Y (pink fairy) | 15 | Crafting · 1.5–2% from Cửu Vĩ Hồ Vương, Cương Thi Vương |
+| Thanh Liên Tiên Y | 18 | Băng Dực Vương 8%, Bạch Diện Quỷ Chủ 4%, elites 0.4% |
 | Bạch Hồ Cừu | 20 | Tuyết Sơn Ma Vương 7% |
 | Phượng Vũ Y | 24 | Hỏa Kỳ Lân 4%, Nham Ma Hỏa Thú 6% |
 | Huyết Nguyệt Chiến Giáp | 28 | Huyền Cơ 4%, Huyết Thi Tướng 6%, Bạch Diện Quỷ Chủ 7% |
 
-Ngoại trang thay diện mạo (dải lụa tiên bay vòng quanh người, áo choàng, miện, tai và đuôi cáo, dải lụa, mặt nạ, hào quang) và cộng một ít chỉ số. Đồ hiếm rơi ra có cột sáng và thông báo trên kênh chat.
+Outfits change the character's look (animated silk ribbons orbiting the body, capes, crowns, fox ears and tails, masks, auras) and add a few stats. Rare drops show a light pillar on the ground and a chat announcement.
 
-**Nhịp cốt truyện**
+**Story pacing**
 
-- Cổng sang vùng mới bị **phong ấn** tới khi xong bước truyện tương ứng (`lock` trong `maps.js`), ví dụ Đầm Lầy cần Hương Phá Chướng, Tuyết Sơn cần hạ Hắc Quỷ Vương.
-- Cấp yêu cầu giãn ra và EXP thưởng chỉ bằng 12–65% một cấp (`main()` trong `story.js`), nên phải đánh quái mới đủ cấp. Bảng theo dõi nhiệm vụ gợi ý bản đồ nên luyện cấp.
+- Portals to new zones are **sealed** until the matching story step is done (`lock` in `maps.js`), e.g. the swamp needs the fog-clearing incense and the snow mountain needs the first chapter boss.
+- Level requirements are spread out and story EXP rewards are only 12–65% of a level (`main()` in `story.js`), so you have to grind between steps. The quest tracker suggests a map to level up on.
 
-**Chế tạo** (`data/recipes.js`, NPC Tú Nương ở Làng Trúc Lâm)
+**Crafting** (`data/recipes.js`, NPC Tú Nương in the village)
 
-| Món | Nguyên liệu |
+| Item | Materials |
 |---|---|
-| Đào Hoa Tiên Y | 40 Cánh Đào Ma, 20 Đuôi Hồ Ly, 20 Lửa Ma Trơi, 1 Tiên Lộ, 15.000 lượng |
-| Nghê Thường Tiên Y | 40 Tơ Băng Tằm, 20 Lông Tuyết Hồ, 15 Băng Tinh, 2 Tiên Lộ, 30.000 lượng |
-| Hồ Ly Y | 60 Đuôi Hồ Ly, 15 Cánh Đào Ma, 1 Tiên Lộ, 10.000 lượng |
-| Bình Máu Lớn ×5 / Đại Linh Đan ×5 / Đá Cường Hóa / Bùa Bảo Hộ / Ngọc Sơ ngẫu nhiên | nguyên liệu thường từ quái |
+| Đào Hoa Tiên Y | 40 Cánh Đào Ma, 20 Đuôi Hồ Ly, 20 Lửa Ma Trơi, 1 Tiên Lộ, 15,000 gold |
+| Nghê Thường Tiên Y | 40 Tơ Băng Tằm, 20 Lông Tuyết Hồ, 15 Băng Tinh, 2 Tiên Lộ, 30,000 gold |
+| Hồ Ly Y | 60 Đuôi Hồ Ly, 15 Cánh Đào Ma, 1 Tiên Lộ, 10,000 gold |
+| Large HP ×5 / Large MP ×5 / Enhancement Stone / Protection Charm / random grade-1 gem | common monster materials |
 
-Nguyên liệu: **Cánh Đào Ma** (Hồ Ly Tinh 6%, Quỷ Rơm 5%, Ma Trơi 3%), **Tơ Băng Tằm** (Băng Dực 8%, Tuyết Hồ 5%, Tuyết Yêu 4%), **Tiên Lộ** (boss dã ngoại và boss chương chắc chắn rơi, boss truyện 50%, quái Tinh Anh 8%). Thêm công thức mới chỉ cần thêm một dòng vào `RECIPES`.
+Materials: **Cánh Đào Ma** (ghost peach petal: fox spirits 6%, scarecrows 5%, wisps 3%), **Tơ Băng Tằm** (ice silk: ice bats 8%, snow foxes 5%, yetis 4%), **Tiên Lộ** (fairy dew: guaranteed from field and chapter bosses, 50% from story bosses, 8% from elites). A new recipe is one more line in `RECIPES`.
 
-**Ép ngọc** (`data/items.js` → `GEM_*`, `game/character.js` → `socketGem`, `fuseGems`)
+**Gem sockets** (`data/items.js` → `GEM_*`, `game/character.js` → `socketGem`, `fuseGems`)
 
-- 5 loại ngọc: Hồng (Công), Hoàng (Chí mạng), Lục (Máu), Tử (Thủ), Lam (Nội lực); mỗi loại 3 phẩm Sơ / Trung / Thượng.
-- Số lỗ khảm: 1, thêm 1 nếu đồ Quý trở lên, thêm 1 nếu cường hóa từ +7 (tối đa 3).
-- Vũ khí nhận Hồng/Hoàng/Lam, mũ áo nhận Lục/Tử/Lam, phụ kiện nhận tất cả (`GEM_SLOTS`).
-- Hợp ngọc: 3 viên cùng loại cùng phẩm → 1 viên phẩm trên. Sơ → Trung 100%, Trung → Thượng 75% (hỏng vỡ 1 viên).
-- Gỡ ngọc mất ít tiền công, ngọc trả về túi nguyên vẹn. Trong bảng rơi đồ, `GEM1`/`GEM2`/`GEM3` là ngọc ngẫu nhiên.
+- 5 gem types: Hồng (attack), Hoàng (crit), Lục (HP), Tử (defense), Lam (MP); each in 3 grades: Sơ / Trung / Thượng.
+- Sockets: 1, +1 for Quý (epic) rarity or better, +1 from enhancement +7 (max 3).
+- Weapons accept Hồng / Hoàng / Lam, hats and armor accept Lục / Tử / Lam, accessories accept all (`GEM_SLOTS`).
+- Fusing: 3 identical gems → 1 gem of the next grade. Sơ → Trung always succeeds, Trung → Thượng 75% (a failure destroys one gem).
+- Unsocketing costs a small fee and returns the gem intact. In drop tables, `GEM1` / `GEM2` / `GEM3` mean a random gem of that grade.
 
-**Cốt truyện** (`data/story.js`)
+**Story** (`data/story.js`)
 
-Tuyến chính gồm Mở đầu và 3 chương (29 nhiệm vụ, cấp 1 → 27):
+The main line is a prologue plus 3 chapters (32 quests, level 1 → 32):
 
-- **Mở đầu · Người Đến Từ Màn Sương**: tỉnh dậy mất trí nhớ ở Trúc Lâm, trên tay là nửa chiếc Chuông Trấn Hồn.
-- **Chương 1 · Mệnh Thuần Âm**: Tiểu Lan bị bắt, lần theo dấu vết tới Quỷ Môn Quan, hạ Hắc Quỷ Vương.
-- **Chương 2 · Huyết Ma Châu**: hai đệ tử Huyền Môn giận nhau ba mươi năm, giải thoát Hỏa Kỳ Lân.
-- **Chương 3 · Mặt Nạ Trắng**: sự thật về Đạo Trưởng Huyền Cơ, Huyền Môn Cổ Tự, lựa chọn rung chuông hay không.
+- **Prologue · Người Đến Từ Màn Sương**: you wake up with no memory in the village, holding half of a broken soul-summoning bell.
+- **Chapter 1 · Mệnh Thuần Âm**: the girl Tiểu Lan is kidnapped; follow the trail to the Ghost Gate and defeat the Black Ghost King.
+- **Chapter 2 · Huyết Ma Châu**: two estranged disciples of the Huyền Môn sect, a fire qilin corrupted by a blood pearl.
+- **Chapter 3 · Mặt Nạ Trắng**: the truth about the village taoist, the hidden temple, and the choice of whether to ring the bell.
 
-Cách viết:
+How quests are written:
 
-- Mỗi nhiệm vụ có `intro` (lúc nhận) và `outro` (lúc trả). Mỗi câu là `[người nói, lời thoại, điều kiện?]`; người nói là id NPC, `'me'`, `'sys'` hoặc id quái. Điều kiện `'bell=ring'` chỉ hiện câu khi người chơi đã chọn rung chuông.
-- `type`: `talk` (đi gặp `target`), `kill`, `collect`, `act` (thao tác hướng dẫn, `target` là tên sự kiện: `djump`, `potion`, `buy`, `stat`, `skillup`, `enhance`, `socket`, `fuse`, `orb`, `daily`).
-- `turnIn`: NPC nhận trả; `drop`: vật phẩm nhiệm vụ rơi từ quái; `give`: vật phẩm phát lúc nhận; `hint`: mẹo hiện trong sổ nhiệm vụ.
-- `SCENES`: cảnh chiếu khi vào một bản đồ lúc đang làm nhiệm vụ, có thể có lựa chọn (đặt cờ trong `ch.flags`).
-- Trong `maps.js`, NPC có `after` (hiện sau khi xong nhiệm vụ), `until` (biến mất khi nhận nhiệm vụ), `hideWhile` (vắng mặt trong lúc làm); cổng có `req` (chỉ mở khi xong nhiệm vụ).
-- Thêm nhiệm vụ vào tuyến chính thì ghi id vào `MAIN_ORDER` đúng vị trí: nhân vật cũ đã đi qua chỗ đó sẽ tự được tính là xong.
+- Each quest has an `intro` (on accept) and an `outro` (on turn-in). Each line is `[speaker, text, condition?]`; the speaker is an NPC id, `'me'`, `'sys'` (narration) or a monster id. The condition `'bell=ring'` shows the line only if the player chose to ring the bell.
+- `type`: `talk` (go meet `target`), `kill`, `collect`, `act` (tutorial action; `target` is an event name: `djump`, `potion`, `buy`, `stat`, `skillup`, `enhance`, `socket`, `fuse`, `orb`, `daily`, `craft`).
+- `turnIn`: the NPC that receives the quest; `drop`: a quest item dropped by monsters while active; `give`: items handed out on accept; `hint`: a tip shown in the quest log.
+- `SCENES`: cutscenes played when entering a map while a quest is active, optionally with choices (stored in `ch.flags`).
+- In `maps.js`, NPCs can have `after` (appear after a quest is done), `until` (disappear once a quest is accepted) and `hideWhile` (absent while a quest is active); portals can have `req` (hidden until a quest is done) and `lock` (visible but sealed).
+- When inserting a quest into the main line, add its id to `MAIN_ORDER` in the right place; characters already past that point automatically get it marked as done.
 
-**Nhiệm vụ hướng dẫn**: Trưởng Làng (nhảy đôi, cộng điểm, pet), Bà Tư (bình máu, mua bán), Đạo Trưởng (kỹ năng, ngũ hành), Thợ Rèn (cường hóa, ép ngọc, hợp ngọc), Bộ Khoái (truy nã). Có dấu **!** xanh trên đầu NPC.
+**Tutorial quests**: the village chief (double jump, stat points, pet), the healer (potions, shopping), the taoist (skills, elements), the blacksmith (enhancement, gem sockets, gem fusing), the bounty officer (daily bounties) and the embroiderer (crafting). Marked with a blue **!** above the NPC.
 
-**Thoại NPC** (`data/chatter.js`): mỗi NPC có `lines` (tự nói khi bạn đứng gần), `greet` (câu mở đầu khi bấm nói chuyện), `hi` (chào khi bạn đi tới). Câu đổi theo tiến độ truyện, giờ trong ngày, cấp, môn phái, pet, danh hiệu, vũ khí. `BANTER` là các đoạn NPC nói chuyện với nhau.
+**NPC dialogue** (`data/chatter.js`): each NPC has `lines` (spoken when you stand nearby), `greet` (opening line when you talk to them) and `hi` (said as you walk up). Lines change with story progress, time of day, level, class, pet, title and weapon. `BANTER` holds NPC-to-NPC conversations.
 
-## Đồ họa được vẽ thế nào
+## How the graphics are drawn
 
-Game không dùng file ảnh nào. Lúc khởi động, mỗi nhân vật/quái được vẽ bằng Canvas 2D (đường cong Bézier,
-gradient, viền tối) ở độ phân giải gấp 3 lần, lưu thành một "sprite sheet" trong bộ nhớ, rồi khi chơi chỉ việc
-cắt từng khung ra vẽ lên màn hình. Nhờ vẽ to rồi thu nhỏ nên hình mịn, không vỡ hạt.
+The game uses no image files. At startup every character and monster is drawn with Canvas 2D (Bézier curves,
+gradients, dark outlines) at 3× resolution into an in-memory sprite sheet; during play the game just copies
+frames from the sheet to the screen. Drawing large and scaling down keeps everything smooth instead of pixelated.
 
-Muốn đổi màu áo, kiểu tóc, màu mắt của môn phái: sửa `look` trong `data/classes.js`
-(`robe`, `trim`, `hair`, `hairStyle` 0–5, `eye`, `skin`). NPC sửa trong `data/npcs.js`.
+To change a class's robe colors, hair style or eye color, edit `look` in `data/classes.js`
+(`robe`, `trim`, `hair`, `hairStyle` 0–5, `eye`, `skin`). NPC looks are in `data/npcs.js`.
 
-Sau này nếu muốn dùng ảnh vẽ tay (PNG) thay cho hình vẽ bằng code, chỉ cần tạo sheet có cùng dạng
-`{ img, fw, fh, s, frames }` trong `gfx/` là phần còn lại của game vẫn chạy như cũ.
+If you later want hand-drawn PNG art instead of code-drawn sprites, create sheets with the same shape
+`{ img, fw, fh, s, frames }` in `gfx/` and the rest of the game keeps working unchanged.

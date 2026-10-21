@@ -1,9 +1,9 @@
-// Icon vật phẩm và hình đạn, vẽ bằng đường cong ở độ phân giải cao
+// Item icons and projectile sprites, drawn with curves at high resolution
 import { makeHi, SS, shade, rgba, paint, ellipse, rrect, poly, radial, linear, OUTLINE } from './draw.js';
 
-// ================= ĐẠN =================
+// ================= PROJECTILES =================
 const projCache = {};
-// Trả về { img, w, h } với w, h là kích thước logic
+// Returns { img, w, h } where w, h are the logical size
 export function projSprite(kind) {
   if (projCache[kind]) return projCache[kind];
   let w, h, draw;
@@ -30,7 +30,7 @@ export function projSprite(kind) {
     };
   } else if (kind === 'fire') {
     w = 40; h = 24; draw = (ctx) => {
-      // rồng lửa nhỏ: thân lửa + đầu có mắt
+      // small fire dragon: flame body + head with eyes
       ctx.fillStyle = radial(ctx, 26, 12, 1, 18, [[0, 'rgba(255,240,180,0.95)'], [0.4, 'rgba(255,150,40,0.9)'], [1, 'rgba(220,40,20,0)']]);
       ctx.fillRect(0, 0, 40, 24);
       const head = new Path2D();
@@ -76,7 +76,7 @@ export function projSprite(kind) {
   return projCache[kind];
 }
 
-// ================= ICON VẬT PHẨM (16×16 logic) =================
+// ================= ITEM ICONS (16×16 logical) =================
 const iconCache = {};
 export function itemIcon(icon, color, slotLook) {
   const key = icon + color + (slotLook || '');
@@ -183,7 +183,7 @@ export function itemIcon(icon, color, slotLook) {
       paint(ctx, ellipse(6, 9.5, 1, 1.6), rgba('#ffffff', 0.6), null);
       break;
     }
-    case 'petal': { // cánh hoa đào
+    case 'petal': { // peach blossom petal
       for (const [a, s2] of [[-0.6, 0.85], [0.5, 1]]) {
         ctx.save(); ctx.translate(8, 9); ctx.rotate(a);
         const p = new Path2D(); p.moveTo(0, 5); p.bezierCurveTo(-5, 1, -4, -5, 0, -6); p.lineTo(0.8, -4.6); p.lineTo(1.6, -6); p.bezierCurveTo(5, -4, 4, 1, 0, 5); p.closePath();
@@ -192,7 +192,7 @@ export function itemIcon(icon, color, slotLook) {
       }
       break;
     }
-    case 'silk': { // cuộn tơ
+    case 'silk': { // silk spool
       paint(ctx, rrect(3, 3, 10, 2, 0.8), '#c8a070', OUTLINE, lw * 0.8);
       paint(ctx, rrect(3, 11, 10, 2, 0.8), '#c8a070', OUTLINE, lw * 0.8);
       paint(ctx, rrect(4, 5, 8, 6, 1.5), linear(ctx, 4, 0, 12, 0, [[0, shade(color, -0.15)], [0.5, '#ffffff'], [1, shade(color, -0.1)]]), OUTLINE, lw);
@@ -242,7 +242,7 @@ export function itemIcon(icon, color, slotLook) {
       paint(ctx, ellipse(8, 8, 5.2, 5.2), radial(ctx, 6.4, 6.4, 0.5, 6, [[0, '#ffffff'], [0.4, l], [1, d]]), OUTLINE, lw);
       paint(ctx, ellipse(6.3, 6, 1.4, 1), rgba('#ffffff', 0.85), null);
       break;
-    case 'gem': { // ngọc khảm: viên giác cắt, số vạch = phẩm
+    case 'gem': { // socket gem: cut stone, number of marks = grade
       const g = +slotLook || 1;
       ctx.fillStyle = radial(ctx, 8, 8, 0.5, 8, [[0, rgba(color, 0.35 + g * 0.12)], [1, rgba(color, 0)]]); ctx.fillRect(0, 0, 16, 16);
       const outer = poly([[8, 1.5], [13.5, 5], [13.5, 10.5], [8, 14.5], [2.5, 10.5], [2.5, 5]]);
@@ -285,7 +285,7 @@ export function itemIcon(icon, color, slotLook) {
 export function iconForItem(it) {
   if (it.type === 'equip') {
     if (it.slot === 'weapon') {
-      const w = it.cls === 'dao' ? 'staff' : it.cls === 'thich' ? 'dart' : 'sword';
+      const w = it.cls === 'taoist' ? 'staff' : it.cls === 'assassin' ? 'dart' : 'sword';
       return itemIcon('weapon_' + w, it.color);
     }
     if (it.slot === 'hat') return itemIcon('hat', it.color, it.look);

@@ -1,4 +1,4 @@
-// Database SQLite (dùng module node:sqlite có sẵn trong Node >= 22.13, không cần cài thư viện)
+// SQLite database (uses the built-in node:sqlite module, Node >= 22.13, no packages needed)
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS characters (
   gold         INTEGER NOT NULL DEFAULT 0,
   hp           REAL NOT NULL DEFAULT 1,
   mp           REAL NOT NULL DEFAULT 1,
-  map          TEXT NOT NULL DEFAULT 'lang',
+  map          TEXT NOT NULL DEFAULT 'village',
   x            REAL NOT NULL DEFAULT 380,
   stat_str     INTEGER NOT NULL DEFAULT 0,
   stat_dex     INTEGER NOT NULL DEFAULT 0,
@@ -30,27 +30,27 @@ CREATE TABLE IF NOT EXISTS characters (
   stat_points  INTEGER NOT NULL DEFAULT 0,
   skill_points INTEGER NOT NULL DEFAULT 0,
   skills       TEXT NOT NULL DEFAULT '{}',   -- JSON: { skillId: level }
-  pet          TEXT,                         -- JSON: { id, on } hoặc NULL nếu chưa có pet
-  title        TEXT,                         -- danh hiệu đang đeo
-  flags        TEXT NOT NULL DEFAULT '{}',   -- JSON: lựa chọn trong cốt truyện, vd { bell: 'ring' }
+  pet          TEXT,                         -- JSON: { id, on }, or NULL if no pet yet
+  title        TEXT,                         -- title currently shown
+  flags        TEXT NOT NULL DEFAULT '{}',   -- JSON: story choices, e.g. { bell: 'ring' }
   play_time    REAL NOT NULL DEFAULT 0,
   created_at   INTEGER NOT NULL,
   updated_at   INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_characters_user ON characters(user_id);
 
--- Mỗi món đồ là một dòng. equip_slot khác NULL nghĩa là đang mặc.
+-- One row per item. A non-NULL equip_slot means it is equipped.
 CREATE TABLE IF NOT EXISTS items (
   uid          TEXT PRIMARY KEY,
   character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
   item_id      TEXT NOT NULL,
   qty          INTEGER NOT NULL DEFAULT 1,
   rarity       INTEGER NOT NULL DEFAULT 0,
-  bonus        TEXT NOT NULL DEFAULT '{}',   -- JSON chỉ số cộng thêm
-  equip_slot   TEXT,                         -- weapon | hat | armor | acc | outfit (ngoại trang)
-  enhance      INTEGER NOT NULL DEFAULT 0,   -- cấp cường hóa +0..+10
-  el           TEXT,                         -- nguyên tố đã khảm (hoa/bang/loi/doc)
-  gems         TEXT NOT NULL DEFAULT '[]',   -- JSON: ngọc đã ép vào lỗ khảm, vd ["gem_atk1"]
+  bonus        TEXT NOT NULL DEFAULT '{}',   -- JSON bonus stats
+  equip_slot   TEXT,                         -- weapon | hat | armor | acc | outfit
+  enhance      INTEGER NOT NULL DEFAULT 0,   -- enhancement level +0..+10
+  el           TEXT,                         -- socketed element (fire/ice/thunder/poison)
+  gems         TEXT NOT NULL DEFAULT '[]',   -- JSON: gems in the sockets, e.g. ["gem_atk1"]
   position     INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_items_char ON items(character_id);
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS quests (
   quest_id     TEXT NOT NULL,
   state        TEXT NOT NULL,                -- active | done
   progress     INTEGER NOT NULL DEFAULT 0,
-  day          TEXT,                         -- ngày hoàn thành (nhiệm vụ hằng ngày)
+  day          TEXT,                         -- completion day (daily quests)
   PRIMARY KEY (character_id, quest_id)
 );
 `;
@@ -74,7 +74,7 @@ export function openDb(file) {
   return new GameDb(db);
 }
 
-// Nâng cấp database cũ: thêm các cột mới mà không mất dữ liệu
+// Upgrade older databases: add new columns without losing data
 function migrate(db) {
   const cols = db.prepare('PRAGMA table_info(characters)').all().map((c) => c.name);
   if (!cols.includes('pet')) db.exec('ALTER TABLE characters ADD COLUMN pet TEXT');
@@ -86,13 +86,18 @@ function migrate(db) {
   if (!icols.includes('gems')) db.exec("ALTER TABLE items ADD COLUMN gems TEXT NOT NULL DEFAULT '[]'");
   const qcols = db.prepare('PRAGMA table_info(quests)').all().map((c) => c.name);
   if (!qcols.includes('day')) db.exec('ALTER TABLE quests ADD COLUMN day TEXT');
+  // Class ids were renamed to English. The class is never re-saved, so it is fixed here;
+  // everything else (maps, items, skills…) is migrated by the client on load and written back on save.
+  const LEGACY_CLS = { kiem: 'swordsman', dao: 'taoist', thich: 'assassin' };
+  const fix = db.prepare('UPDATE characters SET cls = ? WHERE cls = ?');
+  for (const [from, to] of Object.entries(LEGACY_CLS)) fix.run(to, from);
 }
 
 const int = (v, d = 0) => (Number.isFinite(+v) ? Math.floor(+v) : d);
 const num = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
 const str = (v, max = 64) => String(v ?? '').slice(0, max);
 const EQUIP_SLOTS = new Set(['weapon', 'hat', 'armor', 'acc', 'outfit']);
-// Cờ cốt truyện: chỉ giữ cặp khoá/giá trị chuỗi ngắn
+// Story flags: only keep short string key/value pairs
 function cleanFlags(f) {
   const out = {};
   if (f && typeof f === 'object') for (const [k, v] of Object.entries(f).slice(0, 30)) out[str(k, 20)] = str(v, 20);
@@ -130,7 +135,7 @@ class GameDb {
     catch (e) { this.db.exec('ROLLBACK'); throw e; }
   }
 
-  close() { try { this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); this.db.close(); } catch { /* đã đóng */ } }
+  close() { try { this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); this.db.close(); } catch { /* already closed */ } }
 
   getUser(username) { return this.q.userByName.get(username); }
   createUser(username, passHash) {
@@ -138,7 +143,7 @@ class GameDb {
     return { id: Number(r.lastInsertRowid), username };
   }
 
-  // Ghép các bảng lại thành object nhân vật giống hệt phía client
+  // Joins the tables back into the same character object the client uses
   toCharacter(row) {
     const ch = {
       id: row.id, name: row.name, cls: row.cls, level: row.level, exp: row.exp, gold: row.gold,
@@ -185,7 +190,7 @@ class GameDb {
   writeState(userId, ch) {
     const s = ch.stats || {};
     const r = this.q.updateChar.run(
-      int(ch.level, 1), int(ch.exp), int(ch.gold), num(ch.hp, 1), num(ch.mp, 1), str(ch.map || 'lang', 20), num(ch.x, 380),
+      int(ch.level, 1), int(ch.exp), int(ch.gold), num(ch.hp, 1), num(ch.mp, 1), str(ch.map || 'village', 20), num(ch.x, 380),
       int(s.str), int(s.dex), int(s.int), int(s.vit), int(ch.statPoints), int(ch.skillPoints),
       JSON.stringify(ch.skills || {}),
       ch.pet && ch.pet.id ? JSON.stringify({ id: str(ch.pet.id, 20), on: ch.pet.on !== false }) : null,
@@ -193,13 +198,13 @@ class GameDb {
       JSON.stringify(cleanFlags(ch.flags)),
       num(ch.playTime), Date.now(), str(ch.id, 40), userId,
     );
-    if (r.changes === 0) return false; // không phải nhân vật của user này
+    if (r.changes === 0) return false; // not this user's character
     const id = str(ch.id, 40);
     this.q.clearItems.run(id);
     let pos = 0;
     const putItem = (e, slot) => {
       if (!e || !e.id) return;
-      const el = ['hoa', 'bang', 'loi', 'doc'].includes(e.el) ? e.el : null;
+      const el = ['fire', 'ice', 'thunder', 'poison'].includes(e.el) ? e.el : null;
       const gems = Array.isArray(e.g) ? e.g.slice(0, 3).map((g) => str(g, 20)) : [];
       this.q.insertItem.run(str(e.uid, 40), id, str(e.id, 30), Math.max(1, int(e.qty, 1)), int(e.r), JSON.stringify(e.b || {}), slot, pos++, Math.max(0, Math.min(10, int(e.e))), el, JSON.stringify(gems));
     };

@@ -1,6 +1,6 @@
-// Đóng gói client thành 1 file HTML duy nhất (không cần thư viện ngoài).
-// Đọc client/src/main.js, lần theo các import, ghép tất cả module theo đúng thứ tự,
-// rồi nhúng CSS + JS vào client/dist/index.html.
+// Bundles the client into a single HTML file (no external packages).
+// Reads client/src/main.js, follows the imports, concatenates every module in dependency order,
+// then inlines the CSS + JS into client/dist/index.html.
 //   node tools/build.mjs
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,7 +24,7 @@ function visit(file) {
 }
 visit(path.join(SRC, 'main.js'));
 
-// Kiểm tra trùng tên khai báo cấp cao nhất giữa các module (vì gộp chung một phạm vi)
+// Check for duplicate top-level names across modules (they all share one scope)
 const declared = new Map();
 const DECL_RE = /^(?:export\s+)?(?:async\s+)?(?:function\*?|class|const|let|var)\s+([A-Za-z_$][\w$]*)/gm;
 let clash = false;
@@ -32,7 +32,7 @@ for (const f of order) {
   const code = fs.readFileSync(f, 'utf8');
   for (const m of code.matchAll(DECL_RE)) {
     const name = m[1];
-    if (declared.has(name)) { console.error(`Trùng tên "${name}": ${path.relative(ROOT, declared.get(name))} và ${path.relative(ROOT, f)}`); clash = true; }
+    if (declared.has(name)) { console.error(`Duplicate top-level name "${name}": ${path.relative(ROOT, declared.get(name))} and ${path.relative(ROOT, f)}`); clash = true; }
     else declared.set(name, f);
   }
 }
@@ -47,7 +47,7 @@ const parts = order.map((f) => {
 const js = `(() => {\n'use strict';\n${parts.join('\n')}\n})();`;
 const css = fs.readFileSync(path.join(SRC, 'style.css'), 'utf8');
 
-// Trang đầy đủ (deploy lên server, hoặc mở trực tiếp bằng trình duyệt)
+// Full page (deployed to the server, or opened directly in a browser)
 let html = fs.readFileSync(path.join(CLIENT, 'index.html'), 'utf8');
 html = html.replace('<link rel="stylesheet" href="src/style.css">', () => `<style>\n${css}\n</style>`);
 html = html.replace('<script type="module" src="src/main.js"></script>', () => `<script>\n${js.replace(/<\/script/gi, '<\\/script')}\n</script>`);
@@ -55,10 +55,10 @@ html = html.replace('<script type="module" src="src/main.js"></script>', () => `
 fs.mkdirSync(DIST, { recursive: true });
 fs.writeFileSync(path.join(DIST, 'index.html'), html);
 
-// Bản rút gọn cho Claude Artifact (nền tảng tự bọc <html><head><body>)
+// Trimmed version for Claude Artifacts (the platform wraps it in <html><head><body>)
 const body = html.match(/<body>([\s\S]*)<\/body>/)[1];
 const head = html.match(/<head>([\s\S]*)<\/head>/)[1].replace(/<meta charset[^>]*>\s*/, '').replace(/<meta name="viewport"[^>]*>\s*/, '');
 fs.writeFileSync(path.join(DIST, 'artifact.html'), head.trim() + '\n' + body.trim() + '\n');
 
 const kb = (n) => (n / 1024).toFixed(0) + ' KB';
-console.log(`Đã build ${order.length} module -> client/dist/index.html (${kb(Buffer.byteLength(html))})`);
+console.log(`Built ${order.length} modules -> client/dist/index.html (${kb(Buffer.byteLength(html))})`);

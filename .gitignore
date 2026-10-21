@@ -1,9 +1,10 @@
-# Thư viện, bản build
+# Dependencies and build output
 node_modules/
 client/dist/
 
-# Dữ liệu người chơi + khoá bí mật (data/game.db, data/secret.key) — tuyệt đối không commit
-data/
+# Player data and secret keys (data/game.db, data/secret.key) - never commit.
+# The leading slash matters: only the top-level data/ folder, not client/src/data/.
+/data/
 *.db
 *.db-shm
 *.db-wal
@@ -12,12 +13,12 @@ data/
 *.pem
 *.p12
 
-# Biến môi trường chứa bí mật (giữ lại file mẫu)
+# Environment variables with secrets (keep the example file)
 .env
 .env.*
 !.env.example
 
-# Linh tinh
+# Misc
 *.log
 npm-debug.log*
 .DS_Store

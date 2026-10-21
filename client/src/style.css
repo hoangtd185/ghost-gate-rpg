@@ -1,5 +1,5 @@
-/* Sân khấu 16:9 co giãn theo cửa sổ. --u = độ phóng của 1 pixel game (640 px logic). */
-/* Giao diện: sơn mài đen, viền vàng cũ, đỏ son, xanh ngọc ma trơi */
+/* 16:9 stage that scales with the window. --u = size of one game pixel (640 px logical width). */
+/* Look: black lacquer, old gold borders, vermilion red, will-o'-wisp jade */
 :root {
   --ink: #120e16;
   --ink-2: #1d1724;
@@ -32,7 +32,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 kbd { font-family: var(--font-body); font-size: .72em; padding: .05em .4em; border: 1px solid var(--line); border-radius: 3px; background: #0006; color: var(--gold); }
 :focus-visible { outline: 2px solid var(--ghost); outline-offset: 2px; }
 
-/* ---------- Màn hình tiêu đề ---------- */
+/* ---------- Title screen ---------- */
 #screen { position: absolute; inset: 0; overflow-y: auto; }
 .scr { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2em; padding-block: 1.5em; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); box-sizing: border-box; }
 .logo { text-align: center; position: relative; }
@@ -143,7 +143,7 @@ kbd { font-family: var(--font-body); font-size: .72em; padding: .05em .4em; bord
 .hud-save { position: absolute; right: 1.2em; top: 9.4em; font-size: .78em; color: var(--muted); opacity: 0; transition: opacity .4s; pointer-events: none !important; }
 .hud-save.show { opacity: 1; } .hud-save.error { color: #ff8a7a; }
 
-/* ---------- Cửa sổ ---------- */
+/* ---------- Windows ---------- */
 .win { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -52%); width: min(44em, calc(100% - 2em)); max-height: calc(100% - 6.5em); display: flex; flex-direction: column; background: linear-gradient(#1d1724f6, #120e16f8); border: 1px solid var(--line); box-shadow: 0 0 0 3px #000a, 0 1em 3em #000c; border-radius: 4px; }
 .win header { display: flex; align-items: center; justify-content: space-between; padding: .5em .9em; border-bottom: 1px solid #3a2e22; background: linear-gradient(90deg, #2a1416, transparent); }
 .win h2 { margin: 0; font-family: var(--font-display); font-size: 1.6em; color: var(--gold); font-weight: 600; }
@@ -222,7 +222,7 @@ blockquote { margin: .5em 0 .8em; padding: .7em .9em; background: #0a080e99; bor
 .death h2 { font-family: var(--font-display); color: #ff6a7a; font-size: 2.4em; margin: 0; }
 .death button { margin-top: 1em; font-size: 1.1em; background: linear-gradient(#d8483a, #a3301f); border-color: #e8705a; }
 
-/* ---------- Cảm ứng ---------- */
+/* ---------- Touch controls ---------- */
 .touch { position: absolute; inset: auto 0 5.4em 0; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 1em; pointer-events: none !important; }
 .touch > div { pointer-events: auto; display: flex; gap: .4em; align-items: center; }
 .touch button { width: 4.2em; height: 4.2em; border-radius: 50%; background: #120e16a0; border: 1px solid #ffffff40; font-size: 1.1em; touch-action: none; }
@@ -245,7 +245,7 @@ blockquote { margin: .5em 0 .8em; padding: .7em .9em; background: #0a080e99; bor
   .toast, .bar i, .hud-exp i { transition: none; }
 }
 
-/* ===== Lớp làm mềm giao diện: bo tròn, viền đôi, màu riêng cho từng kỹ năng ===== */
+/* ===== Softening layer: rounded corners, double borders, per-skill colors ===== */
 .hud-status, .hud-bar, .win, .panel, .hud-mini, .hud-menu button, .detail, .card, .cls, .quests li, .skills li, .shop li {
   border-radius: 12px;
 }
@@ -292,7 +292,7 @@ blockquote { border-radius: 0 10px 10px 0; }
 .petbox button { padding: .35em .9em; border-radius: 999px; border: 1px solid #8a7ab0; background: #2a2238; font-weight: 600; }
 .petbox button:hover { border-color: #e8dcff; color: #e8dcff; }
 
-/* ===== Nguyên tố, cường hóa, nhiệm vụ ===== */
+/* ===== Elements, enhancement, quests ===== */
 .eltag { display: inline-flex; align-items: center; gap: .25em; padding: .05em .55em; border-radius: 999px; font-size: .85em; font-weight: 700; color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 60%, transparent); background: color-mix(in srgb, var(--c) 14%, transparent); }
 .resrow { display: flex; gap: .4em; flex-wrap: wrap; align-items: center; margin-top: .5em; }
 .res { display: inline-flex; align-items: center; gap: .3em; padding: .15em .5em; border-radius: 8px; color: var(--c); background: color-mix(in srgb, var(--c) 12%, #0a080e); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); font-family: "Noto Serif TC", serif; }
@@ -317,7 +317,7 @@ blockquote { border-radius: 0 10px 10px 0; }
 .forgemsg.good { color: #8af0a0; } .forgemsg.bad { color: #ff9a8a; }
 @media (max-width: 760px) { .forge { grid-template-columns: 1fr; } }
 
-/* ===== Hội thoại cốt truyện ===== */
+/* ===== Story dialogue ===== */
 .w-dialog { width: min(40em, calc(100% - 2em)); top: auto; bottom: 5.2em; transform: translateX(-50%); }
 .dlg { padding: .2em 0 0; }
 .dlg-chap { margin: 0 !important; font-size: .75em; letter-spacing: .16em; text-transform: uppercase; color: #ff9a6a; }
@@ -341,7 +341,7 @@ blockquote { border-radius: 0 10px 10px 0; }
 .opts .storybtn em { color: #ff8a5a; }
 @media (prefers-reduced-motion: reduce) { .dlg-text p { animation: none; } }
 
-/* ===== Nhãn loại nhiệm vụ ===== */
+/* ===== Quest type tags ===== */
 .qtag { font-size: .68em; padding: .05em .5em; border-radius: 999px; vertical-align: middle; font-weight: 700; border: 1px solid; white-space: nowrap; }
 .qtag.story { background: #3a1a14; color: #ff9a6a; border-color: #8a3a2a; }
 .qtag.tut { background: #12303a; color: #7ae4ff; border-color: #2a6a80; }
@@ -356,7 +356,7 @@ blockquote { border-radius: 0 10px 10px 0; }
 .opts .tutbtn em { color: #6ae0ff; }
 .toast.hint { border-color: #2a8aa8; color: #d0f4ff; max-width: 34em; text-align: left; }
 
-/* ===== Bảng theo dõi nhiệm vụ ===== */
+/* ===== Quest tracker ===== */
 .hud-track { position: absolute; right: 1.2em; top: 9.4em; width: 19em; pointer-events: none !important; }
 .hud-track ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .3em; }
 .hud-track li { background: linear-gradient(90deg, #0a080e00, #0a080ecc 30%); padding: .25em .6em; text-align: right; border-right: 3px solid #5a4a6a; text-shadow: 0 1px 2px #000; }
@@ -370,7 +370,7 @@ blockquote { border-radius: 0 10px 10px 0; }
 /* ===== Chat NPC ===== */
 .cl.npc { color: #e8dcc0; } .cl.npc b { color: #ffd36a; }
 
-/* ===== Lỗ khảm & ngọc ===== */
+/* ===== Sockets & gems ===== */
 .sockets { display: flex; gap: .35em; align-items: center; flex-wrap: wrap; }
 .sock { width: 1.6em; height: 1.6em; border-radius: 50%; border: 1px dashed #6b5532; background: #0a080e; display: inline-grid; place-items: center; padding: 0; }
 .sock.full { border: 1px solid var(--c); box-shadow: 0 0 .5em color-mix(in srgb, var(--c) 55%, transparent); }
@@ -396,11 +396,11 @@ button.sock.full:hover { outline: 2px solid #ff9a8a; }
 .fuselist button:disabled { filter: grayscale(.85); opacity: .6; cursor: default; }
 @media (max-width: 760px) { .fuselist li { grid-template-columns: 2em minmax(0, 1fr) auto; } .fuselist li > :nth-child(n+4):not(button) { display: none; } }
 
-/* ===== Lựa chọn trong cảnh cốt truyện ===== */
+/* ===== Choices in story scenes ===== */
 .dlg-foot .choice { font-size: 1.05em; padding: .55em 1.3em; border-color: #c84a5a; background: linear-gradient(#5a1a24, #2a0e14); color: #ffe0e4; }
 .dlg-foot .choice:hover { border-color: #ff9aa8; }
 
-/* ===== Cây nội công ===== */
+/* ===== Passive skill tree ===== */
 .ptree { display: flex; flex-direction: column; align-items: stretch; gap: 0; }
 .pt-node { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) auto; gap: .7em; align-items: center; padding: .55em .7em; border-radius: 12px; border: 1px solid #3a2e40; background: #0a080e99; }
 .pt-node.learned { border-color: #8a6a2a; background: linear-gradient(90deg, #2a1f14aa, #0a080e99); }
@@ -421,7 +421,7 @@ button.sock.full:hover { outline: 2px solid #ff9a8a; }
 .outfit-note { color: #ffd36a; font-size: .9em; }
 .equip .eqs:nth-child(5) .islot { box-shadow: 0 0 0 1px #c07bff66; }
 
-/* ===== Chế tạo ===== */
+/* ===== Crafting ===== */
 .craft { display: grid; grid-template-columns: 17em minmax(0, 1fr); gap: 1em; align-items: start; }
 .rlist { display: flex; flex-direction: column; gap: .25em; max-height: 26em; overflow-y: auto; }
 .rlist h4 { margin: .4em 0 .1em; }

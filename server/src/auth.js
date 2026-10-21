@@ -1,4 +1,4 @@
-// Mật khẩu (scrypt) và token đăng nhập (HMAC, giống JWT rút gọn) bằng node:crypto
+// Passwords (scrypt) and login tokens (HMAC, a minimal JWT-like format) using node:crypto
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,8 +16,8 @@ export function verifyPassword(password, stored) {
   return crypto.timingSafeEqual(key, Buffer.from(keyHex, 'hex'));
 }
 
-// Khoá bí mật ký token: lấy từ TOKEN_SECRET (.env / biến môi trường).
-// Khi chạy thử trên máy mà chưa đặt thì tự tạo và lưu ở data/secret.key (thư mục data/ không đưa lên git).
+// Token signing key: taken from TOKEN_SECRET (.env / environment variable).
+// When running locally without it, one is generated and stored in data/secret.key (the data/ folder is not committed).
 export function loadSecret(dataDir, fromEnv) {
   if (fromEnv) return fromEnv;
   const f = path.join(dataDir, 'secret.key');

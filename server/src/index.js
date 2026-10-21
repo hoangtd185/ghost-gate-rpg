@@ -1,7 +1,7 @@
-// Server game: REST API + phục vụ file client. Chỉ dùng thư viện có sẵn của Node.
-//   node server/src/index.js          -> chạy bản đã build (client/dist), dùng khi deploy
-//   node server/src/index.js --dev    -> chạy thẳng mã nguồn client/ để vừa sửa vừa thử
-//   Cấu hình qua biến môi trường hoặc file .env (xem .env.example)
+// Game server: REST API + serves the client files. Uses only Node built-ins.
+//   node server/src/index.js          -> serves the build (client/dist), use this when deploying
+//   node server/src/index.js --dev    -> serves the client/ sources directly, for editing and testing
+//   Configure via environment variables or a .env file (see .env.example)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,17 +16,17 @@ const STATIC_DIR = !DEV && fs.existsSync(path.join(distDir, 'index.html')) ? dis
 
 const db = openDb(DB_FILE);
 const SECRET = loadSecret(config.dataDir, config.tokenSecret);
-const VALID_CLS = new Set(['kiem', 'dao', 'thich']);
+const VALID_CLS = new Set(['swordsman', 'taoist', 'assassin']);
 const MAX_CHARS = config.maxCharsPerUser;
 
-// ---------- header bảo mật cho mọi phản hồi ----------
+// ---------- security headers for every response ----------
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
   'X-Frame-Options': 'SAMEORIGIN',
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
-  // bản build gộp script vào 1 file HTML nên cần 'unsafe-inline'; không tải script từ trang khác
+  // the build inlines scripts into one HTML file so 'unsafe-inline' is needed; no scripts from other origins
   'Content-Security-Policy': [
     "default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com", "img-src 'self' data: blob:", "connect-src 'self'",
@@ -46,7 +46,7 @@ function baseHeaders(req) {
   return h;
 }
 
-// IP thật của người dùng (khi chạy sau proxy thì lấy từ X-Forwarded-For)
+// Real client IP (taken from X-Forwarded-For when behind a proxy)
 function clientIp(req) {
   if (config.trustProxy) {
     const xf = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
@@ -55,7 +55,7 @@ function clientIp(req) {
   return req.socket.remoteAddress || '?';
 }
 
-// ---------- tiện ích HTTP ----------
+// ---------- HTTP helpers ----------
 function send(res, status, data, req) {
   const body = JSON.stringify(data);
   res.writeHead(status, { ...baseHeaders(req), 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -88,7 +88,7 @@ function authUser(req) {
   return p ? { id: p.uid, username: p.u } : null;
 }
 
-// Giới hạn số lần gọi trong 1 phút theo IP (chống dò mật khẩu, spam API)
+// Per-IP limit of calls per minute (against password guessing and API spam)
 function limiter(perMin) {
   const hits = new Map();
   setInterval(() => { const now = Date.now(); for (const [k, a] of hits) if (!a.some((t) => now - t < 60_000)) hits.delete(k); }, 60_000).unref();
@@ -102,7 +102,7 @@ function limiter(perMin) {
 const loginLimited = limiter(config.loginLimitPerMin);
 const apiLimited = limiter(config.apiLimitPerMin);
 
-// Kiểm tra dữ liệu nhân vật gửi lên: chặn số liệu vô lý (sửa save bằng tay, gửi request giả)
+// Validates uploaded character data: rejects absurd values (hand-edited saves, forged requests)
 const MAX_LEVEL = 50;
 function sanitizeCharacter(ch) {
   if (!ch || typeof ch !== 'object' || Array.isArray(ch)) return 'Thiếu dữ liệu nhân vật';
@@ -167,7 +167,7 @@ route('POST', '/api/characters', async (req, user) => {
   if (!/^[a-z0-9]{6,40}$/i.test(String(ch.id))) return [400, { error: 'ID không hợp lệ' }];
   if (db.countCharacters(user.id) >= MAX_CHARS) return [400, { error: `Tối đa ${MAX_CHARS} nhân vật` }];
   if (db.nameTaken(name)) return [409, { error: 'Tên nhân vật đã có người dùng' }];
-  // Nhân vật mới luôn bắt đầu từ cấp 1
+  // New characters always start at level 1
   const safe = { ...ch, name, level: 1, exp: 0, gold: Math.min(50, ch.gold || 0) };
   return [201, { character: db.createCharacter(user.id, safe) }];
 }, true);
@@ -188,7 +188,7 @@ route('DELETE', '/api/characters/:id', (req, user, params) => {
 
 route('GET', '/api/leaderboard', () => [200, { top: db.leaderboard() }]);
 
-// ---------- File tĩnh ----------
+// ---------- Static files ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 
 function serveStatic(req, res, urlPath) {
@@ -196,7 +196,7 @@ function serveStatic(req, res, urlPath) {
   try { p = decodeURIComponent(urlPath.split('?')[0]); } catch { res.writeHead(400, baseHeaders(req)); return res.end(); }
   if (p.endsWith('/')) p += 'index.html';
   const file = path.normalize(path.join(STATIC_DIR, p));
-  // chặn thoát khỏi thư mục client (../), file ẩn (.env, .git) và ký tự null
+  // block escaping the client folder (../), hidden files (.env, .git) and null bytes
   if (!file.startsWith(STATIC_DIR + path.sep) || p.includes('\0') || p.split('/').some((seg) => seg.startsWith('.'))) {
     res.writeHead(404, baseHeaders(req)); return res.end();
   }
@@ -226,7 +226,7 @@ const server = http.createServer(async (req, res) => {
       send(res, status, data, req);
     } catch (e) {
       if (!e.status) console.error(e);
-      // không trả chi tiết lỗi nội bộ ra ngoài
+      // never leak internal error details
       send(res, e.status || 500, { error: e.status ? e.message : 'Lỗi máy chủ' }, req);
     }
     return;
@@ -235,20 +235,20 @@ const server = http.createServer(async (req, res) => {
   serveStatic(req, res, url.pathname);
 });
 
-// chống giữ kết nối treo (slowloris)
+// guard against hanging connections (slowloris)
 server.headersTimeout = 15_000;
 server.requestTimeout = 30_000;
 
 server.listen(config.port, config.host, () => {
-  console.log(`Quỷ Môn Quan đang chạy: http://localhost:${config.port}`);
-  console.log(`  Client:   ${path.relative(ROOT, STATIC_DIR) || '.'}${DEV ? ' (chế độ dev)' : ''}`);
+  console.log(`Quỷ Môn Quan server running: http://localhost:${config.port}`);
+  console.log(`  Client:   ${path.relative(ROOT, STATIC_DIR) || '.'}${DEV ? ' (dev mode)' : ''}`);
   console.log(`  Database: ${path.relative(ROOT, DB_FILE) || DB_FILE}`);
-  console.log(`  Chế độ:   ${config.production ? 'production' : 'development'}${config.allowRegister ? '' : ' · khoá đăng ký'}`);
+  console.log(`  Mode:     ${config.production ? 'production' : 'development'}${config.allowRegister ? '' : ' · registration closed'}`);
 });
 
-// tắt server gọn gàng: ghi hết dữ liệu WAL xuống file database
+// clean shutdown: flush the WAL into the database file
 function shutdown(sig) {
-  console.log(`Nhận ${sig}, đang tắt server…`);
+  console.log(`Received ${sig}, shutting down…`);
   server.close(() => { db.close(); process.exit(0); });
   setTimeout(() => process.exit(0), 5000).unref();
 }

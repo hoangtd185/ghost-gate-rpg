@@ -1,4 +1,4 @@
-// Các hàm tiện ích dùng chung toàn game
+// Shared utility functions
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const rand = (a, b) => a + Math.random() * (b - a);
@@ -22,7 +22,7 @@ export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// Seeded random để vẽ background giống nhau mỗi lần
+// Seeded random so backgrounds are drawn the same every time
 export function seeded(seed) {
   let s = seed >>> 0 || 1;
   return () => {

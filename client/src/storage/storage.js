@@ -1,8 +1,8 @@
-// Lớp lưu trữ: tự chọn nơi lưu nhân vật
-//  1. ApiStorage   – có server Node (npm start): lưu vào SQLite qua REST API, có đăng nhập
-//  2. CloudStorage – chạy trong link Claude: lưu vào database của artifact
-//  3. LocalStore   – mở file trực tiếp: lưu trong trình duyệt (localStorage)
-// Cả 3 cùng một giao diện: list(), create(ch), save(ch), remove(id)
+// Storage layer: picks where characters are saved
+//  1. ApiStorage   – Node server present (npm start): saved to SQLite through the REST API, with login
+//  2. CloudStorage – running inside a Claude artifact link: saved to the artifact database
+//  3. LocalStore   – file opened directly: saved in the browser (localStorage)
+// All three share one interface: list(), create(ch), save(ch), remove(id)
 
 function withTimeout(promise, ms, fallback) {
   return Promise.race([promise, new Promise((r) => setTimeout(() => r(fallback), ms))]);
@@ -68,7 +68,7 @@ class LocalStore {
 }
 
 export async function createStorage() {
-  // 1. Có server riêng?
+  // 1. Is there a server?
   if (location.protocol.startsWith('http')) {
     try {
       const r = await withTimeout(fetch('api/health'), 2000, null);
@@ -76,22 +76,22 @@ export async function createStorage() {
         const j = await r.json();
         if (j && j.game === 'quy-mon-quan') return new ApiStorage();
       }
-    } catch { /* không có server */ }
+    } catch { /* no server */ }
   }
-  // 2. Đang chạy trong Claude artifact?
+  // 2. Running inside a Claude artifact?
   if (window.claude && typeof window.claude.use === 'function') {
     try {
       const db = await withTimeout(window.claude.use('db'), 8000, null);
       const user = db ? await withTimeout(window.claude.use('user'), 5000, null) : null;
       const uid = user ? await withTimeout(user.id(), 5000, null) : null;
       if (db && uid) return new CloudStorage(db, uid);
-    } catch { /* bỏ qua */ }
+    } catch { /* ignore */ }
   }
-  // 3. Lưu trong trình duyệt
+  // 3. Save in the browser
   return new LocalStore();
 }
 
-// Hàng đợi lưu: không bao giờ chạy 2 lần lưu cùng lúc
+// Save queue: never runs two saves at the same time
 export class Saver {
   constructor(storage, onStatus) { this.s = storage; this.busy = false; this.pending = null; this.onStatus = onStatus; }
   save(ch) {

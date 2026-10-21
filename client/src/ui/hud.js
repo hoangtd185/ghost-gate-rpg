@@ -1,4 +1,4 @@
-// Giao diện trong game (HUD + các cửa sổ) bằng HTML phủ lên canvas
+// In-game UI (HUD + windows) as HTML laid over the canvas
 import { CLASSES, SKILLS, SKILL_MAX_LV, SKILL_KEYS, PASSIVES, PASSIVE_MAX_LV, PASSIVE_NAMES, passivesOf } from '../data/classes.js';
 import { ITEMS, RARITY, SLOT_NAMES, STAT_NAMES, ENHANCE_MAX, ENHANCE_RATE, ENHANCE_SAFE, enhanceCost, GEM_KINDS, GEM_GRADES, GEM_SLOTS, GEM_FUSE, gemId, socketCount, socketCost, unsocketCost } from '../data/items.js';
 import { ELEMENTS, ELEMENT_IDS } from '../data/elements.js';
@@ -31,32 +31,32 @@ function elTag(el) {
   return el ? `<span class="eltag" style="--c:${ELEMENTS[el].color}">${ELEMENTS[el].glyph} ${ELEMENTS[el].name}</span>` : '';
 }
 
-// NPC đứng ở bản đồ nào
+// Which map an NPC stands on
 function npcMapName(npcId) {
   const m = Object.values(MAPS).find((mp) => (mp.npcs || []).some((n) => n.id === npcId));
   return m ? m.name : '';
 }
 
-// Bản đồ hợp để luyện cấp: cấp đề nghị cao nhất mà người chơi đã vào được
+// Good map to grind on: the highest recommended level the player can already enter
 function grindMap(ch) {
   const opened = (m) => Object.values(MAPS).every((mp) => mp.portals.every((pt) => pt.to !== m || ((!pt.lock || questStatus(ch, pt.lock) === 'done') && (!pt.req || questStatus(ch, pt.req) === 'done'))));
-  const list = Object.entries(MAPS).filter(([id, m]) => m.spawns.length && !m.spawns.some((sp) => sp.mob === 'boss' || sp.mob === 'qilin' || sp.mob === 'huyenco') && (m.minLv || 1) <= ch.level + 1 && opened(id));
+  const list = Object.entries(MAPS).filter(([id, m]) => m.spawns.length && !m.spawns.some((sp) => sp.mob === 'boss' || sp.mob === 'qilin' || sp.mob === 'blood_demon') && (m.minLv || 1) <= ch.level + 1 && opened(id));
   list.sort((a, b) => (b[1].minLv || 1) - (a[1].minLv || 1));
   return list.length ? list[0][1].name : null;
 }
 
-// Nhiệm vụ cốt truyện kế tiếp chưa xong (theo thứ tự tuyến chính)
+// Next unfinished story quest (in main-line order)
 const MAIN_COUNT = MAIN_ORDER.length;
 function nextMainQuest(ch) {
   return MAIN_ORDER.find((qid) => questStatus(ch, qid) !== 'done') || null;
 }
 
-// Nhãn loại nhiệm vụ
+// Quest type tag
 const CAT = { main: ['story', 'Cốt truyện'], tut: ['tut', 'Hướng dẫn'], side: ['side', 'Phụ'], daily: ['daily', 'Hằng ngày'] };
 const catOf = (q) => q.cat || (q.daily ? 'daily' : 'side');
 function catTag(q) { const c = CAT[catOf(q)]; return `<span class="qtag ${c[0]}">${c[1]}</span>`; }
 
-// Mô tả phần thưởng nhiệm vụ
+// Quest reward description
 function rewardText(q, cls) {
   const r = q.reward, parts = [];
   if (r.exp) parts.push(`${fmtNum(r.exp)} EXP`);
@@ -121,8 +121,8 @@ export class GameUI {
       this.world.bots.onPlayerChat(t);
     });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Escape') inp.blur(); });
-    // Nút cảm ứng
-    // Nút cảm ứng chỉ hiện khi người chơi chạm màn hình thật
+    // Touch buttons
+    // Touch buttons only appear once the player actually touches the screen
     window.addEventListener('touchstart', () => { $('#touch', this.root).hidden = false; }, { once: true, passive: true });
     this.root.querySelectorAll('#touch button').forEach((b) => {
       const k = b.dataset.k;
@@ -174,7 +174,7 @@ export class GameUI {
 
   refreshAll() { this.refreshBars(); this.refreshSkillbar(); this.refreshTracker(); if (this.open) this.renderWin(); }
 
-  // Bảng theo dõi nhiệm vụ góc phải: cốt truyện trước, rồi hướng dẫn, tối đa 3 dòng
+  // Quest tracker in the top right: story first, then tutorials, at most 3 lines
   refreshTracker() {
     const ch = this.ch, el = $('#hTrack', this.root);
     const order = { main: 0, tut: 1, side: 2, daily: 3 };
@@ -230,7 +230,7 @@ export class GameUI {
     });
   }
 
-  // Gọi mỗi frame: hồi chiêu, buff, minimap
+  // Called every frame: cooldowns, buffs, minimap
   tick() {
     const w = this.world; if (!w) return;
     const p = w.player, ch = this.ch;
@@ -310,7 +310,7 @@ export class GameUI {
     log.scrollTop = log.scrollHeight;
   }
 
-  // ================= CỬA SỔ =================
+  // ================= WINDOWS =================
   toggle(name) { if (this.open === name) this.close(); else { this.open = name; this.selected = null; this.renderWin(); } }
   close() { this.open = null; this.shopNpc = null; this.npcId = null; $('#win', this.root).hidden = true; }
 
@@ -367,7 +367,7 @@ export class GameUI {
     return html + '</div>';
   }
 
-  // Lỗ khảm: viên ngọc đã ép hoặc ô trống
+  // Socket: the inserted gem or an empty slot
   socketHtml(e, act) {
     const n = socketCount(e), out = [];
     for (let i = 0; i < n; i++) {
@@ -440,7 +440,7 @@ export class GameUI {
     return `<p class="muted small">+1 điểm mỗi cấp. Mỗi cấp chiêu +12% sát thương. Điểm dùng chung với Nội công.</p><ul class="skills">${list}</ul>`;
   }
 
-  // Cây nội công: 4 tầng nối nhau, tầng dưới cần tầng trên đạt cấp yêu cầu
+  // Passive tree: 4 linked tiers; a lower tier needs the tier above at the required level
   skillsPassive() {
     const ch = this.ch;
     const fx = (per, lv) => Object.entries(per).map(([k, v]) => `${PASSIVE_NAMES[k][0]} +${+(v * lv).toFixed(1)}${PASSIVE_NAMES[k][1]}`).join(', ');
@@ -520,7 +520,7 @@ export class GameUI {
     html += `<blockquote>${escapeHtml(this.npcMsg ? fillText(this.npcMsg, ch) : this.npcGreet)}</blockquote>`;
     if (this.npcQuest) html += `<p class="reward">Thưởng: ${rewardText(QUESTS[this.npcQuest], ch.cls)}</p>`;
     html += '<div class="opts">';
-    // việc cần trả ở NPC này (kể cả nhiệm vụ do người khác giao)
+    // things to hand in at this NPC (including quests given by someone else)
     for (const [qid, q] of Object.entries(QUESTS)) {
       if (questTurnIn(q) !== this.npcId) continue;
       const s = questStatus(ch, qid);
@@ -541,9 +541,9 @@ export class GameUI {
     return html;
   }
 
-  // ===== Hội thoại cốt truyện =====
+  // ===== Story dialogue =====
   startDialog(lines, opts) {
-    // lọc câu theo cờ cốt truyện và chèn tên người chơi
+    // filter lines by story flags and fill in the player's name
     lines = lines.filter((l) => lineVisible(this.ch, l[2])).map(([who, t]) => [who, fillText(t, this.ch)]);
     if (!lines.length) lines = [['sys', '…']];
     this.dlg = { lines, i: 0, ...opts };
@@ -593,7 +593,7 @@ export class GameUI {
     } else {
       const look = sp.kind === 'me' ? lookFor(this.ch) : NPCS[sp.id].look;
       const sh = humanoidSheet(look);
-      const k = 5.2; // phóng to phần đầu và vai
+      const k = 5.2; // zoom in on the head and shoulders
       ctx.setTransform(k, 0, 0, k, cv.width / 2 - (HUM_W / 2 + 1) * k, -2 * k);
       drawFrame(ctx, sh, 0, 0, 0, sp.kind !== 'me');
     }
@@ -618,7 +618,7 @@ export class GameUI {
     return `<div class="tabs"><button class="${tab === 'buy' ? 'on' : ''}" data-act="tab" data-t="buy">Mua</button><button class="${tab === 'sell' ? 'on' : ''}" data-act="tab" data-t="sell">Bán</button><span class="gold">Ngân lượng <b>${fmtNum(ch.gold)}</b></span></div>${body}`;
   }
 
-  // Lò rèn: 3 tab Cường hóa / Ép ngọc / Hợp ngọc
+  // Forge: 3 tabs Enhance / Socket / Fuse
   winForge() {
     const tab = this.forgeTab || 'enh';
     const tabs = [['enh', 'Cường hóa'], ['gem', 'Ép ngọc'], ['fuse', 'Hợp ngọc']]
@@ -699,7 +699,7 @@ export class GameUI {
       <ul class="fuselist">${rows.join('') || '<li class="muted">Túi chưa có ngọc nào để hợp.</li>'}</ul>`;
   }
 
-  // Chế tạo: danh sách công thức, nguyên liệu có / cần
+  // Crafting: recipe list, materials owned / needed
   winCraft() {
     const ch = this.ch;
     if (!this.craftSel) this.craftSel = RECIPES[0].id;
@@ -733,7 +733,7 @@ export class GameUI {
 
   openNpc(id) { if (this.npcId !== id || this.open !== 'npc') this.npcGreet = null; this.npcId = id; this.npcMsg = null; this.npcQuest = null; this.open = 'npc'; this.renderWin(); }
 
-  // Cảnh cốt truyện khi vào bản đồ (chiếu một lần), có thể có lựa chọn
+  // Story scene when entering a map (shown once), may include choices
   checkScenes() {
     const w = this.world, ch = this.ch;
     if (!w || this.open === 'dialog') return;
@@ -752,7 +752,7 @@ export class GameUI {
 
   showDeath(loss) { this.deathLoss = loss; this.open = 'death'; this.renderWin(); }
 
-  // ================= HÀNH ĐỘNG =================
+  // ================= ACTIONS =================
   act(a, d) {
     const ch = this.ch, w = this.world;
     const changed = () => { w.recalc(); w.player.refreshLook(); this.refreshAll(); this.cb.save(); };
@@ -806,7 +806,7 @@ export class GameUI {
       case 'daccept': { const { qid, npc } = this.dlg; this.npcId = npc; this.acceptQuest(qid); break; }
       case 'dlater': { const { npc } = this.dlg; this.dlg = null; this.openNpc(npc); break; }
       case 'dchoice': {
-        // lựa chọn trong cảnh cốt truyện: đặt cờ rồi chiếu đoạn thoại riêng
+        // choice in a story scene: set the flag, then play its own dialogue
         const sc = SCENES[this.sceneId], c = sc && sc.choices[+d.i];
         if (!c) break;
         ch.flags[c.flag[0]] = c.flag[1];
@@ -816,7 +816,7 @@ export class GameUI {
       }
       case 'dend': { const dd = this.dlg; this.dlg = null; if (dd && dd.onEnd) dd.onEnd(); else this.close(); break; }
       case 'qtalk': {
-        ch.quests[d.q].p = 1; // đã gặp đúng người
+        ch.quests[d.q].p = 1; // met the right person
         this.finishQuest(d.q);
         break;
       }
@@ -888,8 +888,8 @@ export class GameUI {
     for (const [id, n] of q.give || []) { addItem(ch, id, n); this.toast(`Nhận ${ITEMS[id].name}${n > 1 ? ' ×' + n : ''}`); }
     if (q.hint) this.toast(`💡 ${escapeHtml(fillText(q.hint, ch))}`, 'hint');
     if (q.daily) this.world.event('daily');
-    this.world.refreshNpcs(); // có NPC biến mất/xuất hiện khi nhận nhiệm vụ
-    // nhiệm vụ "gặp chính mình" (quà hằng ngày) xong ngay
+    this.world.refreshNpcs(); // some NPCs appear/disappear when a quest is accepted
+    // "meet yourself" quests (daily gift) complete immediately
     if (q.type === 'talk' && q.target === this.npcId) { ch.quests[qid].p = 1; this.finishQuest(qid); return; }
     this.dlg = null;
     this.openNpc(this.npcId);
@@ -898,7 +898,7 @@ export class GameUI {
     this.world.recalc(); this.refreshAll(); this.cb.save();
   }
 
-  // Trả nhiệm vụ: chiếu đoạn hội thoại kết (nếu có) rồi mới trao thưởng
+  // Turning in a quest: play the closing dialogue (if any), then give the reward
   finishQuest(qid) {
     const q = QUESTS[qid], npc = this.npcId;
     const done = () => { this.openNpc(npc); this.completeQuest(qid); };

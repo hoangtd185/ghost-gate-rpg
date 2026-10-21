@@ -1,4 +1,4 @@
-// Quái vật vẽ bằng đường cong. Mỗi sheet có thêm 1 khung "bị đánh" (chớp trắng) ở cuối.
+// Monsters drawn with curves. Each sheet has one extra "hit" frame (white flash) at the end.
 import { makeSheet, shade, rgba, paint, shadeIn, ellipse, rrect, poly, radial, linear, OUTLINE } from './draw.js';
 
 function withHurt(fw, fh, n, draw, frames) {
@@ -11,7 +11,7 @@ function withHurt(fw, fh, n, draw, frames) {
   }, { ...frames, hurt: [n] });
 }
 
-// Mắt dễ thương dùng chung: tròng đen lớn + 2 đốm sáng
+// Shared cute eyes: big dark iris + 2 highlights
 function cuteEye(ctx, x, y, rx, ry, color = '#1a0e14', glow) {
   if (glow) { ctx.fillStyle = radial(ctx, x, y, 0, rx * 2.6, [[0, rgba(glow, 0.55)], [1, rgba(glow, 0)]]); ctx.fillRect(x - rx * 3, y - ry * 3, rx * 6, ry * 6); }
   paint(ctx, ellipse(x, y, rx, ry), color, null);
@@ -19,19 +19,19 @@ function cuteEye(ctx, x, y, rx, ry, color = '#1a0e14', glow) {
   paint(ctx, ellipse(x + rx * 0.3, y + ry * 0.45, rx * 0.2, ry * 0.15), rgba('#ffffff', 0.8), null);
 }
 
-// ---------- Ma Trơi: ngọn lửa xanh có mặt ----------
+// ---------- Will-o'-wisp: green flame with a face ----------
 const WISP_PAL = {
   wisp: { glow: 'rgba(140,255,230,0.55)', glow0: 'rgba(60,220,190,0)', c0: '#e8fff9', c1: '#8ff4dc', c2: '#2fbfa8', line: '#13524c', shadow: '#0a6a60', eye: '#0e3a38' },
-  // Thủy Quỷ: lửa xanh dương, có rong rêu vắt trên đầu
-  shuigui: { glow: 'rgba(120,180,255,0.5)', glow0: 'rgba(60,120,220,0)', c0: '#eaf4ff', c1: '#8ab8ff', c2: '#3a6ad8', line: '#14285a', shadow: '#1a3a8a', eye: '#0a1838',
+  // Water ghost: blue flame with weeds draped over the head
+  water_ghost: { glow: 'rgba(120,180,255,0.5)', glow0: 'rgba(60,120,220,0)', c0: '#eaf4ff', c1: '#8ab8ff', c2: '#3a6ad8', line: '#14285a', shadow: '#1a3a8a', eye: '#0a1838',
     extra(ctx, f, sw) {
       ctx.strokeStyle = '#3a8a5a'; ctx.lineWidth = 1.1;
       ctx.beginPath(); ctx.moveTo(10, 11); ctx.quadraticCurveTo(7 + sw, 16, 8 + sw, 21); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(20, 11); ctx.quadraticCurveTo(23 + sw, 15, 22 + sw, 19); ctx.stroke();
       ctx.fillStyle = 'rgba(200,230,255,0.8)'; ctx.beginPath(); ctx.ellipse(15, 30.5 + (f % 2), 1, 1.4, 0, 0, 7); ctx.fill();
     } },
-  // Hỏa Linh: lửa đỏ cam, có sừng lửa nhỏ
-  firesp: { glow: 'rgba(255,150,60,0.6)', glow0: 'rgba(255,60,20,0)', c0: '#fff6d0', c1: '#ffb04a', c2: '#e0401e', line: '#5a1408', shadow: '#8a1a0a', eye: '#3a0804',
+  // Fire spirit: orange-red flame with small flame horns
+  fire_spirit: { glow: 'rgba(255,150,60,0.6)', glow0: 'rgba(255,60,20,0)', c0: '#fff6d0', c1: '#ffb04a', c2: '#e0401e', line: '#5a1408', shadow: '#8a1a0a', eye: '#3a0804',
     extra(ctx, f, sw) {
       ctx.fillStyle = '#fff0a0';
       for (const [x, y] of [[9, 8], [21, 8]]) { ctx.beginPath(); ctx.moveTo(x - 1.5, y + 3); ctx.lineTo(x + sw * 0.5, y - 2); ctx.lineTo(x + 1.5, y + 3); ctx.fill(); }
@@ -65,10 +65,10 @@ function wisp(pal = WISP_PAL.wisp) {
   }, { idle: [0, 1, 2, 3], walk: [0, 1, 2, 3] });
 }
 
-// ---------- Hồ Ly Tinh: cáo hai đuôi ----------
+// ---------- Fox spirit: two-tailed fox ----------
 const FOX_PAL = {
   fox: { fur: '#f08a3a', furD: '#c45a1e', cream: '#fff1df', ear: '#ffc8b0', eye: '#3a1410' },
-  // Tuyết Hồ: lông trắng xanh, có bông tuyết trên trán
+  // Snow fox: white-blue fur with a snowflake on the forehead
   snowfox: { fur: '#eef4fc', furD: '#9ab8d8', cream: '#ffffff', ear: '#c8e0ff', eye: '#1a3a6a',
     extra(ctx, f, bob) {
       ctx.strokeStyle = '#7ac8ff'; ctx.lineWidth = 0.7;
@@ -82,7 +82,7 @@ function fox(pal = FOX_PAL.fox) {
     const step = [0, 1, 0, -1][f], bob = f % 2 ? -0.6 : 0;
     const { fur, furD, cream } = pal;
     ctx.fillStyle = rgba('#000000', 0.25); ctx.beginPath(); ctx.ellipse(22, 30.5, 13, 1.6, 0, 0, 7); ctx.fill();
-    // hai cái đuôi
+    // two tails
     for (const [ox, oy, r] of [[0, 0, 0], [3, 2, 0.25]]) {
       const t = new Path2D();
       t.moveTo(14 + ox, 19 + oy + bob);
@@ -91,15 +91,15 @@ function fox(pal = FOX_PAL.fox) {
       t.closePath();
       paint(ctx, t, linear(ctx, 4, 4, 14, 18, [[0, cream], [0.3, fur], [1, furD]]), OUTLINE, 0.9);
     }
-    // chân sau + trước
+    // hind + front legs
     const leg = (x, d, c) => paint(ctx, rrect(x + d, 23 + bob, 3.2, 6.5 - Math.abs(d) * 0.3, 1.5), c, OUTLINE, 0.8);
     leg(14, -step, furD); leg(27, step, furD);
-    // thân
+    // body
     const body = ellipse(21.5, 20 + bob, 10.5, 6.6);
     paint(ctx, body, linear(ctx, 0, 13, 0, 27, [[0, shade(fur, 0.15)], [0.7, fur], [1, furD]]), OUTLINE, 1);
     shadeIn(ctx, body, ellipse(22, 26 + bob, 8, 3.4), cream);
     leg(17, step, fur); leg(29.5, -step, fur);
-    // đầu
+    // head
     const hx = 33, hy = 14 + bob;
     const ears = [[hx - 4.5, hy - 4, hx - 6, hy - 11, hx - 1, hy - 6], [hx + 1, hy - 5.5, hx + 3, hy - 12, hx + 5, hy - 4.5]];
     for (const [a, b, c, d, e, g] of ears) {
@@ -119,19 +119,19 @@ function fox(pal = FOX_PAL.fox) {
   }, { idle: [0], walk: [0, 1, 2, 3] });
 }
 
-// ---------- Quỷ Rơm: bù nhìn sống dậy ----------
-function scare() {
+// ---------- Scarecrow: a straw man come to life ----------
+function scarecrow() {
   return withHurt(40, 46, 4, (ctx, f) => {
     const b = [0, -2, -3, -2][f];
     ctx.fillStyle = rgba('#000000', 0.25); ctx.beginPath(); ctx.ellipse(20, 44.5, 8, 1.5, 0, 0, 7); ctx.fill();
-    paint(ctx, rrect(18.6, 30 + b, 2.8, 14 - b, 1), '#6a4224', OUTLINE, 0.8); // cọc
+    paint(ctx, rrect(18.6, 30 + b, 2.8, 14 - b, 1), '#6a4224', OUTLINE, 0.8); // pole
     // tay que ngang
     paint(ctx, rrect(3, 20 + b, 34, 2.6, 1.2), '#7a4e2a', OUTLINE, 0.8);
     for (const x of [3, 36]) for (let i = 0; i < 4; i++) {
       ctx.strokeStyle = i % 2 ? '#e8c46a' : '#c89a40'; ctx.lineWidth = 0.8;
       ctx.beginPath(); ctx.moveTo(x, 21 + b); ctx.lineTo(x + (x < 10 ? -3 : 3), 17 + i * 2.5 + b); ctx.stroke();
     }
-    // áo vá
+    // patched shirt
     const coat = new Path2D();
     coat.moveTo(13, 19 + b); coat.lineTo(27, 19 + b); coat.lineTo(29, 33 + b); coat.lineTo(11, 33 + b); coat.closePath();
     paint(ctx, coat, linear(ctx, 11, 0, 29, 0, [[0, '#4e3a5e'], [1, '#7a5a8e']]), OUTLINE, 1);
@@ -139,7 +139,7 @@ function scare() {
     ctx.strokeStyle = '#2a1a2a'; ctx.lineWidth = 0.5; ctx.setLineDash([0.8, 0.8]); ctx.strokeRect(21.6, 24.6 + b, 3.3, 2.8); ctx.setLineDash([]);
     paint(ctx, rrect(12.5, 26.5 + b, 15, 2, 0.8), '#3a2418', null);
     for (let i = 0; i < 7; i++) { ctx.strokeStyle = i % 2 ? '#e8c46a' : '#c89a40'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(12.5 + i * 2.5, 33 + b); ctx.lineTo(12 + i * 2.6, 36.5 + b + (i % 3)); ctx.stroke(); }
-    // đầu bao bố
+    // burlap sack head
     const head = ellipse(20, 12.5 + b, 7.6, 7);
     paint(ctx, head, radial(ctx, 18, 10 + b, 1, 9, [[0, '#ead2a0'], [1, '#c4a46a']]), OUTLINE, 1);
     cuteEye(ctx, 17, 12 + b, 1.6, 1.8, '#ff3a2a', '#ff5a3a');
@@ -147,20 +147,20 @@ function scare() {
     ctx.strokeStyle = '#3a2418'; ctx.lineWidth = 0.7;
     ctx.beginPath(); ctx.moveTo(16, 16 + b); ctx.quadraticCurveTo(20, 18.5 + b, 24, 16 + b); ctx.stroke();
     for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.moveTo(16.8 + i * 1.6, 16 + b + (i ? 0.6 : 0)); ctx.lineTo(16.8 + i * 1.6, 17.6 + b); ctx.stroke(); }
-    // nón rách
+    // torn hat
     const hat = new Path2D();
     hat.moveTo(20, -1 + b); hat.lineTo(31.5, 7 + b); hat.lineTo(28, 8 + b); hat.lineTo(26, 7 + b); hat.lineTo(22, 8.2 + b); hat.lineTo(15, 7.6 + b); hat.lineTo(8.5, 7.2 + b); hat.closePath();
     paint(ctx, hat, linear(ctx, 8, 0, 32, 0, [[0, '#b08a3a'], [0.5, '#f0d488'], [1, '#c8a050']]), OUTLINE, 1);
   }, { idle: [0], walk: [0, 1, 2, 3] });
 }
 
-// ---------- Cương Thi: nhảy cóc, tay duỗi thẳng ----------
+// ---------- Jiangshi: hops with arms stretched out ----------
 const JIANG_PAL = {
-  jiang: { robe: '#24525a', robeL: '#3a7a80', skin: '#c6e0c8', glow: '#ff4a4a', tal: '#ffe066', ink: '#c42020' },
-  // Huyết Cương Thi: áo đỏ sẫm, bùa đỏ chữ vàng, mắt đỏ rực
-  bloodjiang: { robe: '#5a1420', robeL: '#8a2a34', skin: '#d8c4c4', glow: '#ff2a4a', tal: '#d8243a', ink: '#ffe066' },
+  jiangshi: { robe: '#24525a', robeL: '#3a7a80', skin: '#c6e0c8', glow: '#ff4a4a', tal: '#ffe066', ink: '#c42020' },
+  // Blood jiangshi: dark red robe, red talisman with gold script, glowing red eyes
+  blood_jiangshi: { robe: '#5a1420', robeL: '#8a2a34', skin: '#d8c4c4', glow: '#ff2a4a', tal: '#d8243a', ink: '#ffe066' },
 };
-function jiang(pal = JIANG_PAL.jiang) {
+function jiangshi(pal = JIANG_PAL.jiangshi) {
   return withHurt(38, 46, 3, (ctx, f) => {
     const c = f === 1 ? 2.2 : 0, a = f === 2 ? -1.2 : 0;
     const { robe, robeL, skin } = pal;
@@ -173,25 +173,25 @@ function jiang(pal = JIANG_PAL.jiang) {
     paint(ctx, rrect(14, 26 + c, 9, 7.5, 1), '#d4a64a', OUTLINE, 0.7);
     paint(ctx, ellipse(18.5, 29.7 + c, 2.4, 2.4), '#a8302a', null);
     ctx.strokeStyle = '#d4a64a'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(9.8, 37.5 + c); ctx.lineTo(27.2, 37.5 + c); ctx.stroke();
-    // tay duỗi
+    // outstretched arms
     for (const [dy, col] of [[0, shade(robe, -0.25)], [3, robe]]) {
       paint(ctx, rrect(18, 21.5 + c + dy + a, 14, 4, 1.6), col, OUTLINE, 0.8);
       paint(ctx, ellipse(33, 23.5 + c + dy + a, 2.4, 1.9), skin, OUTLINE, 0.7);
       ctx.strokeStyle = '#2a4a3a'; ctx.lineWidth = 0.6;
       for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(35, 22.5 + c + dy + a + i * 0.9); ctx.lineTo(36.6, 22.4 + c + dy + a + i * 1.1); ctx.stroke(); }
     }
-    // đầu
+    // head
     const face = rrect(11.5, 8 + c, 13, 12.5, 4.5);
     paint(ctx, face, linear(ctx, 0, 8, 0, 21, [[0, shade(skin, 0.1)], [1, shade(skin, -0.12)]]), OUTLINE, 1);
     cuteEye(ctx, 17.5, 14.5 + c, 1.4, 1.5, '#4a0a0a', pal.glow);
     cuteEye(ctx, 22, 14.5 + c, 1.4, 1.5, '#4a0a0a', pal.glow);
     ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(19, 18 + c); ctx.lineTo(19.8, 19.6 + c); ctx.lineTo(20.6, 18 + c); ctx.fill();
     ctx.strokeStyle = '#3a0a0a'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(17.5, 18 + c); ctx.lineTo(22.5, 18 + c); ctx.stroke();
-    // mũ quan
+    // official's hat
     paint(ctx, ellipse(18, 8.6 + c, 9.2, 2.4), '#1a1a26', OUTLINE, 0.9);
     paint(ctx, rrect(12, 2 + c, 12, 7, 3.6), linear(ctx, 0, 2, 0, 9, [[0, '#3a3a4a'], [1, '#1a1a26']]), OUTLINE, 0.9);
     paint(ctx, ellipse(18, 1.5 + c, 1.8, 1.8), '#d23a32', OUTLINE, 0.7);
-    // lá bùa
+    // talisman
     const tal = new Path2D();
     tal.moveTo(19, 6.5 + c); tal.lineTo(23.5, 6.5 + c); tal.lineTo(24 + a * 0.5, 19 + c); tal.lineTo(19.6 + a * 0.5, 19.4 + c); tal.closePath();
     paint(ctx, tal, pal.tal, OUTLINE, 0.6);
@@ -201,7 +201,7 @@ function jiang(pal = JIANG_PAL.jiang) {
   }, { idle: [0], walk: [1, 2] });
 }
 
-// ---------- Quỷ Đèn Lồng ----------
+// ---------- Lantern ghost ----------
 function lantern() {
   return withHurt(34, 42, 4, (ctx, f) => {
     const sw = [0, 1, 0, -1][f];
@@ -216,7 +216,7 @@ function lantern() {
     for (const rx of [3.5, 7.5]) { ctx.beginPath(); ctx.ellipse(17, 18, rx, 10.5, 0, 0, 7); ctx.stroke(); }
     ctx.restore();
     paint(ctx, rrect(11.5, 27, 11, 3, 1), '#d4a64a', OUTLINE, 0.8);
-    // mặt
+    // face
     const blink = f === 3;
     if (blink) { ctx.strokeStyle = '#2a0a0a'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(11.5, 16); ctx.lineTo(14.5, 16); ctx.moveTo(19.5, 16); ctx.lineTo(22.5, 16); ctx.stroke(); }
     else { cuteEye(ctx, 13, 15.5, 1.9, 2.3, '#2a0a0a', '#ffe060'); cuteEye(ctx, 21, 15.5, 1.9, 2.3, '#2a0a0a', '#ffe060'); }
@@ -231,7 +231,7 @@ function lantern() {
   }, { idle: [0, 1, 2, 1, 0, 3], walk: [0, 1, 2, 1] });
 }
 
-// ---------- Hắc Quỷ Vương ----------
+// ---------- Black Ghost King ----------
 function boss() {
   return withHurt(96, 100, 3, (ctx, f) => {
     const b = f === 1 ? 1 : 0, atk = f === 2;
@@ -239,11 +239,11 @@ function boss() {
     ctx.fillStyle = radial(ctx, 48, 56, 8, 50, [[0, 'rgba(200,30,70,0.38)'], [1, 'rgba(80,0,40,0)']]);
     ctx.fillRect(0, 0, 96, 100);
     ctx.fillStyle = rgba('#000000', 0.3); ctx.beginPath(); ctx.ellipse(48, 97, 26, 3, 0, 0, 7); ctx.fill();
-    // áo choàng sau
+    // back cape
     const cape = new Path2D();
     cape.moveTo(28, 38 + b); cape.quadraticCurveTo(12, 60, 10, 96); cape.lineTo(86, 96); cape.quadraticCurveTo(84, 60, 68, 38 + b); cape.closePath();
     paint(ctx, cape, linear(ctx, 0, 40, 0, 96, [[0, '#2a0610'], [1, '#14020a']]), OUTLINE, 1.2);
-    // thân
+    // body
     const body = new Path2D();
     body.moveTo(30, 40 + b); body.lineTo(66, 40 + b); body.quadraticCurveTo(72, 70, 74, 95); body.lineTo(22, 95); body.quadraticCurveTo(24, 70, 30, 40 + b); body.closePath();
     paint(ctx, body, linear(ctx, 22, 0, 74, 0, [[0, shade(robe, -0.3)], [0.5, robe], [1, robeL]]), OUTLINE, 1.3);
@@ -252,7 +252,7 @@ function boss() {
     paint(ctx, rrect(28, 56 + b, 40, 5, 2), gold, OUTLINE, 1);
     paint(ctx, ellipse(48, 58.5 + b, 5, 4.2), '#2a0610', OUTLINE, 0.9);
     cuteEye(ctx, 48, 58.5 + b, 1.8, 2.4, '#ff3a3a', '#ff3a3a');
-    // giáp vai
+    // shoulder armor
     for (const [x, d] of [[26, -1], [70, 1]]) {
       const sp = new Path2D();
       sp.moveTo(x - 10 * d, 44 + b); sp.quadraticCurveTo(x - 9 * d, 33 + b, x + 6 * d, 34 + b); sp.quadraticCurveTo(x + 10 * d, 40 + b, x + 6 * d, 47 + b); sp.closePath();
@@ -271,18 +271,18 @@ function boss() {
     }
     paint(ctx, rrect(19, 46 + b, 9, 24, 4), shade(robe, -0.2), OUTLINE, 1);
     paint(ctx, ellipse(23.5, 72 + b, 5, 4.6), shade(skin, -0.15), OUTLINE, 1);
-    // đầu
+    // head
     for (const [x, d] of [[36, -1], [60, 1]]) {
       const h = new Path2D();
       h.moveTo(x, 18 + b); h.quadraticCurveTo(x + 9 * d, 10 + b, x + 13 * d, -2 + b); h.quadraticCurveTo(x + 4 * d, 7 + b, x - 3 * d, 13 + b); h.closePath();
       paint(ctx, h, linear(ctx, x, 18, x + 13 * d, -2, [[0, '#d8ccb8'], [1, '#fff8ec']]), OUTLINE, 1.1);
     }
-    paint(ctx, ellipse(48, 14 + b, 18, 6), '#140810', OUTLINE, 1); // tóc bờm
+    paint(ctx, ellipse(48, 14 + b, 18, 6), '#140810', OUTLINE, 1); // mane
     const face = new Path2D();
     face.moveTo(32, 18 + b); face.bezierCurveTo(32, 6 + b, 64, 6 + b, 64, 18 + b);
     face.bezierCurveTo(64, 30 + b, 56, 38 + b, 48, 38 + b); face.bezierCurveTo(40, 38 + b, 32, 30 + b, 32, 18 + b); face.closePath();
     paint(ctx, face, radial(ctx, 46, 20 + b, 2, 20, [[0, shade(skin, 0.2)], [1, skin]]), OUTLINE, 1.3);
-    // mắt đỏ rực
+    // glowing red eyes
     for (const [x, d] of [[41, 1], [55, -1]]) {
       ctx.fillStyle = radial(ctx, x, 22 + b, 0, 8, [[0, 'rgba(255,60,60,0.7)'], [1, 'rgba(255,0,0,0)']]);
       ctx.fillRect(x - 8, 14 + b, 16, 16);
@@ -294,64 +294,64 @@ function boss() {
     paint(ctx, mouth, '#1a0408', OUTLINE, 0.9);
     paint(ctx, poly([[42.5, 30.4 + b], [44, 34 + b], [45.3, 31 + b]]), '#ffffff', null);
     paint(ctx, poly([[50.7, 31 + b], [52, 34 + b], [53.5, 30.4 + b]]), '#ffffff', null);
-    // vương miện
+    // crown
     const cr = poly([[37, 12 + b], [38, 4 + b], [42, 8 + b], [48, 1 + b], [54, 8 + b], [58, 4 + b], [59, 12 + b]]);
     paint(ctx, cr, linear(ctx, 0, 1, 0, 12, [[0, '#fff0b0'], [1, gold]]), OUTLINE, 1);
     paint(ctx, ellipse(48, 8.5 + b, 1.8, 1.8), '#ff2a3a', OUTLINE, 0.7);
   }, { idle: [0, 1], walk: [0, 1], atk: [2] });
 }
 
-// ---------- Ếch Độc ----------
+// ---------- Poison frog ----------
 function frog() {
   return withHurt(36, 28, 3, (ctx, f) => {
     const leap = f === 2, crouch = f === 1;
     const sy = crouch ? 1.5 : leap ? -1.5 : 0;
     ctx.fillStyle = rgba('#000000', 0.25); ctx.beginPath(); ctx.ellipse(18, 26.5, 10, 1.5, 0, 0, 7); ctx.fill();
     const skin = '#7ac84a', dark = '#3a7a2a', spot = '#8a4ab8';
-    // chân sau
+    // hind legs
     if (leap) paint(ctx, poly([[8, 20], [1, 25], [3, 26.5], [11, 22]], true), dark, OUTLINE, 0.8);
     else paint(ctx, ellipse(10, 22 + sy * 0.5, 5, 3.4), dark, OUTLINE, 0.8);
-    // thân
+    // body
     const body = ellipse(18, 18 + sy, 11.5, 7.5 - sy * 0.4);
     paint(ctx, body, radial(ctx, 16, 14, 1, 13, [[0, shade(skin, 0.3)], [1, skin]]), OUTLINE, 1);
     shadeIn(ctx, body, ellipse(19, 24 + sy, 9, 3.5), '#e8f0a0');
     for (const [x, y, r] of [[12, 15, 1.6], [16, 13, 1.2], [21, 15.5, 1.4], [9, 18, 1]]) paint(ctx, ellipse(x, y + sy, r, r * 0.8), spot, null);
-    // chân trước
+    // front legs
     paint(ctx, ellipse(26, 24 + (leap ? -1 : 0), 3, 1.8), skin, OUTLINE, 0.8);
-    // mắt lồi
+    // bulging eyes
     for (const x of [14, 23]) {
       paint(ctx, ellipse(x, 10.5 + sy, 4, 3.8), skin, OUTLINE, 0.9);
       paint(ctx, ellipse(x + 0.4, 10.3 + sy, 2.7, 2.7), '#ffffff', null);
       cuteEye(ctx, x + 0.9, 10.5 + sy, 1.5, 1.8, '#1a0a18');
     }
-    // miệng rộng
+    // wide mouth
     ctx.strokeStyle = OUTLINE; ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.moveTo(17, 17.5 + sy); ctx.quadraticCurveTo(23, 20.5 + sy, 29, 16.5 + sy); ctx.stroke();
     ctx.fillStyle = 'rgba(255,130,160,0.5)'; ctx.beginPath(); ctx.ellipse(27, 15 + sy, 1.5, 0.9, 0, 0, 7); ctx.fill();
-    // giọt độc
+    // poison drop
     ctx.fillStyle = '#b8ff6a'; ctx.beginPath(); ctx.ellipse(28.5, 19.5 + sy + f, 0.8, 1.2, 0, 0, 7); ctx.fill();
   }, { idle: [0], walk: [1, 2] });
 }
 
-// ---------- Tuyết Yêu ----------
+// ---------- Yeti ----------
 function yeti() {
   return withHurt(42, 46, 4, (ctx, f) => {
     const b = [0, -1, 0, -1][f], sw = [0, 1, 0, -1][f];
     const fur = '#f4f8ff', furD = '#b8c8e0', face = '#9ac8e8';
     ctx.fillStyle = rgba('#000000', 0.25); ctx.beginPath(); ctx.ellipse(21, 44.5, 12, 1.8, 0, 0, 7); ctx.fill();
-    // chân
+    // legs
     paint(ctx, rrect(12 - sw, 36 + b, 7, 8 - b, 3), furD, OUTLINE, 0.9);
     paint(ctx, rrect(23 + sw, 36 + b, 7, 8 - b, 3), fur, OUTLINE, 0.9);
     // tay sau
     paint(ctx, rrect(6, 20 + b - sw, 7, 16, 3.5), furD, OUTLINE, 0.9);
-    // thân lông xù
+    // shaggy body
     const body = new Path2D();
     body.moveTo(9, 22 + b);
     for (let i = 0; i <= 10; i++) { const a = Math.PI + (i / 10) * Math.PI; body.lineTo(21 + Math.cos(a) * 14 + (i % 2 ? 1.5 : 0) * Math.cos(a), 24 + b + Math.sin(a) * 15 + (i % 2 ? 1.5 : 0) * Math.sin(a)); }
     body.lineTo(34, 38 + b); body.quadraticCurveTo(21, 42 + b, 8, 38 + b); body.closePath();
     paint(ctx, body, radial(ctx, 18, 16 + b, 2, 20, [[0, '#ffffff'], [1, furD]]), OUTLINE, 1.1);
     shadeIn(ctx, body, ellipse(23, 31 + b, 8, 7), rgba('#c8dcf0', 0.6));
-    // mặt xanh
+    // blue face
     const fc = ellipse(25, 18 + b, 7.5, 6.5);
     paint(ctx, fc, linear(ctx, 0, 12, 0, 24, [[0, shade(face, 0.2)], [1, face]]), OUTLINE, 0.9);
     cuteEye(ctx, 22.5, 17 + b, 1.5, 1.8, '#0a1a3a');
@@ -360,15 +360,15 @@ function yeti() {
     ctx.beginPath(); ctx.moveTo(20.5, 13.6 + b); ctx.lineTo(24, 14.8 + b); ctx.moveTo(30, 13.6 + b); ctx.lineTo(26.5, 14.8 + b); ctx.stroke();
     const m = new Path2D(); m.moveTo(22, 21 + b); m.quadraticCurveTo(25.5, 24 + b, 29, 21 + b); m.closePath(); paint(ctx, m, '#2a3a6a', OUTLINE, 0.6);
     paint(ctx, poly([[23, 21.2 + b], [23.8, 22.8 + b], [24.6, 21.4 + b]]), '#ffffff', null);
-    // sừng nhỏ
+    // small horns
     for (const x of [18, 30]) paint(ctx, poly([[x - 1.6, 9 + b], [x + (x < 24 ? -1 : 1), 3 + b], [x + 1.6, 9 + b]]), '#c8d8ec', OUTLINE, 0.8);
-    // tay trước
+    // front arms
     paint(ctx, rrect(29, 21 + b + sw, 7, 15, 3.5), fur, OUTLINE, 0.9);
     paint(ctx, ellipse(32.5, 36 + b + sw, 4, 3), '#dce8f8', OUTLINE, 0.8);
   }, { idle: [0, 1], walk: [0, 1, 2, 3] });
 }
 
-// ---------- Băng Dực (dơi băng) ----------
+// ---------- Ice bat ----------
 function icebat() {
   return withHurt(38, 30, 4, (ctx, f) => {
     const flap = [0, -1, 0, 1][f];
@@ -395,38 +395,38 @@ function icebat() {
   }, { idle: [0, 1, 2, 3], walk: [0, 1, 2, 3] });
 }
 
-// ---------- Băng Tinh Thạch ----------
+// ---------- Ice golem ----------
 function golem() {
   return withHurt(42, 46, 4, (ctx, f) => {
     const b = [0, -1, 0, -1][f], sw = [0, 1.5, 0, -1.5][f];
     const ice = (x0, y0, x1, y1) => linear(ctx, x0, y0, x1, y1, [[0, '#e8f8ff'], [0.5, '#8acff5'], [1, '#3a7ab8']]);
     ctx.fillStyle = rgba('#000000', 0.25); ctx.beginPath(); ctx.ellipse(21, 44.5, 12, 1.8, 0, 0, 7); ctx.fill();
     ctx.fillStyle = radial(ctx, 21, 26, 2, 22, [[0, 'rgba(140,220,255,0.35)'], [1, 'rgba(140,220,255,0)']]); ctx.fillRect(0, 0, 42, 46);
-    // chân khối
+    // blocky legs
     paint(ctx, poly([[12 - sw, 35 + b], [19 - sw, 35 + b], [18 - sw, 44], [11 - sw, 44]]), ice(11, 35, 19, 44), OUTLINE, 0.9);
     paint(ctx, poly([[23 + sw, 35 + b], [30 + sw, 35 + b], [31 + sw, 44], [24 + sw, 44]]), ice(23, 35, 31, 44), OUTLINE, 0.9);
     // tay
     paint(ctx, poly([[5, 20 + b], [11, 18 + b], [12, 32 + b + sw], [4, 33 + b + sw]]), ice(4, 18, 12, 33), OUTLINE, 0.9);
-    // thân tinh thể
+    // crystal body
     const body = poly([[10, 16 + b], [17, 9 + b], [27, 10 + b], [33, 18 + b], [32, 33 + b], [21, 37 + b], [10, 33 + b]]);
     paint(ctx, body, ice(10, 9, 33, 37), OUTLINE, 1.1);
     ctx.save(); ctx.clip(body);
     ctx.strokeStyle = rgba('#ffffff', 0.55); ctx.lineWidth = 0.7;
     ctx.beginPath(); ctx.moveTo(17, 9 + b); ctx.lineTo(20, 22 + b); ctx.lineTo(10, 33 + b); ctx.moveTo(20, 22 + b); ctx.lineTo(33, 18 + b); ctx.moveTo(20, 22 + b); ctx.lineTo(21, 37 + b); ctx.stroke();
     ctx.restore();
-    // gai băng trên lưng
+    // ice spikes on the back
     for (const [x, h] of [[13, 7], [18, 10], [24, 8]]) paint(ctx, poly([[x - 2.5, 13 + b], [x, 13 + b - h], [x + 2.5, 13 + b]]), ice(x, 13 - h, x, 13), OUTLINE, 0.8);
-    // mắt phát sáng
+    // glowing eyes
     for (const x of [21, 27]) {
       ctx.fillStyle = radial(ctx, x, 20 + b, 0, 4, [[0, 'rgba(160,255,255,0.9)'], [1, 'rgba(80,200,255,0)']]); ctx.fillRect(x - 4, 16 + b, 8, 8);
       paint(ctx, poly([[x - 2, 19 + b], [x + 2, 19.5 + b], [x + 1.5, 21.5 + b], [x - 1.8, 21 + b]]), '#e8ffff', OUTLINE, 0.6);
     }
-    // tay trước
+    // front arms
     paint(ctx, poly([[30, 19 + b], [37, 21 + b], [38, 33 + b - sw], [30, 32 + b - sw]]), ice(30, 19, 38, 33), OUTLINE, 0.9);
   }, { idle: [0], walk: [0, 1, 2, 3] });
 }
 
-// ---------- Nham Thạch Thú ----------
+// ---------- Lava beast ----------
 function lava() {
   return withHurt(46, 36, 4, (ctx, f) => {
     const st = [0, 1, 0, -1][f], b = f % 2 ? -0.6 : 0;
@@ -435,11 +435,11 @@ function lava() {
     const rock = '#3a2a2a', rockL = '#5a4440';
     const leg = (x, d, c) => paint(ctx, rrect(x + d, 25 + b, 5.5, 8.5, 2), c, OUTLINE, 0.9);
     leg(9, -st, shade(rock, -0.2)); leg(28, st, shade(rock, -0.2));
-    // mai đá
+    // rock shell
     const shell = new Path2D();
     shell.moveTo(5, 27 + b); shell.bezierCurveTo(4, 10 + b, 36, 6 + b, 38, 26 + b); shell.quadraticCurveTo(22, 30 + b, 5, 27 + b); shell.closePath();
     paint(ctx, shell, radial(ctx, 18, 12 + b, 1, 22, [[0, rockL], [1, rock]]), OUTLINE, 1.1);
-    // vết nứt nham thạch phát sáng
+    // glowing lava cracks
     ctx.save(); ctx.clip(shell);
     ctx.strokeStyle = '#ffb040'; ctx.lineWidth = 1.2; ctx.shadowColor = '#ff6a20'; ctx.shadowBlur = 3;
     ctx.beginPath();
@@ -450,7 +450,7 @@ function lava() {
     ctx.restore();
     for (const [x, h] of [[13, 5], [21, 7], [29, 5]]) paint(ctx, poly([[x - 3, 12 + b + (x === 21 ? -3 : 0)], [x, 12 + b - h + (x === 21 ? -3 : 0)], [x + 3, 12 + b + (x === 21 ? -3 : 0)]]), rockL, OUTLINE, 0.8);
     leg(14, st, rock); leg(32, -st, rock);
-    // đầu
+    // head
     const head = new Path2D();
     head.moveTo(33, 16 + b); head.quadraticCurveTo(44, 14 + b, 44.5, 22 + b); head.quadraticCurveTo(42, 27 + b, 35, 26 + b); head.closePath();
     paint(ctx, head, linear(ctx, 0, 14, 0, 27, [[0, rockL], [1, rock]]), OUTLINE, 1);
@@ -460,26 +460,26 @@ function lava() {
   }, { idle: [0], walk: [0, 1, 2, 3] });
 }
 
-// ---------- Hỏa Kỳ Lân (boss) ----------
+// ---------- Fire Qilin (boss) ----------
 function qilin() {
   return withHurt(108, 86, 3, (ctx, f) => {
     const b = f === 1 ? 1 : 0, atk = f === 2;
     const gold = '#f0b030', goldD = '#b8701a', red = '#c8301e', scale = '#ffd870';
     ctx.fillStyle = radial(ctx, 54, 48, 8, 54, [[0, 'rgba(255,140,40,0.4)'], [1, 'rgba(255,60,20,0)']]); ctx.fillRect(0, 0, 108, 86);
     ctx.fillStyle = rgba('#000000', 0.3); ctx.beginPath(); ctx.ellipse(54, 84, 34, 3, 0, 0, 7); ctx.fill();
-    // đuôi lửa
+    // flame tail
     const tail = new Path2D();
     tail.moveTo(26, 46 + b); tail.bezierCurveTo(12, 40, 4, 26, 10, 14 + b * 2); tail.bezierCurveTo(12, 22, 16, 26, 18, 24);
     tail.bezierCurveTo(16, 32, 22, 38, 30, 40 + b); tail.closePath();
     paint(ctx, tail, linear(ctx, 8, 14, 28, 46, [[0, '#fff0a0'], [0.5, '#ff9a30'], [1, red]]), '#6a1408', 1);
-    // chân sau
+    // hind legs
     const leg = (x, y, c, d) => {
       paint(ctx, rrect(x + d, y, 7, 20, 3), c, OUTLINE, 1);
       paint(ctx, rrect(x - 1 + d, y + 17, 9, 5, 2), '#3a2418', OUTLINE, 0.9);
       ctx.fillStyle = '#ff9a30'; ctx.beginPath(); ctx.moveTo(x + d, y + 6); ctx.quadraticCurveTo(x - 4 + d, y + 9, x - 2 + d, y + 14); ctx.lineTo(x + 2 + d, y + 9); ctx.fill();
     };
     leg(30, 60, goldD, -1); leg(70, 60, goldD, 1);
-    // thân
+    // body
     const body = ellipse(52, 52 + b, 28, 14);
     paint(ctx, body, linear(ctx, 0, 38, 0, 66, [[0, scale], [0.45, gold], [1, goldD]]), OUTLINE, 1.3);
     ctx.save(); ctx.clip(body);
@@ -488,14 +488,14 @@ function qilin() {
     ctx.fillStyle = '#ffe8b0'; ctx.beginPath(); ctx.ellipse(54, 62 + b, 22, 5, 0, 0, 7); ctx.fill();
     ctx.restore();
     leg(36, 60, gold, 1); leg(76, 60, gold, -1);
-    // bờm lửa dọc lưng và cổ
+    // flame mane along the back and neck
     const mane = new Path2D();
     mane.moveTo(30, 42 + b);
     const pts = [[34, 30], [40, 38], [46, 28], [52, 37], [58, 24], [64, 33], [70, 18], [74, 28], [80, 14]];
     for (const [x, y] of pts) mane.lineTo(x, y + b);
     mane.lineTo(84, 30 + b); mane.lineTo(76, 44 + b); mane.closePath();
     paint(ctx, mane, linear(ctx, 0, 14, 0, 44, [[0, '#fff0a0'], [0.4, '#ff9a30'], [1, red]]), '#6a1408', 1);
-    // cổ + đầu rồng
+    // neck + dragon head
     const neck = new Path2D();
     neck.moveTo(68, 46 + b); neck.quadraticCurveTo(72, 32 + b, 82, 28 + b); neck.lineTo(88, 36 + b); neck.quadraticCurveTo(80, 42 + b, 78, 52 + b); neck.closePath();
     paint(ctx, neck, linear(ctx, 68, 0, 88, 0, [[0, goldD], [1, gold]]), OUTLINE, 1.1);
@@ -510,13 +510,13 @@ function qilin() {
       ctx.fillStyle = radial(ctx, 104, 34, 1, 14, [[0, 'rgba(255,250,200,1)'], [0.4, 'rgba(255,150,40,0.9)'], [1, 'rgba(255,60,20,0)']]);
       ctx.fillRect(90, 20, 18, 28);
     }
-    // sừng gạc
+    // antlers
     for (const [x, d] of [[84, 0], [89, 3]]) {
       ctx.strokeStyle = '#fff2c8'; ctx.lineWidth = 2.2;
       ctx.beginPath(); ctx.moveTo(x, 18 + b); ctx.quadraticCurveTo(x - 4 - d, 8 + b, x - 10 - d, 4 + b); ctx.moveTo(x - 4 - d, 10 + b); ctx.lineTo(x - 1 - d, 3 + b); ctx.stroke();
       ctx.strokeStyle = OUTLINE; ctx.lineWidth = 0.6; ctx.stroke();
     }
-    // mắt, râu
+    // eyes, whiskers
     ctx.fillStyle = radial(ctx, 92, 23 + b, 0, 6, [[0, 'rgba(255,80,40,0.8)'], [1, 'rgba(255,0,0,0)']]); ctx.fillRect(86, 17 + b, 12, 12);
     paint(ctx, poly([[89, 21 + b], [95, 22.5 + b], [93, 25 + b], [89.5, 24 + b]]), '#ff4a2a', OUTLINE, 0.8);
     paint(ctx, ellipse(92.5, 23.2 + b, 0.9, 1.1), '#fff0a0', null);
@@ -527,13 +527,13 @@ function qilin() {
   }, { idle: [0, 1], walk: [0, 1], atk: [2] });
 }
 
-// ---------- Bạch Diện Quỷ: áo choàng trắng rách, mặt nạ sứ ----------
+// ---------- White-masked ghost: tattered white cloak, porcelain mask ----------
 function maskghost() {
   return withHurt(36, 42, 4, (ctx, f) => {
     const sw = [0, 1.2, 0, -1.2][f], b = [0, -0.6, -1, -0.6][f];
     ctx.fillStyle = radial(ctx, 18, 22, 2, 20, [[0, 'rgba(255,120,140,0.28)'], [1, 'rgba(120,0,40,0)']]);
     ctx.fillRect(0, 0, 36, 42);
-    // áo choàng có mũ trùm, đuôi rách bay theo gió
+    // hooded cloak, torn hem flapping in the wind
     const cloak = new Path2D();
     cloak.moveTo(18, 5 + b);
     cloak.bezierCurveTo(28, 5 + b, 30, 14 + b, 29, 24 + b);
@@ -545,9 +545,9 @@ function maskghost() {
     cloak.closePath();
     paint(ctx, cloak, linear(ctx, 0, 5, 0, 40, [[0, '#f4f0ea'], [0.6, '#cfc6bc'], [1, 'rgba(160,150,150,0.6)']]), OUTLINE, 1);
     shadeIn(ctx, cloak, ellipse(10, 28, 7, 14), rgba('#5a4a5a', 0.22));
-    // khoảng tối trong mũ trùm
+    // darkness inside the hood
     paint(ctx, ellipse(18, 17 + b, 8, 8.6), '#1a0e16', null);
-    // mặt nạ
+    // mask
     const mask = new Path2D();
     mask.moveTo(12, 12 + b); mask.quadraticCurveTo(18, 9 + b, 24, 12 + b); mask.quadraticCurveTo(25, 21 + b, 18, 26 + b); mask.quadraticCurveTo(11, 21 + b, 12, 12 + b); mask.closePath();
     paint(ctx, mask, linear(ctx, 0, 9, 0, 26, [[0, '#ffffff'], [1, '#e2dcd2']]), OUTLINE, 0.9);
@@ -559,7 +559,7 @@ function maskghost() {
     ctx.beginPath(); ctx.moveTo(18, 10.5 + b); ctx.lineTo(18, 13.5 + b); ctx.moveTo(16, 22 + b); ctx.quadraticCurveTo(18, 23.4 + b, 20, 22 + b); ctx.stroke();
     ctx.strokeStyle = rgba('#3a2a20', 0.8); ctx.lineWidth = 0.5;
     ctx.beginPath(); ctx.moveTo(22.6, 11.6 + b); ctx.lineTo(21.2, 15 + b); ctx.lineTo(22.4, 18 + b); ctx.stroke();
-    // tay áo lơ lửng + đốm hồn hỏa
+    // floating sleeves + soul-fire wisps
     for (const [x, d] of [[6, -1], [30, 1]]) {
       paint(ctx, ellipse(x, 26 + b + sw * d * 0.4, 3, 4.5), '#ddd4ca', OUTLINE, 0.8);
       ctx.fillStyle = radial(ctx, x + d * 2, 21 + b, 0, 4, [[0, '#ffd0f0'], [0.4, 'rgba(220,110,255,0.8)'], [1, 'rgba(140,40,255,0)']]);
@@ -568,16 +568,16 @@ function maskghost() {
   }, { idle: [0, 1, 2, 3], walk: [0, 1, 2, 1] });
 }
 
-// ---------- Huyết Ma Huyền Cơ (boss Chương 3) ----------
-function huyenco() {
+// ---------- Blood Demon Huyền Cơ (Chapter 3 boss) ----------
+function bloodDemon() {
   return withHurt(100, 108, 3, (ctx, f) => {
     const b = f === 1 ? 1.2 : 0, atk = f === 2;
     const robe = '#3a0a16', robeL = '#6a1426', gold = '#e2b85c', skin = '#e8d8cc';
-    // quầng huyết khí
+    // blood aura
     ctx.fillStyle = radial(ctx, 50, 58, 8, 54, [[0, 'rgba(255,40,70,0.42)'], [0.6, 'rgba(160,0,40,0.18)'], [1, 'rgba(60,0,20,0)']]);
     ctx.fillRect(0, 0, 100, 108);
     ctx.fillStyle = rgba('#000000', 0.3); ctx.beginPath(); ctx.ellipse(50, 105, 26, 3, 0, 0, 7); ctx.fill();
-    // tóc bạc dài bay phía sau
+    // long silver hair flowing behind
     const hair = new Path2D();
     hair.moveTo(36, 18 + b); hair.bezierCurveTo(20, 30, 16, 52, 8 - b * 2, 70);
     hair.bezierCurveTo(20, 60, 26, 50, 30, 40); hair.bezierCurveTo(28, 56, 22, 70, 18, 82);
@@ -586,13 +586,13 @@ function huyenco() {
     const hair2 = new Path2D();
     hair2.moveTo(64, 18 + b); hair2.bezierCurveTo(78, 30, 84, 48, 92 + b * 2, 62); hair2.bezierCurveTo(80, 56, 74, 46, 68, 38); hair2.closePath();
     paint(ctx, hair2, linear(ctx, 64, 20, 92, 62, [[0, '#ffffff'], [1, '#b8b0c0']]), OUTLINE, 1);
-    // đạo bào xòe như đang bay
+    // Taoist robe flaring as if flying
     const body = new Path2D();
     body.moveTo(34, 40 + b); body.lineTo(66, 40 + b);
     body.bezierCurveTo(74, 60, 82, 84, 88, 102); body.lineTo(70, 98); body.lineTo(60, 103); body.lineTo(50, 97); body.lineTo(40, 103); body.lineTo(30, 98); body.lineTo(12, 102);
     body.bezierCurveTo(18, 84, 26, 60, 34, 40 + b); body.closePath();
     paint(ctx, body, linear(ctx, 12, 0, 88, 0, [[0, shade(robe, -0.3)], [0.5, robeL], [1, robe]]), OUTLINE, 1.3);
-    // nẹp áo + bát quái
+    // robe trim + bagua
     ctx.strokeStyle = gold; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(42, 41 + b); ctx.lineTo(50, 60 + b); ctx.lineTo(58, 41 + b); ctx.stroke();
     paint(ctx, rrect(36, 58 + b, 28, 5, 2), gold, OUTLINE, 0.9);
@@ -600,13 +600,13 @@ function huyenco() {
     ctx.fillStyle = '#f4ecdc'; ctx.beginPath(); ctx.arc(50, 76 + b * 0.5, 6, -Math.PI / 2, Math.PI / 2); ctx.arc(50, 79 + b * 0.5, 3, Math.PI / 2, -Math.PI / 2, true); ctx.arc(50, 73 + b * 0.5, 3, Math.PI / 2, -Math.PI / 2); ctx.fill();
     paint(ctx, ellipse(50, 73 + b * 0.5, 1, 1), '#1a0408', null);
     paint(ctx, ellipse(50, 79 + b * 0.5, 1, 1), '#f4ecdc', null);
-    // tay trái cầm phất trần
+    // left hand holds a horsetail whisk
     paint(ctx, rrect(22, 44 + b, 10, 24, 4), shade(robe, -0.15), OUTLINE, 1);
     paint(ctx, ellipse(27, 70 + b, 4.6, 4.2), skin, OUTLINE, 0.9);
     ctx.strokeStyle = '#6a4a2a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(27, 70 + b); ctx.lineTo(19, 50 + b); ctx.stroke();
     ctx.strokeStyle = '#f4f0ea'; ctx.lineWidth = 1;
     for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(27, 71 + b); ctx.quadraticCurveTo(26 + i, 82, 24 + i * 2 - b, 94); ctx.stroke(); }
-    // tay phải: lúc đánh giơ ra phóng huyết phù
+    // right hand: raised while attacking to throw blood talismans
     if (atk) {
       paint(ctx, rrect(64, 44, 28, 10, 4.5), robeL, OUTLINE, 1);
       paint(ctx, ellipse(93, 49, 5, 5), skin, OUTLINE, 1);
@@ -616,7 +616,7 @@ function huyenco() {
       paint(ctx, rrect(68, 44 + b, 10, 24, 4), robeL, OUTLINE, 1);
       paint(ctx, ellipse(73, 70 + b, 4.6, 4.2), skin, OUTLINE, 0.9);
     }
-    // đầu: mũ đạo sĩ + mặt nạ trắng nứt
+    // head: Taoist hat + cracked white mask
     const face = new Path2D();
     face.moveTo(36, 20 + b); face.bezierCurveTo(36, 8 + b, 64, 8 + b, 64, 20 + b);
     face.bezierCurveTo(64, 32 + b, 57, 40 + b, 50, 40 + b); face.bezierCurveTo(43, 40 + b, 36, 32 + b, 36, 20 + b); face.closePath();
@@ -629,15 +629,15 @@ function huyenco() {
     ctx.strokeStyle = '#c42030'; ctx.lineWidth = 1.3;
     ctx.beginPath(); ctx.moveTo(50, 12 + b); ctx.lineTo(50, 17 + b); ctx.moveTo(45, 32 + b); ctx.quadraticCurveTo(50, 34.5 + b, 55, 32 + b); ctx.stroke();
     ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(40, 26 + b); ctx.lineTo(42.5, 29 + b); ctx.moveTo(60, 26 + b); ctx.lineTo(57.5, 29 + b); ctx.stroke();
-    // vết nứt
+    // crack
     ctx.strokeStyle = '#2a1008'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(58, 11 + b); ctx.lineTo(54.5, 19 + b); ctx.lineTo(57.5, 25 + b); ctx.lineTo(53.5, 33 + b); ctx.stroke();
     ctx.fillStyle = 'rgba(255,40,70,0.75)'; ctx.beginPath(); ctx.moveTo(54.5, 19 + b); ctx.lineTo(56, 20 + b); ctx.lineTo(57.5, 25 + b); ctx.lineTo(56, 24.5 + b); ctx.fill();
-    // mũ
+    // hat
     paint(ctx, rrect(41, 2 + b, 18, 9, 3), linear(ctx, 0, 2, 0, 11, [[0, '#3a3a4a'], [1, '#14141e']]), OUTLINE, 1);
     paint(ctx, rrect(38, 9 + b, 24, 3.4, 1.4), gold, OUTLINE, 0.9);
     paint(ctx, ellipse(50, 6 + b, 2.2, 2.2), '#ff2a3a', OUTLINE, 0.7);
-    // bùa huyết bay quanh
+    // blood talismans circling around
     for (let i = 0; i < 4; i++) {
       const ang = i * Math.PI / 2 + f * 0.5, rx = 44, ry = 16;
       const x = 50 + Math.cos(ang) * rx, y = 54 + Math.sin(ang) * ry;
@@ -651,9 +651,9 @@ function huyenco() {
 
 const monCache = {};
 const MAKERS = {
-  wisp: () => wisp(), fox: () => fox(), scare, jiang: () => jiang(), lantern, boss,
-  bloodjiang: () => jiang(JIANG_PAL.bloodjiang), maskghost, huyenco,
-  shuigui: () => wisp(WISP_PAL.shuigui), firesp: () => wisp(WISP_PAL.firesp), snowfox: () => fox(FOX_PAL.snowfox),
+  wisp: () => wisp(), fox: () => fox(), scarecrow, jiangshi: () => jiangshi(), lantern, boss,
+  blood_jiangshi: () => jiangshi(JIANG_PAL.blood_jiangshi), maskghost, blood_demon: bloodDemon,
+  water_ghost: () => wisp(WISP_PAL.water_ghost), fire_spirit: () => wisp(WISP_PAL.fire_spirit), snowfox: () => fox(FOX_PAL.snowfox),
   frog, yeti, icebat, golem, lava, qilin,
 };
 export function monsterSheet(id) {

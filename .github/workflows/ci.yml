@@ -1,0 +1,24 @@
+# On every push / pull request: scan for committed secrets, build the client, smoke-test the server
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Scan for secrets
+        run: node tools/check-secrets.mjs
+      - name: Build client
+        run: node tools/build.mjs
+      - name: Smoke-test server
+        run: |
+          TOKEN_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))") NODE_ENV=production DATA_DIR=/tmp/qmq PORT=3999 node server/src/index.js &
+          sleep 2
+          curl -fsS http://localhost:3999/api/health

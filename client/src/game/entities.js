@@ -1,4 +1,4 @@
-// Các thực thể trong game: người chơi, quái, bot, NPC, đồ rơi, đạn
+// Game entities: player, monsters, bots, NPCs, drops, projectiles
 import { GROUND_Y } from '../data/maps.js';
 import { MONSTERS } from '../data/monsters.js';
 import { CLASSES } from '../data/classes.js';
@@ -13,7 +13,7 @@ export const GRAVITY = 980;
 export const JUMP_V = -385;
 export const MOVE_SPEED = 118;
 
-// Vật lý cơ bản: trọng lực + bục một chiều
+// Basic physics: gravity + one-way platforms
 export function stepBody(b, dt, platforms, mapW) {
   b.vy = Math.min(b.vy + GRAVITY * dt * (b.floaty ? 0 : 1), 640);
   b.x = clamp(b.x + b.vx * dt, 0, mapW - b.w);
@@ -42,7 +42,7 @@ export function platformAt(platforms, x, y) {
   return platforms.find((p) => Math.abs(p.y - y) < 2 && x >= p.x && x <= p.x + p.w) || null;
 }
 
-// ===== Nhân vật dạng người (dùng chung cho người chơi, bot, NPC) =====
+// ===== Humanoid characters (shared by player, bots and NPCs) =====
 export class Humanoid {
   constructor(x, y, look) {
     this.x = x; this.y = y; this.w = 14; this.h = 32;
@@ -92,7 +92,7 @@ export function lookFor(ch) {
   if (hat) { look.hat = hat.look; look.hatColor = hat.color; }
   const arm = ch.equip.armor && ITEMS[ch.equip.armor.id];
   if (arm && arm.lv >= 4) look.robe = arm.color;
-  // ngoại trang: thay màu áo và thêm chi tiết; có mũ trùm/miện/tai thì không hiện mũ thường
+  // outfit: recolors the clothes and adds details; a hood/crown/ears hides the normal hat
   const out = ch.equip.outfit && ITEMS[ch.equip.outfit.id];
   if (out && out.look) {
     Object.assign(look, out.look);
@@ -101,7 +101,7 @@ export function lookFor(ch) {
   return look;
 }
 
-// ===== Người chơi =====
+// ===== Player =====
 export class Player extends Humanoid {
   constructor(ch, x) {
     super(x, GROUND_Y - 32, lookFor(ch));
@@ -116,8 +116,8 @@ export class Player extends Humanoid {
   refreshLook() { this.setLook(lookFor(this.ch)); }
 }
 
-// ===== Quái =====
-// Mỗi con quái có cấp riêng (dao động quanh cấp gốc của loài), chỉ số tăng theo cấp.
+// ===== Monsters =====
+// Each monster has its own level (varies around the species' base level); stats scale with level.
 // opt: { named: id trong NAMED, elite: true/false, lvBonus }
 export class Monster {
   constructor(id, x, standY, range, spawnRef, opt = {}) {
@@ -135,7 +135,7 @@ export class Monster {
       const pool = ELITE_POOL.filter((a) => !affix.includes(a));
       const n = lv >= 13 ? 2 : 1;
       for (let i = 0; i < n && pool.length; i++) affix.push(pool.splice(randInt(0, pool.length - 1), 1)[0]);
-      drops = [...drops, ['GEM1', 0.6], ['stone', 0.7], ['stone', 0.3], ['protect', 0.06], ['out_tienlien', 0.004], ['out_matroi', 0.004], ['out_daohoa', 0.002], ['mat_dew', 0.08]];
+      drops = [...drops, ['GEM1', 0.6], ['stone', 0.7], ['stone', 0.3], ['protect', 0.06], ['out_jade_lotus', 0.004], ['out_wisp_hood', 0.004], ['out_peach_fairy', 0.002], ['mat_dew', 0.08]];
     }
     if (named) {
       hp *= named.hp; atk *= named.atk; df *= 1.3; exp *= named.hp * 0.7; gold = gold.map((g) => g * 10);
@@ -150,7 +150,7 @@ export class Monster {
     this.w = Math.round(base.w * scale); this.h = Math.round(base.h * scale);
     this.x = x; this.y = standY - this.h; this.standY = standY;
     this.vx = 0; this.vy = 0; this.onGround = true; this.dropTimer = 0;
-    this.range = range; // [minX, maxX] cho phép đi lại
+    this.range = range; // [minX, maxX] patrol range
     this.homeX = x; this.homeY = this.y;
     this.maxHp = this.def.hp; this.hp = this.def.hp;
     this.maxShield = this.affix.has('shield') ? Math.round(this.maxHp * 0.25) : 0; this.shield = this.maxShield; this.shieldT = 0;
@@ -162,7 +162,7 @@ export class Monster {
     this.dead = false; this.hitByPlayer = false;
     this.spawnRef = spawnRef;
     this.floaty = base.behavior === 'float';
-    this.phase = 0; this.actT = 0; this.alpha = 0; // hiện dần khi mới xuất hiện
+    this.phase = 0; this.actT = 0; this.alpha = 0; // fade in when spawning
     this.poison = 0; this.poisonT = 0; this.poisonDmg = 0;
     this.lastHitT = 0; this.blinkT = rand(3, 6); this.chargeT = rand(3, 5); this.dodgeT = 0;
   }
@@ -182,7 +182,7 @@ export class Monster {
     if (this.floaty) by += Math.sin(time * 3 + this.homeX) * 3;
     ctx.save();
     ctx.globalAlpha = this.alpha;
-    // hào quang quái Tinh Anh / có tên
+    // glow for Elite / named monsters
     if (this.elite || this.named) {
       const col = this.named ? 'rgba(255,90,70,' : 'rgba(255,210,90,';
       const g = ctx.createRadialGradient(cx, by - this.h / 2, 2, cx, by - this.h / 2, this.h * 0.9);
@@ -197,7 +197,7 @@ export class Monster {
     ctx.translate(cx, by); ctx.scale(sc, sc);
     drawFrame(ctx, s, f, -s.fw / 2, -s.fh, this.facing < 0);
     ctx.restore();
-    // lá chắn Hộ Thể / ánh Phản Đòn
+    // Guard shield / Reflect shimmer
     if (this.shield > 0 || this.affix.has('reflect')) {
       ctx.save();
       const ref = this.affix.has('reflect');
@@ -209,19 +209,19 @@ export class Monster {
   }
 }
 
-// ===== Đồ rơi =====
+// ===== Drops =====
 export class Drop {
   constructor(x, y, kind, data) {
     this.x = x; this.y = y; this.w = 12; this.h = 12;
     this.vx = rand(-50, 50); this.vy = rand(-240, -170);
     this.onGround = false; this.dropTimer = 0;
     this.kind = kind; // 'item' | 'gold'
-    this.data = data; // item: {id, qty, r, b} ; gold: số vàng
+    this.data = data; // item: {id, qty, r, b} ; gold: amount of gold
     this.t = 0; this.life = 60;
   }
 }
 
-// ===== Đạn =====
+// ===== Projectiles =====
 export class Projectile {
   constructor(o) { Object.assign(this, { w: 12, h: 10, t: 0, hit: new Set(), alive: true }, o); }
 }

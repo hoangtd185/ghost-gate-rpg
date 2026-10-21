@@ -1,4 +1,4 @@
-// Chọn câu thoại NPC theo ngữ cảnh, không lặp lại câu vừa nói
+// Picks NPC lines by context, without repeating the line just said
 import { CHATTER, BANTER } from '../data/chatter.js';
 import { CLASSES } from '../data/classes.js';
 import { STAT_NAMES } from '../data/items.js';
@@ -9,7 +9,7 @@ export function isNight() {
   return h >= 19 || h < 5;
 }
 
-// Kiểm tra điều kiện của một câu thoại
+// Checks the conditions of a line
 export function condOK(ch, c) {
   if (!c) return true;
   if (c.a && questStatus(ch, c.a) !== 'done') return false;
@@ -26,7 +26,7 @@ export function condOK(ch, c) {
   return true;
 }
 
-// Chèn tên người chơi, môn phái… vào câu thoại
+// Fills in the player's name, class… in a line
 export function fillText(text, ch) {
   const c = CLASSES[ch.cls];
   return text
@@ -40,12 +40,12 @@ export function fillText(text, ch) {
 
 const norm = (x) => (Array.isArray(x) ? x : [x, null]);
 
-// "Túi" câu thoại: rút hết các câu hợp lệ rồi mới quay lại câu cũ
+// Line "bag": draw every valid line before reusing old ones
 const recent = {};
 function pickFrom(key, pool, ch) {
   const ok = pool.map(norm).filter(([, c]) => condOK(ch, c)).map(([t]) => t);
   if (!ok.length) return null;
-  // câu có điều kiện được ưu tiên hơn câu chung (đúng ngữ cảnh hơn)
+  // conditional lines take priority over generic ones (they fit the context better)
   const special = pool.map(norm).filter(([, c]) => c && condOK(ch, c)).map(([t]) => t);
   const used = recent[key] || (recent[key] = []);
   let cand = ok.filter((t) => !used.includes(t));
@@ -64,7 +64,7 @@ export function npcLine(ch, npcId, kind) {
   return pickFrom(npcId + ':' + kind, d[kind], ch);
 }
 
-// Chọn một đoạn NPC nói chuyện với nhau trên bản đồ, đủ người có mặt
+// Picks a scene where NPCs talk to each other on the map, if everyone involved is present
 const banterUsed = [];
 export function pickBanter(ch, mapId, presentIds) {
   const ok = BANTER.filter((b) => b.map === mapId && condOK(ch, b.when) && b.lines.every(([id]) => presentIds.includes(id)));

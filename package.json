@@ -1,7 +1,7 @@
 {
   "name": "quy-mon-quan",
   "version": "1.0.0",
-  "description": "Game nhập vai 2D màn hình ngang phong cách kiếm hiệp ma quái (một người chơi, có bot)",
+  "description": "2D side-scrolling wuxia ghost RPG (single player with bots)",
   "type": "module",
   "private": true,
   "engines": {

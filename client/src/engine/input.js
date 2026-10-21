@@ -1,4 +1,4 @@
-// Bàn phím + nút cảm ứng ảo
+// Keyboard + virtual touch buttons
 const KEY_ACTIONS = {
   ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
   Space: 'jump', KeyX: 'jump',
@@ -17,7 +17,7 @@ export class Input {
   constructor() {
     this.down = new Set();
     this.pressed = new Set();
-    this.onKey = null; // phím menu (I, C, K, L, Enter, Esc) do UI xử lý
+    this.onKey = null; // menu keys (I, C, K, L, Enter, Esc) are handled by the UI
     window.addEventListener('keydown', (e) => {
       if (isTypingTarget(e)) return;
       const a = KEY_ACTIONS[e.code];

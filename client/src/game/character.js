@@ -1,10 +1,11 @@
-// Logic nhân vật: chỉ số, kinh nghiệm, túi đồ, trang bị, nhiệm vụ.
-// Toàn bộ trạng thái nhân vật là một object JSON thuần để lưu thẳng vào database.
+// Character logic: stats, experience, inventory, equipment, quests.
+// The whole character state is a plain JSON object that is saved straight to the database.
 import { CLASSES, SKILLS, SKILL_MAX_LV, PASSIVES, PASSIVE_MAX_LV, passivesOf } from '../data/classes.js';
 import { ITEMS, RARITY, ENHANCE_MAX, ENHANCE_RATE, ENHANCE_SAFE, ENHANCE_BONUS, enhanceCost, GEM_KINDS, GEM_SLOTS, GEM_FUSE, gemId, socketCount, socketCost, unsocketCost } from '../data/items.js';
 import { ELEMENT_IDS, MAX_RES } from '../data/elements.js';
 import { QUESTS, NPCS, RETIRED_QUESTS } from '../data/npcs.js';
 import { MAIN_ORDER } from '../data/story.js';
+import { migrateLegacy } from '../data/legacy.js';
 import { makeId, randInt, chance, pick } from '../engine/util.js';
 
 export const INV_SIZE = 36;
@@ -22,7 +23,7 @@ export function newCharacter(name, cls) {
     stats: { ...c.base }, statPoints: 0, skillPoints: 0,
     skills: { [c.skills[0]]: 1 },
     inventory: [], equip: { weapon: null, hat: null, armor: null, acc: null, outfit: null },
-    quests: {}, flags: {}, map: 'lang', x: 380,
+    quests: {}, flags: {}, map: 'village', x: 380,
     createdAt: Date.now(), playTime: 0,
   };
   ch.equip.weapon = makeEntry(`w_${cls}1`, 1, 0, {});
@@ -34,9 +35,10 @@ export function newCharacter(name, cls) {
   return ch;
 }
 
-// Đảm bảo dữ liệu cũ/thiếu field vẫn chạy (khi load từ DB)
+// Make sure old data / missing fields still work (when loading from the DB)
 export function normalizeCharacter(ch) {
-  const c = CLASSES[ch.cls] || CLASSES.kiem;
+  migrateLegacy(ch);
+  const c = CLASSES[ch.cls] || CLASSES.swordsman;
   ch.cls = c.id;
   ch.stats = { ...c.base, ...(ch.stats || {}) };
   ch.skills = ch.skills || { [c.skills[0]]: 1 };
@@ -46,7 +48,7 @@ export function normalizeCharacter(ch) {
   ch.quests = ch.quests || {};
   ch.flags = ch.flags && typeof ch.flags === 'object' ? ch.flags : {};
   for (const qid of Object.keys(ch.quests)) if (!QUESTS[qid] || RETIRED_QUESTS.includes(qid)) delete ch.quests[qid];
-  // Tuyến chính được chèn thêm nhiệm vụ: nhân vật đã đi xa hơn thì các bước trước tính là xong
+  // The main line gained new quests: if a character is further along, earlier steps count as done
   let last = -1;
   MAIN_ORDER.forEach((qid, i) => { if (ch.quests[qid] && ch.quests[qid].s === 'done') last = i; });
   for (let i = 0; i < last; i++) {
@@ -60,14 +62,14 @@ export function normalizeCharacter(ch) {
   ch.title = ch.title || null;
   ch.level = ch.level || 1; ch.exp = ch.exp || 0; ch.gold = ch.gold || 0;
   ch.statPoints = ch.statPoints || 0; ch.skillPoints = ch.skillPoints || 0;
-  ch.map = ch.map || 'lang'; ch.x = ch.x || 380; ch.playTime = ch.playTime || 0;
+  ch.map = ch.map || 'village'; ch.x = ch.x || 380; ch.playTime = ch.playTime || 0;
   return ch;
 }
 
-// 'W2' trong bảng rơi đồ / phần thưởng = vũ khí bậc 2 đúng môn phái
+// 'W2' in drop tables / rewards = tier-2 weapon for the player's class
 export function resolveItemId(id, cls) {
   if (/^W\d$/.test(id)) return `w_${cls}${id[1]}`;
-  if (/^GEM\d$/.test(id)) return gemId(pick(Object.keys(GEM_KINDS)), +id[3]); // ngọc ngẫu nhiên
+  if (/^GEM\d$/.test(id)) return gemId(pick(Object.keys(GEM_KINDS)), +id[3]); // random gem
   return id;
 }
 
@@ -75,7 +77,7 @@ export function makeEntry(id, qty = 1, rarity = 0, bonus = {}) {
   return { uid: makeId(), id, qty, r: rarity, b: bonus };
 }
 
-// Đồ rơi từ quái có độ hiếm ngẫu nhiên và chỉ số cộng thêm
+// Monster drops get a random rarity and bonus stats
 export function rollEquip(id, luck = 0) {
   const it = ITEMS[id];
   let r = 0;
@@ -93,12 +95,12 @@ export function rollEquip(id, luck = 0) {
   return { r, bonus };
 }
 
-// Chỉ số của một món đồ: chỉ số gốc × cường hóa + chỉ số cộng thêm ngẫu nhiên
+// Stats of one item: base stats × enhancement + random bonus stats
 export function entryStats(e) {
   const it = ITEMS[e.id];
   const mul = 1 + ENHANCE_BONUS * (e.e || 0);
   const out = {};
-  for (const [k, v] of Object.entries(it.stats || {})) out[k] = k.startsWith('r_') || k === 'crit' ? v : Math.round(v * mul);
+  for (const [k, v] of Object.entries(it.stats || {})) out[k] = k.startsWith('res_') || k === 'crit' ? v : Math.round(v * mul);
   for (const [k, v] of Object.entries(e.b || {})) out[k] = (out[k] || 0) + v;
   for (const id of e.g || []) {
     const gm = ITEMS[id] && ITEMS[id].gem;
@@ -109,8 +111,8 @@ export function entryStats(e) {
   return out;
 }
 
-// ===== Ép ngọc =====
-// Kiểm tra ngọc có hợp với vị trí trang bị không
+// ===== Gem sockets =====
+// Checks whether a gem fits that equipment slot
 export function gemFits(e, gemItemId) {
   const it = ITEMS[e.id], gm = ITEMS[gemItemId] && ITEMS[gemItemId].gem;
   if (!gm || it.type !== 'equip') return false;
@@ -142,7 +144,7 @@ export function unsocketGem(ch, e, idx) {
   return { ok: true, id };
 }
 
-// Hợp 3 viên cùng loại cùng phẩm thành 1 viên phẩm cao hơn
+// Fuse 3 gems of the same kind and grade into one gem of the next grade
 export function fuseGems(ch, kind, g) {
   const from = gemId(kind, g), to = gemId(kind, g + 1);
   const rule = GEM_FUSE[g - 1];
@@ -155,11 +157,11 @@ export function fuseGems(ch, kind, g) {
     addItem(ch, to, 1);
     return { ok: true, success: true, id: to };
   }
-  removeItem(ch, from, 1); // thất bại: vỡ 1 viên
+  removeItem(ch, from, 1); // failure: one gem breaks
   return { ok: true, success: false, id: from };
 }
 
-// Hệ nguyên tố của vũ khí: ngọc đã khảm, nếu không thì hệ sẵn có của vũ khí
+// Weapon element: the inserted orb, otherwise the weapon's own element
 export function entryElement(e) {
   if (!e) return null;
   return e.el || ITEMS[e.id].el || null;
@@ -170,7 +172,7 @@ export function entryName(e) {
   return (e.e ? `+${e.e} ` : '') + it.name;
 }
 
-// Cường hóa một món. Trả về { ok, msg, before, after }
+// Enhance one item. Returns { ok, msg, before, after }
 export function enhanceEntry(ch, e, useProtect) {
   const it = ITEMS[e.id];
   const lv = e.e || 0;
@@ -226,13 +228,13 @@ export function calcStats(ch, buffs = []) {
     atk: Math.floor(atk * atkMul),
     def: Math.floor(def * defMul),
     crit: Math.min(70, 5 + s.dex * 0.45 + eq.crit + pas.crit),
-    res: Object.fromEntries(ELEMENT_IDS.map((el) => [el, Math.min(MAX_RES, (eq['r_' + el] || 0) + pas.resAll)])),
+    res: Object.fromEntries(ELEMENT_IDS.map((el) => [el, Math.min(MAX_RES, (eq['res_' + el] || 0) + pas.resAll)])),
     pas,
     el: entryElement(ch.equip.weapon),
   };
 }
 
-// Cộng EXP, trả về số cấp đã lên
+// Add EXP, returns the number of levels gained
 export function gainExp(ch, amount) {
   let ups = 0;
   if (ch.level >= MAX_LEVEL) return 0;
@@ -244,14 +246,14 @@ export function gainExp(ch, amount) {
     ch.skillPoints += 1;
     ups++;
   }
-  // Tự học kỹ năng mới khi đủ cấp
+  // Learn new skills automatically at the right level
   for (const sid of CLASSES[ch.cls].skills) {
     if (!ch.skills[sid] && SKILLS[sid].unlock <= ch.level) ch.skills[sid] = 1;
   }
   return ups;
 }
 
-// ===== Chế tạo =====
+// ===== Crafting =====
 export function canCraft(ch, r, n = 1) {
   if (ch.gold < r.gold * n) return `Cần ${r.gold * n} ngân lượng`;
   for (const [id, q] of r.need) if (countItem(ch, id) < q * n) return `Thiếu ${ITEMS[id].name}`;
@@ -274,8 +276,8 @@ export function craft(ch, r, n = 1) {
   return { ok: true, out };
 }
 
-// ===== Nội công (bị động) =====
-// Cộng dồn hiệu ứng các nội công đã học
+// ===== Inner arts (passives) =====
+// Sum the effects of all learned passives
 export function passiveTotals(ch) {
   const t = { hpPct: 0, mpPct: 0, atkPct: 0, defPct: 0, crit: 0, critDmg: 0, lifesteal: 0, elemDmg: 0, mpCost: 0, mpRegen: 0, resAll: 0, dodge: 0, speed: 0, killHeal: 0, lowHp: 0 };
   for (const id of passivesOf(ch.cls)) {
@@ -286,7 +288,7 @@ export function passiveTotals(ch) {
   return t;
 }
 
-// Lý do chưa học/nâng được nội công (null = được)
+// Why a passive cannot be learned/raised yet (null = it can)
 export function passiveBlock(ch, id) {
   const p = PASSIVES[id], lv = ch.skills[id] || 0;
   if (lv >= PASSIVE_MAX_LV) return 'Đã tối đa';
@@ -303,7 +305,7 @@ export function learnPassive(ch, id) {
   return true;
 }
 
-// Tẩy điểm: trả lại toàn bộ điểm kỹ năng, chiêu đã mở về cấp 1, quên hết nội công
+// Reset: refund every skill point, unlocked skills back to level 1, forget all passives
 export function resetCost(ch) { return ch.level * 150; }
 export function resetSkills(ch) {
   const cost = resetCost(ch);
@@ -328,7 +330,7 @@ export function addStat(ch, stat) {
   return true;
 }
 
-// ===== Túi đồ =====
+// ===== Inventory =====
 export function countItem(ch, id) {
   return ch.inventory.filter((e) => e.id === id).reduce((a, e) => a + e.qty, 0);
 }
@@ -403,14 +405,14 @@ export function sellPrice(e) {
   return Math.max(1, Math.floor(base * 0.35 * (1 + (e.r || 0) * 0.8) * (1 + (e.e || 0) * 0.3)));
 }
 
-// ===== Nhiệm vụ =====
+// ===== Quests =====
 // locked | available | active | ready | done
 export function questStatus(ch, qid) {
   const q = QUESTS[qid];
   const st = ch.quests[qid];
   if (st && st.s === 'done') {
     if (!q.daily || st.day === todayKey()) return 'done';
-    // nhiệm vụ ngày đã sang ngày mới: nhận lại được
+    // a daily quest from a previous day: can be taken again
     if (ch.level < q.lv) return 'locked';
     return 'available';
   }
@@ -431,12 +433,12 @@ export function questProgress(ch, qid) {
   return Math.min(q.count, q.type === 'collect' ? countItem(ch, q.target) : st.p);
 }
 
-// NPC nhận trả nhiệm vụ: nhiệm vụ "đi gặp" trả ở người cần gặp, còn lại ở turnIn hoặc người giao
+// NPC that takes the turn-in: "go meet" quests hand in to the person to meet, others to turnIn or the giver
 export function questTurnIn(q) {
   return q.type === 'talk' ? q.target : (q.turnIn || q.npc);
 }
 
-// Vật phẩm nhiệm vụ rơi từ quái khi đang làm nhiệm vụ cần nó
+// Quest items dropped by monsters while a quest that needs them is active
 export function questDropsFor(ch, mobId) {
   const out = [];
   for (const [qid, st] of Object.entries(ch.quests)) {
@@ -448,7 +450,7 @@ export function questDropsFor(ch, mobId) {
   return out;
 }
 
-// Dấu trên đầu NPC: '?' có việc cần trả, '!' có nhiệm vụ mới, null nếu không có gì
+// Marker above an NPC: '?' something to hand in, '!' new quest available, null if nothing
 export function npcMarker(ch, npcId) {
   for (const qid of Object.keys(ch.quests)) {
     const q = QUESTS[qid];
@@ -465,7 +467,7 @@ export function npcMarker(ch, npcId) {
   return null;
 }
 
-// Sự kiện thao tác cho nhiệm vụ hướng dẫn (type 'act'): djump, potion, buy, stat, skillup, enhance, socket, fuse, orb, daily
+// Action events for tutorial quests (type 'act'): djump, potion, buy, stat, skillup, enhance, socket, fuse, orb, daily
 export function questEvent(ch, name, n = 1) {
   const changed = [];
   for (const [qid, st] of Object.entries(ch.quests)) {
@@ -478,14 +480,14 @@ export function questEvent(ch, name, n = 1) {
   return changed;
 }
 
-// Điều kiện của một câu thoại: 'bell=ring' → cờ bell phải là ring
+// Condition of a dialogue line: 'bell=ring' → flag bell must be ring
 export function lineVisible(ch, cond) {
   if (!cond) return true;
   const [k, v] = cond.split('=');
   return (ch.flags || {})[k] === v;
 }
 
-// NPC có đứng trên bản đồ không (theo tiến độ cốt truyện)
+// Whether an NPC is standing on the map (depends on story progress)
 export function npcPresent(ch, entry) {
   if (entry.after && questStatus(ch, entry.after) !== 'done') return false;
   if (entry.until && ch.quests[entry.until]) return false;
