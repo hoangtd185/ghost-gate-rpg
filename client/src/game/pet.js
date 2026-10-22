@@ -2,10 +2,11 @@
 import { petSheet } from '../gfx/pet.js';
 import { drawFrame } from '../gfx/draw.js';
 import { pick, rand } from '../engine/util.js';
+import { GAME } from '../config.js';
 
 export const PET_NAME = 'Tiểu Quỷ';
-const PICK_RANGE = 330;   // pickup range, measured from the player
-const FLY_SPEED = 240;
+const PICK_RANGE = GAME.pet.pickRange; // pickup range, measured from the player
+const FLY_SPEED = GAME.pet.flySpeed;
 const PET_LINES = ['Để em nhặt cho!', 'Của chủ nhân nè~', 'Hihi, lấp lánh quá', 'Đồ rơi kìa!', 'Em giỏi không?'];
 
 export class Pet {

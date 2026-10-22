@@ -18,6 +18,7 @@ import {
 import { npcLine, pickBanter } from './chatter.js';
 import { BotManager } from './bots.js';
 import { clamp, rand, randInt, chance, overlap, centerDist, pick } from '../engine/util.js';
+import { GAME } from '../config.js';
 
 // flying monsters dodge projectiles: fly up if there is room, otherwise swoop down
 const pr_up = (m) => m.y > 90;
@@ -27,10 +28,11 @@ const rbg = (hex, a) => rgbaHex(hex, a);
 function rgbaHex(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
 
 // Player jump: initial impulse, how long holding Space keeps pushing, and the extra push
-const PLAYER_JUMP = -330;
-const JUMP_HOLD_TIME = 0.2;
-const JUMP_HOLD_ACCEL = 620;
-const SPRINT_MULT = 1.6; // speed multiplier while sprinting (double-tap ← / →)
+const PH = GAME.physics; // tuned in config.js
+const PLAYER_JUMP = PH.jumpV;
+const JUMP_HOLD_TIME = PH.jumpHoldTime;
+const JUMP_HOLD_ACCEL = PH.jumpHoldAccel;
+const SPRINT_MULT = PH.sprintMult;
 
 // Glow behind projectiles: [core color, radius]
 const PROJ_GLOW = {
@@ -311,13 +313,13 @@ export class GameWorld {
     // Ctrl + ↓ (either order) drops through the platform you stand on, same as ↓ + Space
     const held = (k) => input.isDown(k) || input.wasPressed(k); // a quick tap may press and release within one frame
     const ctrlDrop = (held('ctrl') && input.wasPressed('down')) || (held('down') && input.wasPressed('ctrl'));
-    if (ctrlDrop && p.onGround && p.standY < GROUND_Y) { p.dropTimer = 0.3; p.y += 2; p.jumps = 1; }
+    if (ctrlDrop && p.onGround && p.standY < GROUND_Y) { p.dropTimer = PH.dropThroughTime; p.y += 2; p.jumps = 1; }
     else if (input.wasPressed('jump')) {
       if (p.onGround) {
-        if (input.isDown('down') && p.standY < GROUND_Y) { p.dropTimer = 0.3; p.y += 2; p.jumps = 1; }
+        if (input.isDown('down') && p.standY < GROUND_Y) { p.dropTimer = PH.dropThroughTime; p.y += 2; p.jumps = 1; }
         else { p.vy = PLAYER_JUMP; p.jumps = 1; p.jumpHold = JUMP_HOLD_TIME; }
       } else if ((p.jumps || 1) < 2) {
-        p.vy = PLAYER_JUMP * 0.95; p.jumps = 2; p.jumpHold = JUMP_HOLD_TIME * 0.7;
+        p.vy = PLAYER_JUMP * PH.doubleJumpMult; p.jumps = 2; p.jumpHold = JUMP_HOLD_TIME * 0.7;
         this.event('djump');
         this.addFx('ring', p.cx, p.y + p.h, 0.35, { color: '#e8f4ff', r: 14 });
         for (let i = 0; i < 10; i++) this.spark(p.cx + rand(-6, 6), p.y + p.h, { vx: rand(-70, 70), vy: rand(10, 40), color: pick(['#ffffff', '#d8ecff', '#bfe0ff']), size: rand(1.5, 3), life: rand(0.3, 0.5), glow: false, drag: 0.9 });
@@ -350,15 +352,16 @@ export class GameWorld {
       if (this.nearNpc) { this.hooks.openNpc(this.nearNpc.id); input.clear(); }
     }
 
-    // Natural HP/MP regen (3× faster while sitting)
+    // Natural HP/MP regen (faster while sitting and in safe maps; see GAME.player.regen)
+    const RG = GAME.player.regen;
     p.regenT += dt;
-    const regenEvery = p.sitting ? 1 : 3;
+    const regenEvery = p.sitting ? RG.sittingEvery : RG.every;
     if (p.regenT >= regenEvery) {
       p.regenT = 0;
-      const mul = this.map.safe ? 2 : 1;
+      const mul = this.map.safe ? RG.safeMapMult : 1;
       const oldHp = ch.hp, oldMp = ch.mp;
-      ch.hp = Math.min(st.maxHp, ch.hp + Math.ceil(st.maxHp * 0.02 * mul + 1));
-      ch.mp = Math.min(st.maxMp, ch.mp + Math.ceil((st.maxMp * 0.03 * mul + 1) * (1 + st.pas.mpRegen / 100)));
+      ch.hp = Math.min(st.maxHp, ch.hp + Math.ceil(st.maxHp * RG.hpPct * mul + 1));
+      ch.mp = Math.min(st.maxMp, ch.mp + Math.ceil((st.maxMp * RG.mpPct * mul + 1) * (1 + st.pas.mpRegen / 100)));
       if (oldHp !== ch.hp || oldMp !== ch.mp) this.hooks.changed('bars');
     }
 
@@ -417,7 +420,7 @@ export class GameWorld {
       this.addFx('circle', p.cx, p.y + p.h, 0.55, { color: SKILL_FX[sid], r: sk.type === 'buff' || sk.type === 'heal' ? 30 : 22 });
       for (let i = 0; i < 6; i++) this.spark(p.cx + rand(-14, 14), p.y + p.h - 2, { vy: rand(-60, -30), color: SKILL_FX[sid], size: rand(1.5, 2.5), life: rand(0.4, 0.7), shape: 'star', drag: 0.95 });
     }
-    const lvMul = 1 + 0.12 * ((ch.skills[sid] || 1) - 1);
+    const lvMul = 1 + GAME.player.skillDmgPerLv * ((ch.skills[sid] || 1) - 1);
     const el = sk.el || this.stats.el || null; // skill element: the skill's own element, otherwise the weapon's
     const mult = (sk.mult || 0) * lvMul;
     const dir = p.facing;
@@ -628,7 +631,7 @@ export class GameWorld {
   playerDie() {
     const p = this.player, ch = this.ch;
     ch.hp = 0; p.dead = true; p.poisonT = 0; p.slowT = 0;
-    const lose = Math.floor(expToNext(ch.level) * 0.05);
+    const lose = Math.floor(expToNext(ch.level) * GAME.player.deathExpLoss);
     ch.exp = Math.max(0, ch.exp - lose);
     this.hooks.death(lose);
   }
@@ -656,7 +659,7 @@ export class GameWorld {
     const g = m.spawnRef;
     if (g) {
       g.alive--;
-      const delay = m.def.boss ? BOSS_RESPAWN : rand(6, 11);
+      const delay = m.def.boss ? BOSS_RESPAWN : rand(...GAME.monsters.respawnSec);
       this.timers.push({ t: delay, fn: () => { if (this.mapId && g === this.spawnGroups.find((x) => x === g)) this.spawnMonster(g); } });
     }
     if (m.def.boss) {
@@ -687,7 +690,7 @@ export class GameWorld {
       const strong = m.def.boss || m.named || m.elite;
       if (it.slot === 'outfit') { data.r = 3; data.rare = true; }
       else if (it.type === 'equip') {
-        const luck = m.chief ? CHIEF.luck : strong ? 0.08 : 0;
+        const luck = m.chief ? CHIEF.luck : strong ? GAME.monsters.elite.luck : 0;
         const minR = m.def.boss || m.named ? 2 : m.chief ? CHIEF.minRarity : 0;
         const roll = rollEquip(id, luck, minR);
         data.r = roll.r; data.b = roll.bonus;
@@ -733,7 +736,7 @@ export class GameWorld {
     let dmg = rawAtk * rand(0.9, 1.1) - def * 0.6;
     if (el) dmg *= 1 - (this.stats.res[el] || 0) / 100; // elemental resistance from gear
     dmg = Math.max(1, Math.round(dmg));
-    if (chance(0.04 + st.pas.dodge / 100)) { this.floatText(p.cx, p.y - 4, 'NÉ', '#e8e8f8'); p.invuln = 0.6; return; }
+    if (chance(GAME.player.baseDodge + st.pas.dodge / 100)) { this.floatText(p.cx, p.y - 4, 'NÉ', '#e8e8f8'); p.invuln = 0.6; return; }
     ch.hp -= dmg;
     // attacker's traits
     if (src && src.affix && !src.dead) {
@@ -752,8 +755,8 @@ export class GameWorld {
   respawn() {
     const p = this.player;
     p.dead = false; p.invuln = 2;
-    this.ch.hp = Math.floor(this.stats.maxHp * 0.5);
-    this.ch.mp = Math.floor(this.stats.maxMp * 0.5);
+    this.ch.hp = Math.floor(this.stats.maxHp * GAME.player.respawnHpMp);
+    this.ch.mp = Math.floor(this.stats.maxMp * GAME.player.respawnHpMp);
     this.loadMap('village', MAPS.village.spawnX);
     this.hooks.changed();
     this.hooks.save();

@@ -1,6 +1,7 @@
 // Classes and skills
 // type: melee = slash in front, proj = projectile, strike = lightning on the nearest targets,
 //       dash = dash through enemies, cloud = poison area, buff/heal = power up / heal
+import { GAME } from '../config.js';
 export const CLASSES = {
   swordsman: {
     id: 'swordsman', name: 'Kiếm Khách', main: 'str',
@@ -64,7 +65,7 @@ export const SKILLS = {
     desc: 'Thả mây độc gây sát thương liên tục 5 giây. Hệ Độc.' },
 };
 
-export const SKILL_MAX_LV = 10;
+export const SKILL_MAX_LV = GAME.player.skillMaxLv;
 export const SKILL_KEYS = ['Z', 'A', 'S', 'D'];
 
 // ===== Inner arts (passive skills) =====
@@ -74,7 +75,7 @@ export const SKILL_KEYS = ['Z', 'A', 'S', 'D'];
 //   lifesteal: % of damage healed   elemDmg: +% damage for elemental hits   mpCost: −% MP cost
 //   mpRegen: +% MP regen   resAll: +% all resistances   dodge: +% dodge   speed: +% move speed
 //   killHeal: heal % HP and MP on each kill   lowHp: +% attack and defense below 35% HP
-export const PASSIVE_MAX_LV = 5;
+export const PASSIVE_MAX_LV = GAME.player.passiveMaxLv;
 export const PASSIVES = {
   // Swordsman
   sw_p1: { cls: 'swordsman', name: 'Thiết Bố Sam', glyph: '鐵', unlock: 5, per: { hpPct: 4, defPct: 3 }, desc: 'Luyện da thịt cứng như vải sắt.' },

@@ -2,6 +2,7 @@
 // Monsters. behavior: float (hovering), walk (patrol), hop (hopping), boss
 // el: element of the monster's attack; res: elemental resistance (positive = resist, negative = weak)
 // drops: [itemId, drop rate]. 'W2' = tier-2 weapon for the player's class.
+import { GAME } from '../config.js';
 export const MONSTERS = {
   wisp: {
     name: 'Ma Trơi', lv: 1, hp: 32, atk: 7, def: 0, exp: 9, gold: [1, 4],
@@ -130,4 +131,4 @@ for (const m of Object.values(MONSTERS)) {
   if (m.lv >= 14) m.drops.push(['GEM2', 0.004]);
 }
 
-export const BOSS_RESPAWN = 150; // seconds
+export const BOSS_RESPAWN = GAME.monsters.bossRespawnSec; // seconds, tuned in config.js

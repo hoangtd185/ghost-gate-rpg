@@ -8,10 +8,11 @@ import { monsterSheet } from '../gfx/monsters.js';
 import { drawFrame } from '../gfx/draw.js';
 import { clamp, rand, randInt } from '../engine/util.js';
 import { NAMED, ELITE_POOL, CHIEF, smartTier, eliteChance } from '../data/affixes.js';
+import { GAME } from '../config.js';
 
-export const GRAVITY = 980;
-export const JUMP_V = -385;
-export const MOVE_SPEED = 118;
+export const GRAVITY = GAME.physics.gravity;
+export const JUMP_V = GAME.physics.botJumpV;
+export const MOVE_SPEED = GAME.physics.moveSpeed;
 
 // Basic physics: gravity + one-way platforms
 export function stepBody(b, dt, platforms, mapW) {
@@ -125,16 +126,17 @@ export class Monster {
     const named = opt.named ? NAMED[opt.named] : null;
     const chief = !named && !base.boss && !!opt.chief;
     const elite = !named && !base.boss && !chief && (opt.elite ?? Math.random() < eliteChance(base.lv));
-    const bonus = named || base.boss ? 0 : (opt.lvBonus ?? randInt(0, base.lv >= 13 ? 3 : 2));
+    const LB = GAME.monsters.levelBonus, PL = GAME.monsters.perLevel, EL = GAME.monsters.elite;
+    const bonus = named || base.boss ? 0 : (opt.lvBonus ?? randInt(0, base.lv >= 13 ? LB.maxFromLv13 : LB.max));
     const lv = named ? named.lv : base.lv + bonus;
     const k = lv - base.lv;
-    let hp = base.hp * (1 + 0.12 * k), atk = base.atk * (1 + 0.07 * k), df = base.def * (1 + 0.05 * k), exp = base.exp * (1 + 0.15 * k);
-    let gold = base.gold.map((g) => Math.round(g * (1 + 0.1 * k)));
+    let hp = base.hp * (1 + PL.hp * k), atk = base.atk * (1 + PL.atk * k), df = base.def * (1 + PL.def * k), exp = base.exp * (1 + PL.exp * k);
+    let gold = base.gold.map((g) => Math.round(g * (1 + PL.gold * k)));
     let affix = [...(base.affix || [])], drops = base.drops, name = base.name, scale = 1;
     if (elite) {
-      hp *= 4; atk *= 1.4; df *= 1.2; exp *= 5; gold = gold.map((g) => g * 4); scale = 1.28;
+      hp *= EL.hp; atk *= EL.atk; df *= EL.def; exp *= EL.exp; gold = gold.map((g) => g * EL.gold); scale = EL.scale;
       const pool = ELITE_POOL.filter((a) => !affix.includes(a));
-      const n = lv >= 13 ? 2 : 1;
+      const n = lv >= 13 ? EL.affixesFromLv13 : EL.affixes;
       for (let i = 0; i < n && pool.length; i++) affix.push(pool.splice(randInt(0, pool.length - 1), 1)[0]);
       drops = [...drops, ['GEM1', 0.6], ['stone', 0.7], ['stone', 0.3], ['protect', 0.06], ['out_jade_lotus', 0.004], ['out_wisp_hood', 0.004], ['out_peach_fairy', 0.002], ['mat_dew', 0.08]];
     }
@@ -222,7 +224,7 @@ export class Drop {
     this.onGround = false; this.dropTimer = 0;
     this.kind = kind; // 'item' | 'gold'
     this.data = data; // item: {id, qty, r, b} ; gold: amount of gold
-    this.t = 0; this.life = 60;
+    this.t = 0; this.life = GAME.loot.dropLifeSec;
   }
 }
 

@@ -7,18 +7,20 @@ import { QUESTS, NPCS, RETIRED_QUESTS } from '../data/npcs.js';
 import { MAIN_ORDER } from '../data/story.js';
 import { migrateLegacy } from '../data/legacy.js';
 import { makeId, randInt, chance, pick } from '../engine/util.js';
+import { GAME } from '../config.js';
 
-export const INV_SIZE = 36;
-export const MAX_LEVEL = 50;
+export const INV_SIZE = GAME.player.invSize;
+export const MAX_LEVEL = GAME.player.maxLevel;
 
 export function expToNext(lv) {
-  return Math.floor(22 * Math.pow(lv, 1.85) + 28 * lv);
+  const { a, p, b } = GAME.player.expCurve;
+  return Math.floor(a * Math.pow(lv, p) + b * lv);
 }
 
 export function newCharacter(name, cls) {
   const c = CLASSES[cls];
   const ch = {
-    id: makeId(), name, cls, level: 1, exp: 0, gold: 50,
+    id: makeId(), name, cls, level: 1, exp: 0, gold: GAME.player.startGold,
     hp: 1, mp: 1,
     stats: { ...c.base }, statPoints: 0, skillPoints: 0,
     skills: { [c.skills[0]]: 1 },
@@ -83,7 +85,8 @@ export function rollEquip(id, luck = 0, minRarity = 0) {
   const it = ITEMS[id];
   let r = 0;
   const roll = Math.random() - luck;
-  if (roll < 0.02) r = 3; else if (roll < 0.09) r = 2; else if (roll < 0.28) r = 1;
+  const R = GAME.loot.rarity;
+  if (roll < R.r3) r = 3; else if (roll < R.r2) r = 2; else if (roll < R.r1) r = 1;
   r = Math.max(r, minRarity);
   const bonus = {};
   const pool = ['str', 'dex', 'int', 'vit', 'hp', 'def', 'crit'];
@@ -244,8 +247,8 @@ export function gainExp(ch, amount) {
   while (ch.level < MAX_LEVEL && ch.exp >= expToNext(ch.level)) {
     ch.exp -= expToNext(ch.level);
     ch.level++;
-    ch.statPoints += 5;
-    ch.skillPoints += 1;
+    ch.statPoints += GAME.player.statPointsPerLevel;
+    ch.skillPoints += GAME.player.skillPointsPerLevel;
     ups++;
   }
   // Learn new skills automatically at the right level

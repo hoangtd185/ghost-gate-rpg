@@ -1,5 +1,6 @@
 // Items: consumable (usable), material, equip (equipment)
 // equipment slots: weapon, hat, armor, acc
+import { GAME } from '../config.js';
 export const RARITY = [
   { id: 0, name: 'Thường', color: '#d8d4cc' },
   { id: 1, name: 'Hiếm', color: '#5aa7ff' },
@@ -131,7 +132,7 @@ export const GEM_GRADES = ['Sơ', 'Trung', 'Thượng'];
 export const GEM_SLOTS = {
   weapon: ['atk', 'crit', 'mp'], hat: ['hp', 'def', 'mp'], armor: ['hp', 'def', 'mp'], acc: ['atk', 'crit', 'hp', 'def', 'mp'], outfit: [],
 };
-export const GEM_FUSE = [{ gold: 300, rate: 1 }, { gold: 1500, rate: 0.75 }]; // grade 1→2, grade 2→3
+export const GEM_FUSE = GAME.forge.gemFuse; // tuned in config.js
 export const gemId = (kind, g) => `gem_${kind}${g}`;
 for (const [kind, k] of Object.entries(GEM_KINDS)) {
   for (let g = 1; g <= 3; g++) {
@@ -193,10 +194,11 @@ export const STAT_NAMES = {
 };
 
 // Enhancement: success rate when going from +n to +(n+1)
-export const ENHANCE_MAX = 10;
-export const ENHANCE_RATE = [1, 0.95, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.22];
-export const ENHANCE_SAFE = 4; // from +5 up, a failure drops one level
-export const ENHANCE_BONUS = 0.1; // each level adds +10% of the base stats
+// Enhancement numbers are tuned in config.js (GAME.forge)
+export const ENHANCE_MAX = GAME.forge.enhanceMax;
+export const ENHANCE_RATE = GAME.forge.enhanceRate;
+export const ENHANCE_SAFE = GAME.forge.enhanceSafe;
+export const ENHANCE_BONUS = GAME.forge.enhanceBonus;
 export function enhanceCost(it, lv) {
   return { stones: 1 + Math.floor(lv / 3), gold: (lv + 1) * ((it.lv || 1) * 30 + 60) };
 }
