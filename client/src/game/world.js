@@ -3,6 +3,7 @@ import { MAPS, GROUND_Y } from '../data/maps.js';
 import { MONSTERS, BOSS_RESPAWN } from '../data/monsters.js';
 import { CLASSES, SKILLS } from '../data/classes.js';
 import { ITEMS } from '../data/items.js';
+import { CHIEF } from '../data/affixes.js';
 import { NPCS, QUESTS } from '../data/npcs.js';
 import { AFFIXES, NAMED } from '../data/affixes.js';
 import { ELEMENTS, elementMult } from '../data/elements.js';
@@ -209,7 +210,13 @@ export class GameWorld {
       else x2 -= def.w;
       const x = rand(x1, Math.max(x1, x2));
       let y = g.y;
-      const m = new Monster(g.mob, x, y, [x1, Math.max(x1, x2)], g);
+      // now and then a regular spawn becomes a chieftain (mini boss), at most one per map at a time
+      const chief = !def.boss && !this.monsters.some((o) => o.chief && !o.dead) && Math.random() < CHIEF.chance;
+      const m = new Monster(g.mob, x, y, [x1, Math.max(x1, x2)], g, { chief });
+      if (chief) {
+        this.hooks.chat('Hệ thống', `♛ ${m.def.name} (Lv.${m.def.lv}) đang lảng vảng ở ${this.map.name}!`, 'system');
+        this.hooks.toast(`♛ <b>${m.def.name}</b> xuất hiện!`, 'rare');
+      }
       if (def.behavior === 'float') { m.y = y - m.h - rand(4, 20); m.homeY = m.y; }
       m.x = clamp(m.x, x1, Math.max(x1, x2 + def.w - m.w));
       this.monsters.push(m);
@@ -508,7 +515,7 @@ export class GameWorld {
 
   // Target to focus single-target skills on: boss > named > elite > nearest, within range of (x, y)
   focusTarget(x, y, range) {
-    const rank = (m) => (m.def.behavior === 'boss' ? 3 : m.named ? 2 : m.elite ? 1 : 0);
+    const rank = (m) => (m.def.behavior === 'boss' ? 3 : m.named ? 2 : m.chief || m.elite ? 1 : 0);
     let best = null, bestScore = -Infinity;
     for (const m of this.monsters) {
       if (m.dead) continue;
@@ -679,7 +686,13 @@ export class GameWorld {
       let data = { id, qty: 1, r: 0, b: {} };
       const strong = m.def.boss || m.named || m.elite;
       if (it.slot === 'outfit') { data.r = 3; data.rare = true; }
-      else if (it.type === 'equip') { const roll = rollEquip(id, strong ? 0.08 : 0); data.r = roll.r; data.b = roll.bonus; if (m.def.boss || m.named) data.r = Math.max(data.r, 2); if (data.r >= 3) data.rare = true; }
+      else if (it.type === 'equip') {
+        const luck = m.chief ? CHIEF.luck : strong ? 0.08 : 0;
+        const minR = m.def.boss || m.named ? 2 : m.chief ? CHIEF.minRarity : 0;
+        const roll = rollEquip(id, luck, minR);
+        data.r = roll.r; data.b = roll.bonus;
+        if (data.r >= 3) data.rare = true;
+      }
       if (data.rare) {
         this.hooks.chat('Hệ thống', `✦ ${it.name} rơi ra từ ${m.def.name}!`, 'system');
         this.hooks.toast(`✦ <b>${it.name}</b> rơi ra!`, 'rare');
@@ -1264,8 +1277,8 @@ export class GameWorld {
         if (m.shield > 0) { ctx.fillStyle = '#ffd84a'; ctx.fillRect(Math.round(m.cx - bw / 2 - cam), Math.round(m.y - 7), Math.round(bw * m.shield / m.maxShield), 1); }
       }
       const danger = this.ch.level < m.def.lv - 2;
-      const col = m.named ? '#ff9a6a' : m.elite ? '#ffd84a' : danger ? '#ff8a7a' : '#d8d4cc';
-      this.nameTag(ctx, `Lv.${m.def.lv} ${m.elite ? '★ ' : ''}${m.def.name}`, m.cx - cam, m.y + m.h + 9, col, m.named ? 8 : 7, m.elite || !!m.named);
+      const col = m.named ? '#ff9a6a' : m.chief ? '#ffa04a' : m.elite ? '#ffd84a' : danger ? '#ff8a7a' : '#d8d4cc';
+      this.nameTag(ctx, `Lv.${m.def.lv} ${m.chief ? '♛ ' : m.elite ? '★ ' : ''}${m.def.name}`, m.cx - cam, m.y + m.h + 9, col, m.named || m.chief ? 8 : 7, m.elite || m.chief || !!m.named);
       if (m.affix.size && (m.elite || m.named || (m.aggro && dist2(m, p) < 220))) this.affixTags(ctx, m, m.cx - cam, m.y + m.h + 18);
     }
     for (const n of this.npcs) {
@@ -1302,7 +1315,7 @@ export class GameWorld {
     if (p.slowT > 0) sts.push(['❄ Chậm', '#9fd8ff']);
     sts.forEach(([txt, c], i) => this.nameTag(ctx, txt, p.cx - cam, p.y - (this.ch.title ? 44 : 34) - i * 10, c, 7));
     // boss HP bar (named bosses included)
-    const boss = this.monsters.find((m) => (m.def.boss || m.named) && !m.dead && m.aggro) || this.monsters.find((m) => m.def.boss && !m.dead);
+    const boss = this.monsters.find((m) => (m.def.boss || m.named || m.chief) && !m.dead && m.aggro) || this.monsters.find((m) => m.def.boss && !m.dead);
     if (boss && boss.aggro) {
       const bw = 300, bx = (VIEW_W - bw) / 2, by = 74;
       ctx.fillStyle = 'rgba(10,4,8,0.85)'; ctx.fillRect(bx - 3, by - 3, bw + 6, 12);
@@ -1311,7 +1324,7 @@ export class GameWorld {
       ctx.fillStyle = '#ff8a9a'; ctx.fillRect(bx, by, bw * boss.hp / boss.maxHp, 1);
       ctx.font = '700 9px "Be Vietnam Pro", system-ui, sans-serif';
       ctx.fillStyle = '#ffd36a'; ctx.textAlign = 'center';
-      ctx.fillText(`${boss.named ? 'Lv.' + boss.def.lv + ' ' : ''}${boss.def.name}  ·  ${Math.ceil(boss.hp)} / ${boss.maxHp}`, VIEW_W / 2, by - 6);
+      ctx.fillText(`${boss.named || boss.chief ? 'Lv.' + boss.def.lv + ' ' : ''}${boss.def.name}  ·  ${Math.ceil(boss.hp)} / ${boss.maxHp}`, VIEW_W / 2, by - 6);
       if (boss.shield > 0) { ctx.fillStyle = '#ffd84a'; ctx.fillRect(bx, by + 7, bw * boss.shield / boss.maxShield, 2); }
       if (boss.affix.size) this.affixTags(ctx, boss, VIEW_W / 2, by + 18);
     }

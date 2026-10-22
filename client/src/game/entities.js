@@ -7,7 +7,7 @@ import { humanoidSheet, HUM_W, HUM_FEET } from '../gfx/humanoid.js';
 import { monsterSheet } from '../gfx/monsters.js';
 import { drawFrame } from '../gfx/draw.js';
 import { clamp, rand, randInt } from '../engine/util.js';
-import { NAMED, ELITE_POOL, smartTier, eliteChance } from '../data/affixes.js';
+import { NAMED, ELITE_POOL, CHIEF, smartTier, eliteChance } from '../data/affixes.js';
 
 export const GRAVITY = 980;
 export const JUMP_V = -385;
@@ -62,14 +62,14 @@ export class Humanoid {
     else if (this.atkT > 0) a = 'atk';
     else if (this.sitting) a = 'sit';
     else if (!this.onGround) a = 'jump';
-    else if (Math.abs(this.vx) > 5) a = 'walk';
+    else if (Math.abs(this.vx) > 5) a = this.running && this.sheet.frames.run ? 'run' : 'walk';
     else a = 'idle';
     if (a !== this.anim) { this.anim = a; this.animT = 0; }
   }
   frameIndex() {
     const fr = this.sheet.frames[this.anim];
     if (this.anim === 'atk') return this.atkT > this.atkDur * 0.55 ? fr[0] : fr[1];
-    const speed = this.anim === 'walk' ? (this.running ? 14 : 9) : 2.2;
+    const speed = this.anim === 'run' ? 13 : this.anim === 'walk' ? 9 : 2.2;
     return fr[Math.floor(this.animT * speed) % fr.length];
   }
   draw(ctx, camX, alpha = 1) {
@@ -118,12 +118,13 @@ export class Player extends Humanoid {
 
 // ===== Monsters =====
 // Each monster has its own level (varies around the species' base level); stats scale with level.
-// opt: { named: id trong NAMED, elite: true/false, lvBonus }
+// opt: { named: id in NAMED, elite: true/false, chief: true/false (mini boss), lvBonus }
 export class Monster {
   constructor(id, x, standY, range, spawnRef, opt = {}) {
     const base = MONSTERS[id];
     const named = opt.named ? NAMED[opt.named] : null;
-    const elite = !named && !base.boss && (opt.elite ?? Math.random() < eliteChance(base.lv));
+    const chief = !named && !base.boss && !!opt.chief;
+    const elite = !named && !base.boss && !chief && (opt.elite ?? Math.random() < eliteChance(base.lv));
     const bonus = named || base.boss ? 0 : (opt.lvBonus ?? randInt(0, base.lv >= 13 ? 3 : 2));
     const lv = named ? named.lv : base.lv + bonus;
     const k = lv - base.lv;
@@ -137,14 +138,18 @@ export class Monster {
       for (let i = 0; i < n && pool.length; i++) affix.push(pool.splice(randInt(0, pool.length - 1), 1)[0]);
       drops = [...drops, ['GEM1', 0.6], ['stone', 0.7], ['stone', 0.3], ['protect', 0.06], ['out_jade_lotus', 0.004], ['out_wisp_hood', 0.004], ['out_peach_fairy', 0.002], ['mat_dew', 0.08]];
     }
+    if (chief) {
+      hp *= CHIEF.hp; atk *= CHIEF.atk; df *= CHIEF.def; exp *= CHIEF.exp; gold = gold.map((g) => g * CHIEF.gold); scale = CHIEF.scale;
+      drops = [...drops, ...CHIEF.drops]; name = 'Đầu Lĩnh ' + base.name;
+    }
     if (named) {
       hp *= named.hp; atk *= named.atk; df *= 1.3; exp *= named.hp * 0.7; gold = gold.map((g) => g * 10);
       affix = [...named.affix]; drops = named.drops; name = named.name; scale = named.scale;
     }
     this.id = id;
     this.def = { ...base, lv, name, drops, affix, hp: Math.round(hp), atk: Math.round(atk), def: Math.round(df), exp: Math.round(exp), gold };
-    this.elite = elite; this.named = opt.named || null; this.namedDef = named;
-    this.scale = scale; this.tint = named ? named.tint : elite ? 'saturate(1.35) brightness(1.08)' : null;
+    this.elite = elite; this.chief = chief; this.named = opt.named || null; this.namedDef = named;
+    this.scale = scale; this.tint = named ? named.tint : chief ? 'saturate(1.5) contrast(1.08) brightness(0.96)' : elite ? 'saturate(1.35) brightness(1.08)' : null;
     this.affix = new Set(affix);
     this.tier = smartTier(lv);
     this.w = Math.round(base.w * scale); this.h = Math.round(base.h * scale);
@@ -183,8 +188,8 @@ export class Monster {
     ctx.save();
     ctx.globalAlpha = this.alpha;
     // glow for Elite / named monsters
-    if (this.elite || this.named) {
-      const col = this.named ? 'rgba(255,90,70,' : 'rgba(255,210,90,';
+    if (this.elite || this.named || this.chief) {
+      const col = this.named ? 'rgba(255,90,70,' : this.chief ? 'rgba(255,130,40,' : 'rgba(255,210,90,';
       const g = ctx.createRadialGradient(cx, by - this.h / 2, 2, cx, by - this.h / 2, this.h * 0.9);
       g.addColorStop(0, col + (0.28 + Math.sin(time * 4) * 0.08) + ')'); g.addColorStop(1, col + '0)');
       ctx.fillStyle = g; ctx.fillRect(cx - this.h, by - this.h * 1.5, this.h * 2, this.h * 2);
