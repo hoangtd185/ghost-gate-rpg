@@ -20,6 +20,7 @@ import {
 } from '../game/character.js';
 import { SKILL_GLYPH, SKILL_COLOR } from './skillglyphs.js';
 import { escapeHtml, fmtNum } from '../engine/util.js';
+import { GAME } from '../config.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -434,7 +435,7 @@ export class GameUI {
       const mp = Math.ceil(sk.mp * (1 - pas.mpCost / 100));
       return `<li class="${lv ? '' : 'locked'}" style="--c:${SKILL_COLOR[sid]}"><span class="glyph" style="color:${SKILL_COLOR[sid]}">${SKILL_GLYPH[sid]}</span>
         <div><h3>${sk.name} <kbd>${SKILL_KEYS[i]}</kbd> ${lv ? `<small>Cấp ${lv}/${SKILL_MAX_LV}</small>` : `<small>Mở ở cấp ${sk.unlock}</small>`}</h3>
-        <p>${sk.desc}</p><p class="muted small">Nội lực ${mp} · Hồi chiêu ${sk.cd}s${sk.mult ? ` · Sát thương ${Math.round(sk.mult * (1 + 0.12 * ((lv || 1) - 1)) * 100)}%${lv && lv < SKILL_MAX_LV ? ` → ${Math.round(sk.mult * (1 + 0.12 * lv) * 100)}%` : ''}` : ''}</p></div>
+        <p>${sk.desc}</p><p class="muted small">Nội lực ${mp} · Hồi chiêu ${sk.cd}s${sk.mult ? ` · Sát thương ${Math.round(sk.mult * (1 + GAME.player.skillDmgPerLv * ((lv || 1) - 1)) * 100)}%${lv && lv < SKILL_MAX_LV ? ` → ${Math.round(sk.mult * (1 + 0.12 * lv) * 100)}%` : ''}` : ''}</p></div>
         ${can ? `<button class="plus" data-act="skillup" data-sid="${sid}" aria-label="Nâng ${sk.name}">+</button>` : ''}</li>`;
     }).join('');
     return `<p class="muted small">+1 điểm mỗi cấp. Mỗi cấp chiêu +12% sát thương. Điểm dùng chung với Nội công.</p><ul class="skills">${list}</ul>`;
@@ -502,7 +503,7 @@ export class GameUI {
   winSystem() {
     const s = this.cb.storage;
     return `<div class="sys">
-      <p class="muted">Dữ liệu được lưu tại: <b>${s.label}</b>${s.username ? ` · tài khoản <b>${escapeHtml(s.username)}</b>` : ''}. Game tự lưu mỗi 20 giây.</p>
+      <p class="muted">Dữ liệu được lưu tại: <b>${s.label}</b>${s.username ? ` · tài khoản <b>${escapeHtml(s.username)}</b>` : ''}. Game tự lưu mỗi ${GAME.save.autosaveSec} giây.</p>
       <div class="acts col"><button data-act="save">Lưu ngay</button><button data-act="switch">Đổi nhân vật</button>${s.kind === 'api' ? '<button data-act="logout" class="ghost">Đăng xuất</button>' : ''}</div>
       <h4>Phím điều khiển</h4>
       <table class="keys"><tr><td><kbd>←</kbd><kbd>→</kbd></td><td>Di chuyển (nhấn đúp rồi giữ = chạy nhanh)</td><td><kbd>Space</kbd> / <kbd>X</kbd></td><td>Nhảy (giữ = cao hơn, nhấn 2 lần = nhảy đôi)</td></tr>

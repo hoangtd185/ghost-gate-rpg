@@ -4,6 +4,7 @@ import { CLASSES } from '../data/classes.js';
 import { BOT_NAMES, BOT_CHAT, BOT_LOOKS } from '../data/bots.js';
 import { Humanoid, Projectile, stepBody, MOVE_SPEED, JUMP_V } from './entities.js';
 import { pick, rand, randInt, chance, clamp } from '../engine/util.js';
+import { GAME } from '../config.js';
 
 const MAP_ORDER = ['village', 'forest', 'field', 'graveyard', 'ghost_gate', 'snow_peak', 'ice_cave', 'volcano', 'qilin_altar'];
 
@@ -143,7 +144,7 @@ export class BotManager {
 
   walkTo(b, x, floorY) {
     const dx = x - b.cx;
-    b.vx = Math.abs(dx) < 4 ? 0 : Math.sign(dx) * MOVE_SPEED * 0.9;
+    b.vx = Math.abs(dx) < 4 ? 0 : Math.sign(dx) * MOVE_SPEED * GAME.physics.botSpeedMult[0];
     if (b.vx) b.facing = Math.sign(b.vx);
     if (b.onGround && b.standY < floorY - 2) { b.dropTimer = 0.3; b.y += 2; }
   }
@@ -184,7 +185,7 @@ export class BotManager {
       if (b.cd <= 0) this.attack(b, t);
       return;
     }
-    b.vx = Math.sign(dx) * MOVE_SPEED * 0.85; b.facing = Math.sign(dx) || 1;
+    b.vx = Math.sign(dx) * MOVE_SPEED * GAME.physics.botSpeedMult[1]; b.facing = Math.sign(dx) || 1;
     if (!b.onGround) return;
     const plats = W.map.platforms;
     if (vdiff < -30) {
@@ -193,7 +194,7 @@ export class BotManager {
       if (here) b.vy = JUMP_V;
       else if (above.length) {
         const c = above.sort((p, q) => Math.abs(p.x + p.w / 2 - b.cx) - Math.abs(q.x + q.w / 2 - b.cx))[0];
-        b.vx = Math.sign(c.x + c.w / 2 - b.cx) * MOVE_SPEED * 0.85;
+        b.vx = Math.sign(c.x + c.w / 2 - b.cx) * MOVE_SPEED * GAME.physics.botSpeedMult[1];
       }
     } else if (vdiff > 30 && b.standY < GROUND_Y) {
       b.dropTimer = 0.3; b.y += 2;

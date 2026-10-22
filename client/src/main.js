@@ -10,6 +10,7 @@ import { buildMapGraphics, drawLayer, VIEW_W, VIEW_H } from './gfx/backgrounds.j
 import { MAPS } from './data/maps.js';
 import { monsterSheet } from './gfx/monsters.js';
 import { drawFrame } from './gfx/draw.js';
+import { GAME } from './config.js';
 
 const stage = document.getElementById('stage');
 const canvas = document.getElementById('game');
@@ -78,7 +79,7 @@ function enterGame(ch, isNew) {
     changed: (what) => { if (!ui.world) return; if (what === 'bars') ui.refreshBars(); else ui.refreshAll(); },
     save: () => doSave(),
     mapChanged: (map) => ui && ui.world && ui.setMap(map),
-    levelUp: (lv) => { ui.banner(`<small>Chúc mừng</small>Đạt cấp ${lv}`); ui.toast(`Thăng cấp ${lv}! +5 điểm tiềm năng, +1 điểm kỹ năng`, 'quest'); ui.refreshAll(); },
+    levelUp: (lv) => { ui.banner(`<small>Chúc mừng</small>Đạt cấp ${lv}`); ui.toast(`Thăng cấp ${lv}! +${GAME.player.statPointsPerLevel} điểm tiềm năng, +${GAME.player.skillPointsPerLevel} điểm kỹ năng`, 'quest'); ui.refreshAll(); },
     questProgress: (q) => ui.questProgress(q),
     gotItem: (d) => ui.gotItem(d),
     useItemById: (id) => ui.useItemById(id),
@@ -130,7 +131,7 @@ function frame(now) {
     world.render(ctx);
     ui.tick();
     autoSaveT += dt;
-    if (autoSaveT > 20) { autoSaveT = 0; doSave(); }
+    if (autoSaveT > GAME.save.autosaveSec) { autoSaveT = 0; doSave(); }
   } else {
     renderTitle(dt);
     input.endFrame();

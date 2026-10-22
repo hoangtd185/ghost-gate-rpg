@@ -1,4 +1,5 @@
 // Keyboard + virtual touch buttons
+import { GAME } from '../config.js';
 const KEY_ACTIONS = {
   ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
   Space: 'jump', KeyX: 'jump',
@@ -8,7 +9,7 @@ const KEY_ACTIONS = {
   KeyE: 'interact',
   ControlLeft: 'ctrl', ControlRight: 'ctrl',
 };
-const DOUBLE_TAP_MS = 280; // second tap of ← / → within this window starts a sprint
+const DOUBLE_TAP_MS = GAME.physics.doubleTapMs; // second tap of ← / → within this window starts a sprint
 
 function isTypingTarget(e) {
   const t = e.target;

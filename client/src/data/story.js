@@ -13,6 +13,7 @@
 //   drop     – quest item dropped by monsters while active: { mob, item, chance }
 //   give     – items handed out on accepting the quest
 //   hint     – tip shown in the quest log (tutorial quests)
+import { GAME } from '../config.js';
 export const SPEAKERS = { boss: 'Hắc Quỷ Vương', qilin: 'Hỏa Kỳ Lân', blood_demon: 'Huyết Ma Huyền Cơ' };
 
 export const CHAPTERS = {
@@ -31,12 +32,13 @@ export const MAIN_ORDER = [
 ];
 
 // Reward EXP = a share of the EXP needed to level up (same formula as expToNext), so players still have to fight to reach the next step's level.
-const needExp = (lv) => Math.floor(22 * Math.pow(lv, 1.85) + 28 * lv);
-const EXP_SHARE = { talk: 0.12, collect: 0.28, kill: 0.3, act: 0.1 };
+const { a: EA, p: EP, b: EB } = GAME.player.expCurve;
+const needExp = (lv) => Math.floor(EA * Math.pow(lv, EP) + EB * lv);
+const EXP_SHARE = GAME.story.expShare; // tuned in config.js
 const BIG = ['st7', 'st12', 'st18']; // chapter boss kill
 function main(chapter, q) {
   const out = { cat: 'main', chapter, ...q, reward: { ...q.reward } };
-  const share = q.target && q.target.startsWith('nb_') ? 0.45 : EXP_SHARE[q.type];
+  const share = q.target && q.target.startsWith('nb_') ? EXP_SHARE.namedBoss : EXP_SHARE[q.type];
   out.reward.exp = Math.round(needExp(q.lv) * share / 10) * 10;
   return out;
 }
@@ -649,7 +651,7 @@ export const TUTORIAL_QUESTS = {
     text: 'Cộng 3 điểm tiềm năng trong bảng Nhân vật.',
     hint: 'Nhấn C để mở bảng Nhân vật, bấm dấu + cạnh chỉ số. {cls} nên ưu tiên {main}, thêm ít Thể để chịu đòn.',
     intro: [
-      ['elder', 'Lên cấp rồi đấy! Mỗi cấp con được 5 điểm tiềm năng.'],
+      ['elder', `Lên cấp rồi đấy! Mỗi cấp con được ${GAME.player.statPointsPerLevel} điểm tiềm năng.`],
       ['elder', 'Mở bảng Nhân vật (phím C) mà cộng. {cls} như con thì cần {main} nhất. Thể thì ai cũng cần, để chịu đòn.'],
       ['elder', 'Cộng thử ba điểm cho lão xem.'],
     ],
@@ -756,4 +758,4 @@ export const TUTORIAL_QUESTS = {
   }),
 };
 
-for (const id of BIG) STORY_QUESTS[id].reward.exp = Math.round(needExp(STORY_QUESTS[id].lv) * 0.65 / 10) * 10;
+for (const id of BIG) STORY_QUESTS[id].reward.exp = Math.round(needExp(STORY_QUESTS[id].lv) * EXP_SHARE.chapterFinale / 10) * 10;

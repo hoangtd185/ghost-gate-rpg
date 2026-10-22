@@ -3,6 +3,7 @@
 //  2. CloudStorage – running inside a Claude artifact link: saved to the artifact database
 //  3. LocalStore   – file opened directly: saved in the browser (localStorage)
 // All three share one interface: list(), create(ch), save(ch), remove(id)
+import { GAME } from '../config.js';
 
 function withTimeout(promise, ms, fallback) {
   return Promise.race([promise, new Promise((r) => setTimeout(() => r(fallback), ms))]);
@@ -171,7 +172,7 @@ export class SaveQueue {
       this.onStatus && this.onStatus('saved');
     } catch (e) {
       if (!this.pending) this.pending = snap; // keep the newest snapshot for the retry
-      this.delay = Math.min(30000, this.delay ? this.delay * 2 : 2000);
+      this.delay = Math.min(GAME.save.retryMaxMs, this.delay ? this.delay * 2 : GAME.save.retryMinMs);
       this.onStatus && this.onStatus('error', this.useOutbox ? 'đã giữ trên máy, sẽ tự gửi lại' : e.message);
       this.retryT = setTimeout(() => { this.retryT = null; this.flush(); }, this.delay);
     }

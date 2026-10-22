@@ -264,6 +264,7 @@ client/
   index.html            dev page (loads src/main.js as an ES module)
   src/
     main.js             startup, game loop, wires the UI to the game world
+    config.js           GAME: every balance / tuning number in one place (also read by the server)
     engine/             keyboard / touch input, utilities
     data/               GAME DATA: classes, skills, items, monsters, maps, NPCs, quests, bots
       story.js          main story, tutorial quests, scenes with choices
@@ -327,6 +328,16 @@ To inspect the data, open `data/game.db` with [DB Browser for SQLite](https://sq
 Send the token in the `Authorization: Bearer <token>` header. Request bodies must be `Content-Type: application/json`.
 
 ## Extending the game
+
+**Where to change things:**
+
+| What | File |
+|---|---|
+| Balance and feel: speeds, jump, sprint, regen, EXP curve, points per level, monster scaling, elite and chieftain rates, drop rarity, enhancement rates, autosave and retry timing | `client/src/config.js` (`GAME`) |
+| Content: classes, skills, items, monsters, maps, NPCs, quests, dialogue, recipes, named bosses | `client/src/data/*.js` |
+| Server deployment: port, secrets, registration, rate limits, CORS | `.env` (see `.env.example`), read by `server/src/config.js` |
+
+The server imports `client/src/config.js` too, so values both sides must agree on (class ids, equipment slots, level cap, points per level, max enhancement) come from one place.
 
 **Conventions.** Code, ids and comments are in English. Only player-facing text (dialogue, item and map names, UI labels, error messages shown on screen) is Vietnamese. Ids are lowercase snake_case: classes `swordsman` / `taoist` / `assassin`, elements `fire` / `ice` / `thunder` / `poison`, maps such as `village` or `ghost_gate`. If you rename an id that can be stored in a save, add the old name to `client/src/data/legacy.js` so existing characters keep loading.
 

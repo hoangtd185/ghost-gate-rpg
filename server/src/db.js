@@ -2,6 +2,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { GAME } from '../../client/src/config.js'; // game rules shared with the client
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -96,7 +97,7 @@ function migrate(db) {
 const int = (v, d = 0) => (Number.isFinite(+v) ? Math.floor(+v) : d);
 const num = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
 const str = (v, max = 64) => String(v ?? '').slice(0, max);
-const EQUIP_SLOTS = new Set(['weapon', 'hat', 'armor', 'acc', 'outfit']);
+const EQUIP_SLOTS = new Set(GAME.player.equipSlots);
 // Story flags: only keep short string key/value pairs
 function cleanFlags(f) {
   const out = {};

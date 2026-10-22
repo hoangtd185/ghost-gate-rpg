@@ -8,6 +8,7 @@ import path from 'node:path';
 import { config, ROOT } from './config.js';
 import { openDb } from './db.js';
 import { hashPassword, verifyPassword, signToken, verifyToken, loadSecret } from './auth.js';
+import { GAME } from '../../client/src/config.js'; // game rules shared with the client
 
 const DEV = process.argv.includes('--dev');
 const DB_FILE = path.join(config.dataDir, 'game.db');
@@ -16,7 +17,7 @@ const STATIC_DIR = !DEV && fs.existsSync(path.join(distDir, 'index.html')) ? dis
 
 const db = openDb(DB_FILE);
 const SECRET = loadSecret(config.dataDir, config.tokenSecret);
-const VALID_CLS = new Set(['swordsman', 'taoist', 'assassin']);
+const VALID_CLS = new Set(GAME.player.classes);
 const MAX_CHARS = config.maxCharsPerUser;
 
 // ---------- security headers for every response ----------
@@ -103,7 +104,7 @@ const loginLimited = limiter(config.loginLimitPerMin);
 const apiLimited = limiter(config.apiLimitPerMin);
 
 // Validates uploaded character data: rejects absurd values (hand-edited saves, forged requests)
-const MAX_LEVEL = 50;
+const P = GAME.player, MAX_LEVEL = P.maxLevel;
 function sanitizeCharacter(ch) {
   if (!ch || typeof ch !== 'object' || Array.isArray(ch)) return 'Thiếu dữ liệu nhân vật';
   const lv = Math.floor(+(ch.level ?? 1));
@@ -112,14 +113,14 @@ function sanitizeCharacter(ch) {
   if (!(gold >= 0 && gold <= 2e9)) return 'Ngân lượng không hợp lệ';
   const st = ch.stats || {};
   const totalStat = ['str', 'dex', 'int', 'vit'].reduce((a, k) => a + Math.max(0, +st[k] || 0), 0) + Math.max(0, +ch.statPoints || 0);
-  if (totalStat > 30 + lv * 5 + 10) return 'Điểm tiềm năng không hợp lệ';
+  if (totalStat > 30 + lv * P.statPointsPerLevel + 10) return 'Điểm tiềm năng không hợp lệ';
   const skillSum = Object.values(ch.skills || {}).reduce((a, v) => a + Math.max(0, +v || 0), 0) + Math.max(0, +ch.skillPoints || 0);
-  if (skillSum > lv + 8) return 'Điểm kỹ năng không hợp lệ';
-  if (!Array.isArray(ch.inventory || []) || (ch.inventory || []).length > 60) return 'Túi đồ không hợp lệ';
+  if (skillSum > lv * P.skillPointsPerLevel + 8) return 'Điểm kỹ năng không hợp lệ';
+  if (!Array.isArray(ch.inventory || []) || (ch.inventory || []).length > P.invSize + 24) return 'Túi đồ không hợp lệ';
   for (const e of [...(ch.inventory || []), ...Object.values(ch.equip || {})]) {
     if (!e) continue;
     if (typeof e.id !== 'string' || !/^[a-z0-9_]{1,30}$/i.test(e.id)) return 'Vật phẩm không hợp lệ';
-    if (+e.qty > 999 || +e.e > 10) return 'Vật phẩm không hợp lệ';
+    if (+e.qty > 999 || +e.e > GAME.forge.enhanceMax) return 'Vật phẩm không hợp lệ';
   }
   return null;
 }
