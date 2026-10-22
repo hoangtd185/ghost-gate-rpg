@@ -5,6 +5,7 @@ import { STAT_NAMES } from '../data/items.js';
 import { humanoidSheet, HUM_W, HUM_H } from '../gfx/humanoid.js';
 import { drawFrame } from '../gfx/draw.js';
 import { newCharacter, normalizeCharacter } from '../game/character.js';
+import { mergeOutbox } from '../storage/storage.js';
 import { lookFor } from '../game/entities.js';
 import { escapeHtml } from '../engine/util.js';
 
@@ -55,7 +56,7 @@ export class Screens {
 
   async showSelect(confirmId = null) {
     let chars = [];
-    try { chars = (await this.s.list()).map(normalizeCharacter); }
+    try { chars = mergeOutbox(this.s, await this.s.list()).map(normalizeCharacter); }
     catch (e) { if (this.s.needsAuth) return this.showAuth('login', 'Phiên đăng nhập hết hạn, hãy đăng nhập lại.'); this.frame(`<p class="err">Không tải được nhân vật: ${escapeHtml(e.message)}</p>`); return; }
     if (!chars.length) return this.showCreate(true);
     chars.sort((a, b) => b.level - a.level);

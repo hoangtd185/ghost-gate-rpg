@@ -59,6 +59,22 @@ export function projSprite(kind) {
       ctx.fillStyle = radial(ctx, 12, 12, 0.5, 12, [[0, '#ffffff'], [0.25, '#fff0a0'], [0.55, 'rgba(255,140,40,0.95)'], [1, 'rgba(220,40,20,0)']]);
       ctx.fillRect(0, 0, 24, 24);
     };
+  } else if (kind === 'thunderorb') {
+    w = 18; h = 18; draw = (ctx) => {
+      // glowing ball of lightning with small arcs crackling around it
+      ctx.fillStyle = radial(ctx, 9, 9, 0.5, 9, [[0, '#ffffff'], [0.3, '#e4f4ff'], [0.55, 'rgba(130,190,255,0.9)'], [1, 'rgba(60,110,255,0)']]);
+      ctx.fillRect(0, 0, 18, 18);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.8; ctx.lineCap = 'round';
+      for (let k = 0; k < 3; k++) {
+        const a = k * 2.1;
+        ctx.beginPath();
+        ctx.moveTo(9 + Math.cos(a) * 3, 9 + Math.sin(a) * 3);
+        ctx.lineTo(9 + Math.cos(a + 0.4) * 5.5, 9 + Math.sin(a + 0.4) * 5.5);
+        ctx.lineTo(9 + Math.cos(a + 0.1) * 6.5, 9 + Math.sin(a + 0.1) * 6.5);
+        ctx.lineTo(9 + Math.cos(a + 0.5) * 8.5, 9 + Math.sin(a + 0.5) * 8.5);
+        ctx.stroke();
+      }
+    };
   } else if (kind === 'waterbolt') {
     w = 14; h = 14; draw = (ctx) => {
       ctx.fillStyle = radial(ctx, 7, 7, 0.5, 7, [[0, '#ffffff'], [0.35, '#a8d8ff'], [1, 'rgba(60,120,255,0)']]);

@@ -29,11 +29,12 @@ function rgbaHex(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${
 const PLAYER_JUMP = -330;
 const JUMP_HOLD_TIME = 0.2;
 const JUMP_HOLD_ACCEL = 620;
+const SPRINT_MULT = 1.6; // speed multiplier while sprinting (double-tap ← / →)
 
 // Glow behind projectiles: [core color, radius]
 const PROJ_GLOW = {
   talisman: ['rgba(255,220,90,0.55)', 14], fire: ['rgba(255,140,40,0.7)', 26], wave: ['rgba(140,200,255,0.6)', 26],
-  dart: ['rgba(220,240,255,0.35)', 9], ember: ['rgba(255,110,40,0.6)', 14], ghostfire: ['rgba(200,80,255,0.6)', 16], bloodtalisman: ['rgba(255,40,70,0.6)', 18], fireball: ['rgba(255,140,40,0.7)', 22], waterbolt: ['rgba(110,170,255,0.6)', 14],
+  dart: ['rgba(220,240,255,0.35)', 9], ember: ['rgba(255,110,40,0.6)', 14], ghostfire: ['rgba(200,80,255,0.6)', 16], thunderorb: ['rgba(140,200,255,0.8)', 18], bloodtalisman: ['rgba(255,40,70,0.6)', 18], fireball: ['rgba(255,140,40,0.7)', 22], waterbolt: ['rgba(110,170,255,0.6)', 14],
 };
 // Trails: [palette, max particle size, chance per frame]
 const PROJ_TRAIL = {
@@ -41,14 +42,24 @@ const PROJ_TRAIL = {
   wave: [['#bfe6ff', '#ffffff', '#7ab8ff'], 2.6, 0.9], dart: [['#e8f0ff'], 1.4, 0.35],
   ember: [['#ff8a3a', '#ffd06a'], 2, 0.5], ghostfire: [['#d08aff', '#ff9aff', '#8a4aff'], 2.4, 0.7],
   bloodtalisman: [['#ff4a5a', '#ffb0b8', '#a8142a'], 2.4, 0.8],
-  fireball: [['#ffb04a', '#ff6a2a', '#fff0a0'], 3.4, 1], waterbolt: [['#bfe0ff', '#ffffff'], 2, 0.6],
+  fireball: [['#ffb04a', '#ff6a2a', '#fff0a0'], 3.4, 1], thunderorb: [['#bfe0ff', '#ffffff', '#7ab8ff'], 2.2, 1], waterbolt: [['#bfe0ff', '#ffffff'], 2, 0.6],
 };
 // Main color of each skill (magic circle, particles)
 const SKILL_FX = {
   sw_combo: '#8fd0ff', sw_wave: '#bfe6ff', sw_guard: '#ffd84a',
-  ta_thunder: '#a8d4ff', ta_fire: '#ff9a3c', ta_heal: '#7dff9a',
+  ta_thunder: '#a8d4ff', ta_fire: '#ff9a3c', ta_orbs: '#9ad8ff',
   as_triple: '#c8f0a0', as_dash: '#c08aff', as_poison: '#8fe06a',
 };
+
+// Drops worth saving immediately: outfits, Rare+ equipment, grade 2+ gems, orbs and protection charms
+function isRareDrop(e) {
+  const it = ITEMS[e.id];
+  if (!it) return false;
+  if (it.slot === 'outfit') return true;
+  if (it.type === 'equip') return (e.r || 0) >= 2;
+  if (it.type === 'gem') return it.gem.g >= 2;
+  return e.id.startsWith('orb_') || e.id === 'protect';
+}
 
 export class GameWorld {
   constructor(ch, hooks) {
@@ -276,16 +287,25 @@ export class GameWorld {
     const busy = p.atkT > p.atkDur * 0.4 && p.onGround;
     if (input.isDown('left')) move -= 1;
     if (input.isDown('right')) move += 1;
+    // double-tap and hold ← / → to sprint
+    p.running = move !== 0 && input.sprint === (move < 0 ? 'left' : 'right');
     p.sitting = false;
     if (p.hurtT > 0.15) { /* knocked back */ }
     else if (busy) p.vx *= 0.7;
     else {
-      p.vx = move * MOVE_SPEED * spd;
+      p.vx = move * MOVE_SPEED * spd * (p.running ? SPRINT_MULT : 1);
       if (move) p.facing = move;
+    }
+    if (p.running && p.onGround && Math.random() < dt * 22) {
+      this.spark(p.cx - move * 8, p.y + p.h - 1, { vx: -move * rand(20, 60), vy: rand(-30, -8), color: pick(['#d8ccb4', '#bfb39a', '#efe6d2']), size: rand(1.5, 2.8), life: rand(0.25, 0.45), glow: false, drag: 0.9 });
     }
     // Jump: tap = short hop, hold = high jump, press again in the air = double jump
     if (p.onGround) p.jumps = 0;
-    if (input.wasPressed('jump')) {
+    // Ctrl + ↓ (either order) drops through the platform you stand on, same as ↓ + Space
+    const held = (k) => input.isDown(k) || input.wasPressed(k); // a quick tap may press and release within one frame
+    const ctrlDrop = (held('ctrl') && input.wasPressed('down')) || (held('down') && input.wasPressed('ctrl'));
+    if (ctrlDrop && p.onGround && p.standY < GROUND_Y) { p.dropTimer = 0.3; p.y += 2; p.jumps = 1; }
+    else if (input.wasPressed('jump')) {
       if (p.onGround) {
         if (input.isDown('down') && p.standY < GROUND_Y) { p.dropTimer = 0.3; p.y += 2; p.jumps = 1; }
         else { p.vy = PLAYER_JUMP; p.jumps = 1; p.jumpHold = JUMP_HOLD_TIME; }
@@ -303,7 +323,7 @@ export class GameWorld {
         p.jumpHold = 0;
       }
     }
-    if (input.isDown('down') && p.onGround && !move && p.atkT <= 0) p.sitting = true;
+    if (input.isDown('down') && !input.isDown('ctrl') && p.onGround && !move && p.atkT <= 0) p.sitting = true;
     stepBody(p, dt, this.map.platforms, this.map.width);
     p.updateAnim(dt);
 
@@ -456,6 +476,21 @@ export class GameWorld {
         this.recalc();
         break;
       }
+      case 'orbs': {
+        const target = this.focusTarget(p.cx, p.cy, sk.range);
+        for (let i = 0; i < sk.count; i++) {
+          // fan out above and behind the caster, then curve in on the target one after another
+          const a = -Math.PI / 2 - dir * (0.35 + i * 0.32);
+          this.projs.push(new Projectile({
+            owner: 'player', kind: 'thunderorb', x: p.cx - 7, y: p.cy - 14,
+            vx: Math.cos(a) * 170, vy: Math.sin(a) * 170, range: 99999, life: sk.life,
+            mult, maxTargets: 1, dir, el, w: 14, h: 14,
+            homing: true, target, speed: sk.speed, seekAt: 0.1 + i * 0.07, seekRange: sk.range + 120,
+          }));
+        }
+        this.burst(p.cx, p.cy - 10, '#bfe0ff', 12, 80, { shape: 'star', drag: 0.92 });
+        break;
+      }
       case 'heal': {
         const amt = Math.floor(this.stats.maxHp * sk.heal);
         ch.hp = Math.min(this.stats.maxHp, ch.hp + amt);
@@ -469,6 +504,37 @@ export class GameWorld {
       }
     }
     this.hooks.changed('bars');
+  }
+
+  // Target to focus single-target skills on: boss > named > elite > nearest, within range of (x, y)
+  focusTarget(x, y, range) {
+    const rank = (m) => (m.def.behavior === 'boss' ? 3 : m.named ? 2 : m.elite ? 1 : 0);
+    let best = null, bestScore = -Infinity;
+    for (const m of this.monsters) {
+      if (m.dead) continue;
+      const d = Math.hypot(m.cx - x, m.cy - y);
+      if (d > range) continue;
+      const score = rank(m) * 1000 - d;
+      if (score > bestScore) { bestScore = score; best = m; }
+    }
+    return best;
+  }
+
+  // Steer a homing projectile toward its target; picks a new target if the old one died
+  steerHoming(pr, dt) {
+    if (pr.t < pr.seekAt) { pr.vx *= 0.94; pr.vy *= 0.94; return; }
+    const cx = pr.x + pr.w / 2, cy = pr.y + pr.h / 2;
+    if (!pr.target || pr.target.dead) pr.target = this.focusTarget(cx, cy, pr.seekRange);
+    const speed = Math.min(pr.speed, 140 + (pr.t - pr.seekAt) * 700);
+    if (!pr.target) { // nothing to chase: drift forward
+      pr.vx += (pr.dir * speed - pr.vx) * Math.min(1, dt * 3); pr.vy *= 0.96;
+      return;
+    }
+    const m = pr.target;
+    const ang = Math.atan2(m.cy - cy, m.cx - cx);
+    const turn = Math.min(1, dt * (6 + (pr.t - pr.seekAt) * 14)); // turns harder the longer it flies, so it never orbits forever
+    pr.vx += (Math.cos(ang) * speed - pr.vx) * turn;
+    pr.vy += (Math.sin(ang) * speed - pr.vy) * turn;
   }
 
   hitArea(area, mult, maxTargets, owner, atk, el) {
@@ -907,6 +973,8 @@ export class GameWorld {
     const p = this.player;
     for (const pr of this.projs) {
       pr.t += dt;
+      if (pr.homing) this.steerHoming(pr, dt);
+      if (pr.life && pr.t > pr.life) { pr.alive = false; continue; }
       pr.x += pr.vx * dt; pr.y += pr.vy * dt;
       pr.dist = (pr.dist || 0) + Math.hypot(pr.vx, pr.vy) * dt;
       if (pr.dist > pr.range || pr.x < -40 || pr.x > this.map.width + 40 || pr.y > GROUND_Y + 10) { pr.alive = false; continue; }
@@ -916,8 +984,14 @@ export class GameWorld {
       }
       for (const m of this.monsters) {
         if (m.dead || pr.hit.has(m) || !overlap(pr, m)) continue;
+        if (pr.homing && pr.target && m !== pr.target) continue; // homing orbs only hit what they chase
         pr.hit.add(m);
         this.damageMonster(m, pr.mult, pr.owner, pr.atk, pr.botName, pr.el);
+        if (pr.kind === 'thunderorb') {
+          this.addFx('lightning', m.cx, m.y + m.h, 0.18, {});
+          this.burst(pr.x + pr.w / 2, pr.y + pr.h / 2, '#bfe0ff', 8, 90, { shape: 'star', drag: 0.9 });
+          this.shakeT = Math.max(this.shakeT || 0, 0.05);
+        }
         this.addFx('spark', pr.x + pr.w / 2, pr.y + pr.h / 2, 0.2, { color: pr.kind === 'fire' ? '#ffa02a' : '#fff2a0' });
         if (!pr.pierce || pr.hit.size >= pr.maxTargets) { pr.alive = false; break; }
       }
@@ -970,7 +1044,10 @@ export class GameWorld {
       d.taken = true;
     } else {
       const ok = addItem(this.ch, d.data.id, d.data.qty, d.data.r, d.data.b);
-      if (ok) { d.taken = true; this.hooks.gotItem(d.data); }
+      if (ok) {
+        d.taken = true; this.hooks.gotItem(d.data);
+        if (isRareDrop(d.data)) this.hooks.save(); // valuable loot is saved right away (queued, in the background)
+      }
       else if (!d.warned) { d.warned = true; this.hooks.toast('Túi đồ đã đầy', 'warn'); }
     }
     if (d.taken) this.hooks.changed('inv');
@@ -1048,7 +1125,7 @@ export class GameWorld {
     }
     for (const b of p.buffs) {
       if (Math.random() < dt * 9) {
-        const col = b.sid === 'ta_heal' ? '#9dffb4' : '#ffe27a';
+        const col = '#ffe27a';
         this.spark(p.cx + rand(-10, 10), p.y + p.h - rand(0, 6), { vy: rand(-40, -25), vx: rand(-4, 4), color: col, size: rand(1, 2.4), life: rand(0.6, 1), drag: 0.98, shape: 'star' });
       }
     }
@@ -1167,6 +1244,7 @@ export class GameWorld {
       ctx.save();
       ctx.translate(pr.x + pr.w / 2 - cam, pr.y + pr.h / 2);
       if (pr.kind === 'dart') ctx.rotate(pr.t * 25);
+      else if (pr.kind === 'thunderorb') ctx.rotate(pr.t * 9);
       else if (pr.vx < 0) ctx.scale(-1, 1);
       ctx.drawImage(ps.img, -ps.w / 2, -ps.h / 2, ps.w, ps.h);
       ctx.restore();

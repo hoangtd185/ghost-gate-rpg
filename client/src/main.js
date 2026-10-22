@@ -5,7 +5,7 @@ import { lookFor, Monster } from './game/entities.js';
 import { humanoidSheet } from './gfx/humanoid.js';
 import { GameUI } from './ui/hud.js';
 import { Screens } from './ui/screens.js';
-import { createStorage, Saver } from './storage/storage.js';
+import { createStorage, SaveQueue } from './storage/storage.js';
 import { buildMapGraphics, drawLayer, VIEW_W, VIEW_H } from './gfx/backgrounds.js';
 import { MAPS } from './data/maps.js';
 import { monsterSheet } from './gfx/monsters.js';
@@ -59,16 +59,17 @@ function renderTitle(dt) {
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 }
 
-function doSave() {
+// Queue a save. It goes to the local outbox at once and uploads in the background (see SaveQueue).
+function doSave(onExit = false) {
   if (!world || !saver) return;
   world.ch.x = Math.round(world.player.x);
   world.ch.savedAt = Date.now();
-  saver.save(world.ch);
+  if (onExit) saver.saveOnExit(world.ch); else saver.save(world.ch);
 }
 
 function enterGame(ch, isNew) {
   hudRoot.hidden = false;
-  saver = new Saver(storage, (st, msg) => ui && ui.saveStatus(st, msg));
+  if (!saver) saver = new SaveQueue(storage, (st, msg) => ui && ui.world && ui.saveStatus(st, msg));
   const hooks = {
     toast: (m, k) => ui.toast(m, k),
     chat: (n, m, t) => ui.addChat(n, m, t),
@@ -106,7 +107,7 @@ async function boot() {
   ui = new GameUI(hudRoot, input, {
     save: (manual) => { doSave(); if (manual === true) ui.toast('Đã lưu tiến trình'); },
     exit: exitGame,
-    logout: () => { doSave(); storage.logout(); world = null; ui.detach(); hudRoot.hidden = true; screens.showAuth('login'); },
+    logout: () => { doSave(true); saver && saver.reset(); storage.logout(); world = null; ui.detach(); hudRoot.hidden = true; screens.showAuth('login'); },
     storage,
   });
   screens = new Screens(screenRoot, storage, (ch, isNew) => enterGame(ch, isNew));
@@ -146,8 +147,10 @@ if (DEBUG) {
   window.__lookFor = lookFor; window.__humSheet = humanoidSheet; window.__drawFrame = drawFrame; window.__Monster = Monster;
 }
 
-window.addEventListener('beforeunload', doSave);
-document.addEventListener('visibilitychange', () => { if (document.hidden) doSave(); });
+// Closing the tab, Alt+F4, switching apps on a phone: write the outbox and send a keepalive upload
+window.addEventListener('pagehide', () => doSave(true));
+window.addEventListener('beforeunload', () => doSave(true));
+document.addEventListener('visibilitychange', () => { if (document.hidden) doSave(true); });
 
 boot();
 

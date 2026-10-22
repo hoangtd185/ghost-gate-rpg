@@ -38,6 +38,15 @@ class ApiStorage {
   async list() { return (await this.req('GET', 'characters')).characters; }
   async create(ch) { return (await this.req('POST', 'characters', { character: ch })).character; }
   async save(ch) { await this.req('PUT', 'characters/' + encodeURIComponent(ch.id), { character: ch }); }
+  // Fire-and-forget upload that the browser finishes even after the page closes (keepalive bodies max 64 KB)
+  saveKeepalive(ch) {
+    const body = JSON.stringify({ character: ch });
+    if (!this.token || body.length > 60000) return;
+    fetch('api/characters/' + encodeURIComponent(ch.id), {
+      method: 'PUT', keepalive: true, body,
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + this.token },
+    }).catch(() => { /* the outbox still has it */ });
+  }
   async remove(id) { await this.req('DELETE', 'characters/' + encodeURIComponent(id)); }
   async leaderboard() { return (await this.req('GET', 'leaderboard')).top; }
 }
@@ -91,21 +100,82 @@ export async function createStorage() {
   return new LocalStore();
 }
 
-// Save queue: never runs two saves at the same time
-export class Saver {
-  constructor(storage, onStatus) { this.s = storage; this.busy = false; this.pending = null; this.onStatus = onStatus; }
-  save(ch) {
-    this.pending = ch;
-    if (!this.busy) this.flush();
+// ===== Save queue =====
+// Every save is first written to a local "outbox" in localStorage (synchronous, so it survives a crash,
+// Alt+F4 or a lost connection), then uploaded to the backend in the background. An entry leaves the
+// outbox only after the backend confirms it. Failed uploads retry with backoff (2 s … 30 s) and right
+// away when the browser comes back online. Entries still in the outbox are merged back into the
+// character list on the next load (see mergeOutbox), so nothing picked up is lost.
+const outboxKey = (s) => `qmq_outbox:${s.kind}:${s.username || ''}`;
+function readOutbox(s) { try { return JSON.parse(localStorage.getItem(outboxKey(s)) || '{}'); } catch { return {}; } }
+function writeOutbox(s, box) {
+  try {
+    if (Object.keys(box).length) localStorage.setItem(outboxKey(s), JSON.stringify(box));
+    else localStorage.removeItem(outboxKey(s));
+  } catch { /* storage full or blocked: the upload still runs */ }
+}
+function clearOutboxEntry(s, snap) {
+  const box = readOutbox(s);
+  if (box[snap.id] && box[snap.id].savedAt === snap.savedAt) { delete box[snap.id]; writeOutbox(s, box); }
+}
+
+// Use unsent local copies that are at least as far along as the server copy, and re-upload them.
+// Outbox entries for characters that no longer exist are dropped.
+export function mergeOutbox(storage, chars) {
+  if (storage.kind === 'local') return chars;
+  const box = readOutbox(storage);
+  if (!Object.keys(box).length) return chars;
+  const ids = new Set(chars.map((c) => c.id));
+  for (const id of Object.keys(box)) if (!ids.has(id)) delete box[id];
+  writeOutbox(storage, box);
+  return chars.map((c) => {
+    const o = box[c.id];
+    if (!o || (o.playTime || 0) < (c.playTime || 0)) return c;
+    storage.save(o).then(() => clearOutboxEntry(storage, o)).catch(() => { /* stays in the outbox */ });
+    return o;
+  });
+}
+
+export class SaveQueue {
+  constructor(storage, onStatus) {
+    this.s = storage; this.onStatus = onStatus;
+    this.useOutbox = storage.kind !== 'local'; // LocalStore already writes to localStorage synchronously
+    this.pending = null; this.busy = false; this.retryT = null; this.delay = 0;
+    window.addEventListener('online', () => this.kick());
   }
+  // Queue a snapshot of the character. Returns at once; the upload happens in the background.
+  save(ch) {
+    const snap = JSON.parse(JSON.stringify(ch));
+    if (this.useOutbox) { const box = readOutbox(this.s); box[snap.id] = snap; writeOutbox(this.s, box); }
+    this.pending = snap; // only the newest snapshot matters, older ones are replaced
+    if (!this.busy && !this.retryT) setTimeout(() => this.flush(), 0);
+    return snap;
+  }
+  // The page is closing: the outbox already holds this state; also fire one upload that outlives the page.
+  saveOnExit(ch) {
+    const snap = this.save(ch);
+    if (this.s.saveKeepalive) this.s.saveKeepalive(snap);
+  }
+  // Drop queued work (logout): unsent data stays in the outbox of that account.
+  reset() { this.pending = null; clearTimeout(this.retryT); this.retryT = null; this.delay = 0; }
+  kick() { clearTimeout(this.retryT); this.retryT = null; this.delay = 0; this.flush(); }
   async flush() {
-    if (!this.pending) return;
+    if (this.busy || !this.pending) return;
     this.busy = true;
-    const ch = this.pending; this.pending = null;
+    const snap = this.pending; this.pending = null;
     this.onStatus && this.onStatus('saving');
-    try { await this.s.save(ch); this.onStatus && this.onStatus('saved'); }
-    catch (e) { this.onStatus && this.onStatus('error', e.message); }
+    try {
+      await this.s.save(snap);
+      this.delay = 0;
+      if (this.useOutbox) clearOutboxEntry(this.s, snap);
+      this.onStatus && this.onStatus('saved');
+    } catch (e) {
+      if (!this.pending) this.pending = snap; // keep the newest snapshot for the retry
+      this.delay = Math.min(30000, this.delay ? this.delay * 2 : 2000);
+      this.onStatus && this.onStatus('error', this.useOutbox ? 'đã giữ trên máy, sẽ tự gửi lại' : e.message);
+      this.retryT = setTimeout(() => { this.retryT = null; this.flush(); }, this.delay);
+    }
     this.busy = false;
-    if (this.pending) this.flush();
+    if (this.pending && !this.retryT) this.flush();
   }
 }

@@ -61,7 +61,7 @@ export const CHATTER = {
       ['Tiểu Lan lại mất tích… lần này bà không khóc nữa. Bà tin con.', { a: 'st17', b: 'st18' }],
       ['Mặt con xanh quá, {name}. Ăn uống gì chưa?', { night: true }],
       ['Pet của con dễ thương thế. Nó có uống thuốc được không nhỉ?', { pet: true }],
-      ['Đạo Sĩ mà cũng mua thuốc à? Tự hồi máu được cơ mà!', { cls: 'taoist', lv: [10, 99] }],
+      ['Đạo Sĩ thì bùa sét đầy túi, nhưng máu thì vẫn phải mua ở đây nhé.', { cls: 'taoist', lv: [10, 99] }],
       ['Kiếm Khách toàn lao vào trước, nên toàn mua thuốc nhiều nhất.', { cls: 'swordsman' }],
     ],
     greet: [

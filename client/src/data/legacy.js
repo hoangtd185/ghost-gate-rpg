@@ -10,8 +10,10 @@ export const LEGACY_QUEST = { q_shuigui: 'q_water_ghost' };
 
 const SKILL_PREFIX = { k_: 'sw_', d_: 'ta_', t_: 'as_' };
 const SKILL_NAMES = /^(k_(basic|combo|wave|guard|p[1-4])|d_(basic|thunder|fire|heal|p[1-4])|t_(basic|triple|dash|poison|p[1-4]))$/;
+const SKILL_RENAME = { ta_heal: 'ta_orbs' }; // the Taoist heal was replaced by homing thunder orbs
 export function legacySkill(id) {
-  return SKILL_NAMES.test(id) ? SKILL_PREFIX[id.slice(0, 2)] + id.slice(2) : id;
+  const out = SKILL_NAMES.test(id) ? SKILL_PREFIX[id.slice(0, 2)] + id.slice(2) : id;
+  return SKILL_RENAME[out] || out;
 }
 
 const ITEM_RENAME = {

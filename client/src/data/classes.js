@@ -13,12 +13,12 @@ export const CLASSES = {
   },
   taoist: {
     id: 'taoist', name: 'Đạo Sĩ', main: 'int',
-    desc: 'Dùng bùa chú đánh xa, sét đánh nhiều mục tiêu, tự hồi máu.',
+    desc: 'Dùng bùa chú đánh xa, sét đánh nhiều mục tiêu, cầu sét truy đuổi dồn sát thương lên một kẻ địch.',
     base: { str: 3, dex: 4, int: 9, vit: 5 },
     hpGrow: 11, mpGrow: 9,
     weapon: 'staff',
     look: { robe: '#e6dcc4', trim: '#a1302a', pants: '#3a3428', hair: '#2a2420', hairStyle: 1, skin: '#f6d2b0', eye: '#7a3a2a' },
-    skills: ['ta_basic', 'ta_thunder', 'ta_fire', 'ta_heal'],
+    skills: ['ta_basic', 'ta_thunder', 'ta_fire', 'ta_orbs'],
   },
   assassin: {
     id: 'assassin', name: 'Thích Khách', main: 'dex',
@@ -49,8 +49,9 @@ export const SKILLS = {
     desc: 'Gọi sét đánh 3 quái gần nhất. Hệ Lôi.' },
   ta_fire: { name: 'Hỏa Long Phù', unlock: 6, mp: 24, cd: 3.5, type: 'proj', el: 'fire', proj: 'fire', speed: 230, range: 320, mult: 2.6, maxTargets: 10, pierce: true,
     desc: 'Rồng lửa xuyên thấu, thiêu cháy hàng loạt quái. Hệ Hỏa.' },
-  ta_heal: { name: 'Hộ Thân Phù', unlock: 10, mp: 35, cd: 25, type: 'heal', heal: 0.45, buff: { def: 0.3 }, dur: 15,
-    desc: 'Hồi 45% máu và tăng 30% phòng thủ 15 giây.' },
+  // type 'orbs': homing orbs that all focus one target (boss > named > elite > nearest), retargeting if it dies
+  ta_orbs: { name: 'Lôi Cầu Truy Hồn', unlock: 10, mp: 30, cd: 6, type: 'orbs', el: 'thunder', count: 4, speed: 360, range: 340, mult: 1.25, life: 3,
+    desc: 'Gọi 4 quả cầu sét lao theo truy bắt cùng một kẻ địch, ưu tiên boss và quái Tinh Anh. Kẻ địch gục giữa chừng thì cầu tự tìm mục tiêu gần nhất. Hệ Lôi.' },
 
   // ===== Assassin =====
   as_basic: { name: 'Phi Tiêu', unlock: 1, mp: 0, cd: 0.34, type: 'proj', proj: 'dart', speed: 440, range: 280, mult: 0.9, maxTargets: 1,

@@ -293,7 +293,7 @@ export class GameUI {
 
   saveStatus(state, msg) {
     const el = $('#hSave', this.root);
-    el.textContent = state === 'saving' ? 'Đang lưu…' : state === 'saved' ? 'Đã lưu' : 'Lưu thất bại: ' + (msg || '');
+    el.textContent = state === 'saving' ? 'Đang lưu…' : state === 'saved' ? 'Đã lưu' : 'Chưa gửi được: ' + (msg || '');
     el.className = 'hud-save show ' + state;
     clearTimeout(this._saveT);
     if (state !== 'saving') this._saveT = setTimeout(() => (el.className = 'hud-save'), 1800);
@@ -505,8 +505,8 @@ export class GameUI {
       <p class="muted">Dữ liệu được lưu tại: <b>${s.label}</b>${s.username ? ` · tài khoản <b>${escapeHtml(s.username)}</b>` : ''}. Game tự lưu mỗi 20 giây.</p>
       <div class="acts col"><button data-act="save">Lưu ngay</button><button data-act="switch">Đổi nhân vật</button>${s.kind === 'api' ? '<button data-act="logout" class="ghost">Đăng xuất</button>' : ''}</div>
       <h4>Phím điều khiển</h4>
-      <table class="keys"><tr><td><kbd>←</kbd><kbd>→</kbd></td><td>Di chuyển</td><td><kbd>Space</kbd> / <kbd>X</kbd></td><td>Nhảy (giữ = cao hơn, nhấn 2 lần = nhảy đôi)</td></tr>
-      <tr><td><kbd>↓</kbd>+<kbd>Space</kbd></td><td>Nhảy xuống bục</td><td><kbd>↓</kbd></td><td>Ngồi nghỉ (hồi nhanh)</td></tr>
+      <table class="keys"><tr><td><kbd>←</kbd><kbd>→</kbd></td><td>Di chuyển (nhấn đúp rồi giữ = chạy nhanh)</td><td><kbd>Space</kbd> / <kbd>X</kbd></td><td>Nhảy (giữ = cao hơn, nhấn 2 lần = nhảy đôi)</td></tr>
+      <tr><td><kbd>↓</kbd>+<kbd>Space</kbd> / <kbd>Ctrl</kbd>+<kbd>↓</kbd></td><td>Nhảy xuống bục</td><td><kbd>↓</kbd></td><td>Ngồi nghỉ (hồi nhanh)</td></tr>
       <tr><td><kbd>Z</kbd> / <kbd>J</kbd></td><td>Đánh thường (giữ)</td><td><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Kỹ năng</td></tr>
       <tr><td><kbd>1</kbd> <kbd>2</kbd></td><td>Bình máu / linh khí</td><td><kbd>↑</kbd> / <kbd>E</kbd></td><td>Qua cổng, nói chuyện</td></tr>
       <tr><td><kbd>I</kbd><kbd>C</kbd><kbd>K</kbd><kbd>L</kbd></td><td>Các cửa sổ</td><td><kbd>Enter</kbd></td><td>Chat</td></tr>

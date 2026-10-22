@@ -22,6 +22,9 @@ It plays like an MMO, but it is single-player: the world is populated by bots th
 - Chibi characters with big heads and big eyes. Every graphic is drawn in code; no art from any other game is used
 - **Zero dependencies**: the game engine is plain JavaScript on a canvas, and the server only uses Node built-ins (`node:http`, `node:sqlite`, `node:crypto`)
 
+
+> Picking up the project (new developer or AI)? Start with [HANDOFF.md](HANDOFF.md): architecture, content ids, conventions, traps, history and open items.
+
 ## Quick start on Windows
 
 **Step 1. Install Node.js** (one time only)
@@ -350,9 +353,9 @@ __game().loadMap('ghost_gate', 200) // teleport to the first boss
 
 | Key | Action |
 |---|---|
-| ← → | Move |
+| ← → | Move (double-tap and hold = sprint) |
 | Space / X | Jump (hold = higher, press again in the air = double jump) |
-| ↓ + Space | Drop down through a platform |
+| ↓ + Space / Ctrl + ↓ | Drop down through a platform |
 | ↓ (standing still) | Sit and rest, regenerates 3× faster |
 | Z / J (hold) | Basic attack |
 | A S D | Skills |

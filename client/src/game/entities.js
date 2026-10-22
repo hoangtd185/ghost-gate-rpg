@@ -69,7 +69,7 @@ export class Humanoid {
   frameIndex() {
     const fr = this.sheet.frames[this.anim];
     if (this.anim === 'atk') return this.atkT > this.atkDur * 0.55 ? fr[0] : fr[1];
-    const speed = this.anim === 'walk' ? 9 : 2.2;
+    const speed = this.anim === 'walk' ? (this.running ? 14 : 9) : 2.2;
     return fr[Math.floor(this.animT * speed) % fr.length];
   }
   draw(ctx, camX, alpha = 1) {

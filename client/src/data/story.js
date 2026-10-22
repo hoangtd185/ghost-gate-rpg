@@ -606,7 +606,7 @@ export const TUTORIAL_QUESTS = {
   tut_move: tut({
     name: 'Khinh Công Nhập Môn', npc: 'elder', lv: 1, target: 'djump', count: 3,
     text: 'Nhảy đôi 3 lần cho Trưởng Làng xem.',
-    hint: 'Nhấn Space (hoặc X) để nhảy, đang trên không nhấn thêm lần nữa để nhảy đôi. Giữ Space để nhảy cao hơn. ↓ + Space để nhảy xuống khỏi bục.',
+    hint: 'Nhấn Space (hoặc X) để nhảy, đang trên không nhấn thêm lần nữa để nhảy đôi. Giữ Space để nhảy cao hơn. ↓ + Space (hoặc Ctrl + ↓) để nhảy xuống khỏi bục. Nhấn đúp ← hoặc → rồi giữ để chạy nhanh.',
     intro: [
       ['elder', 'Khoan đi đã. Con nằm ba ngày, chân tay chắc cứng đờ cả rồi.'],
       ['elder', 'Thử nhảy xem nào: nhấn Space để nhảy, giữ lâu thì nhảy cao hơn. Đang trên không nhấn thêm lần nữa là nhảy đôi.'],
