@@ -401,6 +401,8 @@ On phones, touch buttons appear automatically the first time you touch the scree
 - **Elites** (★, gold name, glow): 3–7% depending on zone level. HP ×4, attack ×1.4, 1–2 random affixes, better drops.
 - **Affixes**: Reflect (bounces 18% of your damage back), Life Steal, Regeneration, Enrage, Self-Destruct (red warning circle, then explodes), Teleport, Frost (slows you), Poison, Shield. Some species always have one: ice golems reflect, poison frogs poison, lava beasts explode, ice bats slow…
 
+**Chieftains** (`CHIEF` in `data/affixes.js`): now and then (1.5% per spawn, max one per map) a regular monster spawns as a bigger "Đầu Lĩnh" with ×7 HP, harder hits and better drops.
+
 **Named bosses** (`NAMED` in `data/affixes.js`)
 
 - Story bosses: Bù Nhìn Đầu Đàn, Lão Đăng Quỷ, Băng Dực Vương, Huyết Thi Tướng. They only appear while the matching quest is active.

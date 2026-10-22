@@ -8,10 +8,16 @@ const TOP = 6; // room above for hair buns, hats, plumes
 
 // Pose: bob = lower the body, lean = tilt the torso, lf/lb = front/back leg angle,
 // a1/a2 = front upper arm / forearm angle (rad, 0 = hanging straight down, positive = forward),
-// b1/b2 = back arm, wd = weapon direction (0 = pointing straight ahead), sd = staff direction, eye = eye state
+// b1/b2 = back arm, wd = weapon direction (0 = pointing straight ahead), sd = staff direction, eye = eye state,
+// tilt = rotate the upper body forward around the hips (rad, used by the run cycle)
 const WALK = [0, 1, 2, 3, 4, 5].map((i) => {
   const p = (i / 6) * Math.PI * 2, s = Math.sin(p);
   return { bob: -Math.abs(s) * 1.1 + 0.6, lean: 0.8, lf: s * 0.6, lb: -s * 0.6, a1: 0.3 - s * 0.2, a2: 1.05, b1: s * 0.45, b2: 0.35, wd: 0.55 + s * 0.08, sd: -1.45, eye: 'open' };
+});
+// Run: upper body pitched forward, long strides, bent arms pumping opposite to the legs
+const RUN = [0, 1, 2, 3, 4, 5].map((i) => {
+  const p = (i / 6) * Math.PI * 2, s = Math.sin(p), c = Math.cos(p);
+  return { bob: -Math.abs(s) * 2 + 1.2, lean: 1.5, tilt: 0.32, lf: s * 1.05, lb: -s * 1.05, a1: 0.5 - s * 0.4, a2: 1.15, b1: s * 0.75 - 0.15, b2: 1.3, wd: 1.75 + c * 0.1, sd: -1.68 - s * 0.06, eye: 'focus' };
 });
 const POSES = [
   { bob: 0, lean: 0, lf: 0.2, lb: -0.16, a1: 0.32, a2: 1.08, b1: -0.12, b2: 0.35, wd: 0.5, sd: -1.5, eye: 'open' },          // 0 guard stance
@@ -23,8 +29,9 @@ const POSES = [
   { bob: 1, lean: 2, lf: 0.6, lb: -0.5, a1: 1.45, a2: 0.12, b1: -0.7, b2: 0.4, wd: 0.12, sd: -0.45, eye: 'focus' },          // 11 slash
   { bob: 0.8, lean: -2, lf: 0.2, lb: -0.4, a1: -0.5, a2: 0.9, b1: -0.9, b2: 0.5, wd: 2.0, sd: -1.95, eye: 'hurt' },          // 12 hit
   { bob: 6, lean: 0, lf: 1.45, lb: 1.35, a1: 0.45, a2: 1.0, b1: 0.3, b2: 0.6, wd: 0.25, sd: -1.15, eye: 'open', sit: true },  // 13 sit
+  ...RUN,                                                                                                                  // 14-19 run
 ];
-export const HUM_FRAMES = { idle: [0, 1, 0, 1, 0, 2], walk: [3, 4, 5, 6, 7, 8], jump: [9], atk: [10, 11], hurt: [12], sit: [13] };
+export const HUM_FRAMES = { idle: [0, 1, 0, 1, 0, 2], walk: [3, 4, 5, 6, 7, 8], jump: [9], atk: [10, 11], hurt: [12], sit: [13], run: [14, 15, 16, 17, 18, 19] };
 
 // ---------------- body parts ----------------
 function drawLeg(ctx, hx, hy, ang, pants, boot, fold) {
@@ -620,11 +627,16 @@ export function drawHumanoid(ctx, look, f) {
   if (look.sash) drawSash(ctx, bodyX, bodyY, look.sash, sw, b);
   if (look.tail) drawTail(ctx, bodyX, bodyY + 4, look.tail, sw);
   // back hair + back arm + legs
+  // upper body pitched forward around the hips (run); legs stay upright
+  const pitch = () => { if (P.tilt) { ctx.translate(bodyX, hipY); ctx.rotate(P.tilt); ctx.translate(-bodyX, -hipY); } };
+  ctx.save(); pitch();
   if (!look.hood) drawBackHair(ctx, look.hairStyle, look.hair, hcx, hcy);
   drawArm(ctx, bodyX - 3.6, bodyY + 1.2, P.b1, P.b2, robe, trim, skin, true);
   if (look.shoulder) drawShoulder(ctx, bodyX - 3.6, bodyY + 1.4, look.shoulder, true);
+  ctx.restore();
   drawLeg(ctx, 22.3 + l * 0.3, hipY, P.lb, shade(pants, -0.15), boot, P.fold);
   drawLeg(ctx, 26.6 + l * 0.3, hipY, P.lf, pants, boot, P.fold);
+  ctx.save(); pitch();
   // torso
   drawBody(ctx, bodyX, bodyY, look, sw);
   if (look.fur) drawFur(ctx, bodyX + 0.5, bodyY - 1, look.fur);
@@ -691,6 +703,7 @@ export function drawHumanoid(ctx, look, f) {
   if (look.crown) drawCrown(ctx, hcx, hcy, look.crown);
   else if (look.hat && !look.hood) drawHat(ctx, look.hat, look.hatColor || '#2a2a3a', hcx, hcy);
   if (!armUp) frontArm();
+  ctx.restore();
 }
 
 const humCache = new Map();

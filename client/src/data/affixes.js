@@ -22,6 +22,14 @@ export const ELITE_POOL = ['reflect', 'vampire', 'regen', 'enrage', 'explode', '
 //   3 (21+): leads its shots, attacks more often, backs off at low HP
 export function smartTier(lv) { return lv >= 21 ? 3 : lv >= 13 ? 2 : lv >= 6 ? 1 : 0; }
 // Elite spawn chance by level
+// Chieftain (mini boss): now and then a regular monster spawns as a bigger, tougher "Đầu Lĩnh".
+// At most one per map at a time. No extra affixes: it is simply beefier, hits harder and drops more.
+export const CHIEF = {
+  chance: 0.015, // per spawn
+  hp: 7, atk: 1.35, def: 1.25, exp: 6, gold: 6, scale: 1.45, luck: 0.12, minRarity: 1,
+  drops: [['stone', 1], ['stone', 0.5], ['GEM1', 0.7], ['hp_l', 0.6], ['mp_l', 0.5], ['protect', 0.08], ['mat_dew', 0.06]],
+};
+
 export function eliteChance(lv) { return lv >= 21 ? 0.07 : lv >= 13 ? 0.05 : lv >= 5 ? 0.03 : 0; }
 
 // Named monsters: based on a species, with multiplied HP/attack, bigger and recolored
