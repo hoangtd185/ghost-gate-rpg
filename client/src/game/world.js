@@ -687,10 +687,10 @@ export class GameWorld {
       const strong = m.def.boss || m.named || m.elite;
       if (it.slot === 'outfit') { data.r = 3; data.rare = true; }
       else if (it.type === 'equip') {
-        const roll = rollEquip(id, m.chief ? CHIEF.luck : strong ? 0.08 : 0);
+        const luck = m.chief ? CHIEF.luck : strong ? 0.08 : 0;
+        const minR = m.def.boss || m.named ? 2 : m.chief ? CHIEF.minRarity : 0;
+        const roll = rollEquip(id, luck, minR);
         data.r = roll.r; data.b = roll.bonus;
-        if (m.def.boss || m.named) data.r = Math.max(data.r, 2);
-        else if (m.chief) data.r = Math.max(data.r, CHIEF.minRarity);
         if (data.r >= 3) data.rare = true;
       }
       if (data.rare) {

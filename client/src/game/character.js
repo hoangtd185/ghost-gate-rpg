@@ -78,11 +78,13 @@ export function makeEntry(id, qty = 1, rarity = 0, bonus = {}) {
 }
 
 // Monster drops get a random rarity and bonus stats
-export function rollEquip(id, luck = 0) {
+// minRarity is applied before the bonuses are rolled, so a guaranteed rarity still gets its bonus stats
+export function rollEquip(id, luck = 0, minRarity = 0) {
   const it = ITEMS[id];
   let r = 0;
   const roll = Math.random() - luck;
   if (roll < 0.02) r = 3; else if (roll < 0.09) r = 2; else if (roll < 0.28) r = 1;
+  r = Math.max(r, minRarity);
   const bonus = {};
   const pool = ['str', 'dex', 'int', 'vit', 'hp', 'def', 'crit'];
   for (let i = 0; i < r; i++) {
