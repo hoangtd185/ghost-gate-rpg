@@ -20,10 +20,10 @@ It plays like an MMO, but it is single-player: the world is populated by bots th
 - A pet ghost (Tiểu Quỷ) that follows you and picks up loot in range, even on high platforms
 - Double jump and variable jump height
 - Chibi characters with big heads and big eyes. Every graphic is drawn in code; no art from any other game is used
-- **Zero dependencies**: the game engine is plain JavaScript on a canvas, and the server only uses Node built-ins (`node:http`, `node:sqlite`, `node:crypto`)
+- **Plain JavaScript on a canvas**, with a small Node server (`node:http`, `node:sqlite`, `node:crypto`). No runtime dependencies yet; external libraries are allowed when they earn their place (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 
 
-> Picking up the project (new developer or AI)? Start with [HANDOFF.md](HANDOFF.md): architecture, content ids, conventions, traps, history and open items.
+> Picking up the project (new developer or AI)? Start with [HANDOFF.md](HANDOFF.md) (content ids, conventions, traps, history, open items) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (stack, why each technology was chosen, saving/queue design, decisions log, multiplayer plan). AI agents also read [CLAUDE.md](CLAUDE.md).
 
 ## Quick start on Windows
 
@@ -78,7 +78,7 @@ npm start
 ## Requirements
 
 - **Node.js 22.13 or newer** (for `node:sqlite`). Check with `node -v`.
-- No `npm install` needed.
+- Playing and running the server need no `npm install` (no runtime dependencies yet). Run `npm install` only to run the tests (it installs `playwright-core`), then `npm run uat:browser` once.
 
 ## Scripts
 
@@ -89,6 +89,9 @@ npm start
 | `npm start` | Runs the server in production mode, serving the built file |
 | `npm run check` | Scans the files that would be committed for leaked secrets |
 | `npm run hooks` | Installs a git pre-commit hook that runs `npm run check` on every commit |
+| `npm test` | Unit tests (`node --test`): data integrity, character model, config. A few seconds, no browser |
+| `npm run uat` | Builds the client and runs every end-to-end acceptance scenario in `tests/e2e/` in headless Chromium (about 3–4 minutes) |
+| `npm run uat:browser` | One-time: downloads the Chromium used by the scenarios (after `npm install`) |
 
 ## Build
 
@@ -236,7 +239,7 @@ git status         # double-check: no .env, no data/
 git commit -m "Quỷ Môn Quan"
 ```
 
-`npm run check` (`tools/check-secrets.mjs`) blocks `.env` files, databases, key files, and content that looks like GitHub / AWS / Google / OpenAI tokens, private keys, or `SECRET=` / `PASSWORD=` assignments with a value. GitHub Actions (`.github/workflows/ci.yml`) runs the same scan, builds the client and boots the server on every push.
+`npm run check` (`tools/check-secrets.mjs`) blocks `.env` files, databases, key files, and content that looks like GitHub / AWS / Google / OpenAI tokens, private keys, or `SECRET=` / `PASSWORD=` assignments with a value. GitHub Actions (`.github/workflows/ci.yml`) runs the same scan, builds the client and boots the server on every push, runs the unit tests, then the end-to-end acceptance scenarios (`npm run uat`) in headless Chromium; screenshots are uploaded as the `uat-screenshots` artifact.
 
 **If a secret was pushed by mistake:** deleting it in a new commit is not enough, because git history still has it. Rotate `TOKEN_SECRET` immediately (players just have to log in again), then clean the history.
 
