@@ -99,10 +99,28 @@ export async function startServer() {
     env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, NODE_ENV: 'development', LOGIN_LIMIT_PER_MIN: '1000', API_LIMIT_PER_MIN: '10000' },
     stdio: 'ignore',
   });
+  // Wait for the server process to exit before removing its data folder: on Windows the
+  // SQLite files stay locked until the process is gone. Cleanup failures never fail a test.
+  const stop = async () => {
+    if (proc.exitCode === null && proc.signalCode === null) {
+      const exited = new Promise((r) => proc.once('exit', r));
+      proc.kill();
+      await Promise.race([exited, new Promise((r) => setTimeout(r, 5000))]);
+    }
+    try { fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
+    catch (e) { console.warn(`could not remove ${dataDir}: ${e.code}`); }
+  };
   const url = `http://127.0.0.1:${port}/`;
-  for (let i = 0; i < 50; i++) {
-    try { if ((await fetch(url + 'api/health')).ok) break; } catch { /* not up yet */ }
-    await new Promise((r) => setTimeout(r, 200));
+  let healthy = false;
+  for (let i = 0; i < 50 && !healthy; i++) {
+    if (proc.exitCode !== null || proc.signalCode !== null) break; // crashed on startup
+    try { healthy = (await fetch(url + 'api/health')).ok; } catch { /* not up yet */ }
+    if (!healthy) await new Promise((r) => setTimeout(r, 200));
+  }
+  if (!healthy) {
+    const why = proc.exitCode !== null || proc.signalCode !== null ? `exited early (code ${proc.exitCode}, signal ${proc.signalCode})` : 'did not answer /api/health within 10 s';
+    await stop(); // callers never get a handle to clean up, so do it here
+    throw new Error(`Test server on port ${port} ${why}`);
   }
   return {
     url,
@@ -114,17 +132,7 @@ export async function startServer() {
       });
       return r.json();
     },
-    // Wait for the server process to exit before removing its data folder: on Windows the
-    // SQLite files stay locked until the process is gone. Cleanup failures never fail a test.
-    async stop() {
-      if (proc.exitCode === null) {
-        const exited = new Promise((r) => proc.once('exit', r));
-        proc.kill();
-        await Promise.race([exited, new Promise((r) => setTimeout(r, 5000))]);
-      }
-      try { fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
-      catch (e) { console.warn(`could not remove ${dataDir}: ${e.code}`); }
-    },
+    stop,
   };
 }
 

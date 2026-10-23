@@ -38,8 +38,16 @@ describe('combat systems', { timeout: 300_000 }, () => {
 
   it('ice golems reflect damage', async () => {
     await E("(() => { const w = __game(); w.loadMap('ice_cave', 300); w.player.x = 300; w.player.y = 250; })()"); await page.waitForTimeout(800);
-    const [hpBefore, hpAfter] = await E("(() => { const w = __game(); const m = w.monsters.find((m) => m.id === 'golem'); const hp0 = w.ch.hp; w.damageMonster(m, 3, 'player'); return [hp0, w.ch.hp]; })()");
-    assert.ok(hpAfter < hpBefore);
+    // A fresh plain golem: a random elite could roll a Guard shield (absorbs the hit, so nothing is reflected)
+    // and a random chieftain has more defense. Reflect only depends on the species affix.
+    const r = await E(`(() => { const w = __game(), p = w.player, M = window.__Monster;
+      const m = new M('golem', p.x + 40, p.standY, [p.x + 38, p.x + 42], null, { elite: false, chief: false, lvBonus: 0 });
+      m.alpha = 1; w.monsters.push(m);
+      const hp0 = w.ch.hp; w.damageMonster(m, 3, 'player');
+      return { hp0, hp1: w.ch.hp, affix: [...m.affix], dealt: m.maxHp - m.hp }; })()`);
+    assert.ok(r.affix.includes('reflect') && !r.affix.includes('shield'), JSON.stringify(r));
+    assert.ok(r.dealt > 0, `the hit landed: ${JSON.stringify(r)}`);
+    assert.ok(r.hp1 < r.hp0, `damage was reflected: ${JSON.stringify(r)}`);
   });
 
   it('elites get extra affixes', async () => {
