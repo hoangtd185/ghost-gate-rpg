@@ -1,10 +1,16 @@
-# On every push / pull request: scan for committed secrets, build the client, smoke-test the server
+# On every push / pull request:
+#   check - scan for committed secrets, unit tests, build the client, smoke-test the server in production mode
+#   uat   - end-to-end acceptance scenarios (tests/e2e) in headless Chromium
 name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -15,6 +21,8 @@ jobs:
           node-version: 22
       - name: Scan for secrets
         run: node tools/check-secrets.mjs
+      - name: Unit tests
+        run: npm test
       - name: Build client
         run: node tools/build.mjs
       - name: Smoke-test server
@@ -22,3 +30,27 @@ jobs:
           TOKEN_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))") NODE_ENV=production DATA_DIR=/tmp/qmq PORT=3999 node server/src/index.js &
           sleep 2
           curl -fsS http://localhost:3999/api/health
+
+  uat:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Install Chromium
+        run: npx playwright-core install --with-deps chromium
+      - name: Run UAT scenarios
+        run: npm run uat
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-screenshots
+          path: tests/e2e/out/
+          if-no-files-found: ignore
+          retention-days: 7

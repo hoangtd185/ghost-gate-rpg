@@ -11,7 +11,13 @@
     "dev": "node --watch server/src/index.js --dev",
     "build": "node tools/build.mjs",
     "start": "node server/src/index.js",
+    "test": "node --test \"tests/unit/*.test.mjs\"",
+    "uat": "node tools/build.mjs && node --test --test-concurrency=1 \"tests/e2e/*.test.mjs\"",
+    "uat:browser": "playwright-core install chromium",
     "check": "node tools/check-secrets.mjs",
     "hooks": "node tools/check-secrets.mjs --install-hook"
+  },
+  "devDependencies": {
+    "playwright-core": "1.56.1"
   }
 }
