@@ -69,7 +69,8 @@ CREATE TABLE IF NOT EXISTS quests (
 export function openDb(file) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  // synchronous = FULL: a save that got its "ok" survives a power cut, not only a process crash
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
   migrate(db);
   return new GameDb(db);

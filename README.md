@@ -1,7 +1,7 @@
 # Quỷ Môn Quan (Ghost Gate)
 
 A 2D side-scrolling RPG in the style of Ghost Online / MapleStory, set in an Asian wuxia world full of ghosts and demons.
-It plays like an MMO, but it is single-player: the world is populated by bots that pretend to be other players (they hunt, rest, chat, and reply when you talk).
+It plays like an MMO. On the Node server, real players on the same map see each other move and can chat (map chat, or world chat with a leading `!`). Monsters and loot are still per player for now, and bots that pretend to be other players (they hunt, rest, chat, and reply when you talk) keep the maps lively. See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 
 - **3 classes**: Kiếm Khách (swordsman, melee), Đạo Sĩ (taoist, talismans and elements), Thích Khách (assassin, throwing darts)
 - **4 active skills + 4 passive skills per class**, arranged in a skill tree, with a respec option
@@ -20,7 +20,7 @@ It plays like an MMO, but it is single-player: the world is populated by bots th
 - A pet ghost (Tiểu Quỷ) that follows you and picks up loot in range, even on high platforms
 - Double jump and variable jump height
 - Chibi characters with big heads and big eyes. Every graphic is drawn in code; no art from any other game is used
-- **Plain JavaScript on a canvas**, with a small Node server (`node:http`, `node:sqlite`, `node:crypto`). No runtime dependencies yet; external libraries are allowed when they earn their place (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
+- **Plain JavaScript on a canvas**, with a small Node server (`node:http`, `node:sqlite`, `node:crypto`). One runtime dependency, `ws` (WebSocket, multiplayer), so run `npm install` before starting the server; external libraries are allowed when they earn their place (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 
 
 > Picking up the project (new developer or AI)? Start with [HANDOFF.md](HANDOFF.md) (content ids, conventions, traps, history, open items) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (stack, why each technology was chosen, saving/queue design, decisions log, multiplayer plan). AI agents also read [CLAUDE.md](CLAUDE.md).
@@ -51,8 +51,11 @@ cd path\to\quy-mon-quan
 
 ```powershell
 copy .env.example .env
+npm install
 npm run dev
 ```
+
+`npm install` is needed once (and again after pulling changes to `package.json`): the server uses the `ws` package for multiplayer and will not start without it.
 
 When you see `Quỷ Môn Quan đang chạy: http://localhost:3000`, open that address in your browser.
 The first time, click "Tạo tài khoản" (create account), pick a name, create a character and play.
@@ -68,17 +71,20 @@ The line `ExperimentalWarning: SQLite is an experimental feature` is a normal No
 **Step 5. Production build**
 
 ```powershell
+npm ci --omit=dev
 npm run build
 npm start
 ```
 
+`npm ci --omit=dev` installs only the runtime dependencies (`ws`) exactly as pinned in `package-lock.json`.
 `npm run build` creates `client/dist/index.html` (a single file containing the whole game).
 `npm start` runs the server against the built file. This is also the command hosting platforms run.
 
 ## Requirements
 
 - **Node.js 22.13 or newer** (for `node:sqlite`). Check with `node -v`.
-- Playing and running the server need no `npm install` (no runtime dependencies yet). Run `npm install` only to run the tests (it installs `playwright-core`), then `npm run uat:browser` once.
+- **Run `npm install` (or `npm ci`) before `npm run dev` or `npm start`.** The server needs the `ws` runtime dependency (WebSocket, multiplayer); without it it fails with `Cannot find package 'ws'`. `npm install` also installs `playwright-core` for the tests; run `npm run uat:browser` once after it.
+- Opening `client/dist/index.html` straight from disk (single-player, no server) needs no install.
 
 ## Scripts
 
@@ -121,6 +127,7 @@ The server is a plain Node process that listens on `PORT` and keeps its database
 
 ```bash
 git clone <your repo> quy-mon-quan && cd quy-mon-quan
+npm ci --omit=dev
 npm run build
 cp .env.example .env
 # edit .env: NODE_ENV=production, DATA_DIR=/var/lib/quymonquan, TOKEN_SECRET=<random string>, TRUST_PROXY=true if Nginx/Caddy sits in front
@@ -135,7 +142,17 @@ pm2 start server/src/index.js --name quymonquan
 pm2 save && pm2 startup
 ```
 
-For a domain name and HTTPS, put Nginx or Caddy in front and proxy to `localhost:3000`.
+For a domain name and HTTPS, put Nginx or Caddy in front and proxy to `localhost:3000`. Multiplayer uses a WebSocket at `/ws` on the same port: Caddy forwards it automatically; Nginx needs the upgrade headers:
+
+```nginx
+location /ws {
+  proxy_pass http://localhost:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_read_timeout 120s;
+}
+```
 
 ### Option 2: Docker
 
@@ -191,7 +208,7 @@ Railway rebuilds and redeploys automatically; the data in the volume is kept.
 ### Option 3b: Render / Fly.io
 
 Same idea as Railway: create a service from the GitHub repo and let the platform pick up the `Dockerfile`.
-Without Docker: build command `npm run build`, start command `npm start`.
+Without Docker: build command `npm ci --omit=dev && npm run build`, start command `npm start`.
 Attach a **Persistent Disk** at `/data` and set `DATA_DIR=/data`, `NODE_ENV=production`, `TRUST_PROXY=true` and `TOKEN_SECRET`.
 Note: Render's free tier has no persistent disk, so data is lost on every redeploy.
 
@@ -256,7 +273,7 @@ git commit -m "Quỷ Môn Quan"
 **Limits to keep in mind:**
 
 - Client code (`client/`) is always visible in the browser, even if the repo is private. Never put secrets in client code.
-- Game logic runs in the browser and the result is sent to the server, so the server rejects impossible values but cannot fully prevent cheating. That is fine for a single-player game.
+- Game logic runs in the browser and the result is sent to the server, so the server rejects impossible values but cannot fully prevent cheating. Multiplayer stage 2 moves drops and pickups to the server (see docs/MULTIPLAYER.md).
 - The `__game()` debug helpers are only exposed on `localhost`, when opening the file locally, or with `?debug` in the URL.
 - To keep the source private, set the GitHub repo to **Private**. If you make it public, add a LICENSE file stating how others may use the code.
 
@@ -289,9 +306,11 @@ client/
       chatter.js        picks context-aware NPC lines without repeating
     ui/                 HUD, inventory / skills / quests / shop / forge / crafting windows, login screens
     storage/            the 3 storage backends (API / Claude / browser)
+    net/realtime.js     WebSocket client: position sync, other players, chat, reconnect
     style.css
 server/src/
   index.js              HTTP server, API routing, security headers, rate limits, static files
+  realtime.js           WebSocket server at /ws: presence, movement, chat (multiplayer stage 1)
   config.js             reads environment variables and .env
   db.js                 SQLite schema, migrations, character read / write
   auth.js               password hashing (scrypt), login tokens (HMAC)
@@ -376,7 +395,7 @@ __game().loadMap('ghost_gate', 200) // teleport to the first boss
 | 1 / 2 | HP potion / MP potion |
 | ↑ / E | Use portal, talk to NPC |
 | I C K L | Inventory, Character, Skills, Quests |
-| Enter | Chat (bots reply) |
+| Enter | Chat with players on this map (bots reply); start with `!` for world chat |
 | P | Summon / dismiss the pet |
 | Esc | Close window / system menu |
 

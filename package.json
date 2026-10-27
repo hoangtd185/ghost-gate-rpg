@@ -1,7 +1,7 @@
 {
   "name": "quy-mon-quan",
   "version": "1.0.0",
-  "description": "2D side-scrolling wuxia ghost RPG (single player with bots)",
+  "description": "2D side-scrolling wuxia ghost RPG (online presence and chat, bots fill empty maps)",
   "type": "module",
   "private": true,
   "engines": {
@@ -16,6 +16,9 @@
     "uat:browser": "playwright-core install chromium",
     "check": "node tools/check-secrets.mjs",
     "hooks": "node tools/check-secrets.mjs --install-hook"
+  },
+  "dependencies": {
+    "ws": "8.18.0"
   },
   "devDependencies": {
     "playwright-core": "1.56.1"

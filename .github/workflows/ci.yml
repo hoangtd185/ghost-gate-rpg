@@ -21,6 +21,8 @@ jobs:
           node-version: 22
       - name: Scan for secrets
         run: node tools/check-secrets.mjs
+      - name: Install runtime dependencies
+        run: npm ci --omit=dev
       - name: Unit tests
         run: npm test
       - name: Build client
@@ -28,8 +30,8 @@ jobs:
       - name: Smoke-test server
         run: |
           TOKEN_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))") NODE_ENV=production DATA_DIR=/tmp/qmq PORT=3999 node server/src/index.js &
-          sleep 2
-          curl -fsS http://localhost:3999/api/health
+          for i in $(seq 1 20); do curl -fsS http://localhost:3999/api/health && exit 0; sleep 0.5; done
+          echo "server did not start"; exit 1
 
   uat:
     needs: check
@@ -41,7 +43,7 @@ jobs:
         with:
           node-version: 22
       - name: Install dependencies
-        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+        run: npm ci
       - name: Install Chromium
         run: npx playwright-core install --with-deps chromium
       - name: Run UAT scenarios

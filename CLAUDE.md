@@ -1,12 +1,13 @@
 # CLAUDE.md
 
-Quỷ Môn Quan (ghost-gate): a 2D side-scrolling wuxia/ghost RPG in the style of Ghost Online / MapleStory. It is single-player with fake-player bots today, and multiplayer is planned. Browser canvas client, small Node + SQLite server, one monorepo.
+Quỷ Môn Quan (ghost-gate): a 2D side-scrolling wuxia/ghost RPG in the style of Ghost Online / MapleStory. Multiplayer stage 1 is in (presence, movement, chat over WebSocket); monsters, loot and saves are still per client, and fake-player bots fill maps. Browser canvas client, small Node + SQLite server, one monorepo.
 
 ## Read first
 
 1. `HANDOFF.md` — content ids, how systems work, conventions, traps, history, open items.
 2. `docs/ARCHITECTURE.md` — stack and *why*, the save queue, the decisions log, the dependency policy, the multiplayer plan.
-3. `README.md` — setup, scripts, env variables, deployment, API.
+3. `docs/MULTIPLAYER.md` — realtime protocol, data-safety design for stage 2, why no message broker.
+4. `README.md` — setup, scripts, env variables, deployment, API.
 
 Do not re-derive what these files already say. When you change something they describe, update them in the same change.
 
@@ -35,6 +36,7 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 | Renamed an id that can be stored in a save | Add old → new to `client/src/data/legacy.js` |
 | New monster sprite | Draw in `client/src/gfx/monsters.js`, register it in `MAKERS` |
 | New outfit part | Draw helper in `client/src/gfx/humanoid.js` |
+| New realtime message | `server/src/realtime.js` + `client/src/net/realtime.js`; document it in the protocol table in `docs/MULTIPLAYER.md` |
 
 `config.js` and `data/*` are imported by the server too, so keep them plain data (no DOM, no browser-only or Node-only imports).
 
@@ -50,6 +52,7 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 - `.gitignore` / `.dockerignore` must use `/data/` with the leading slash. A plain `data/` hides `client/src/data/`.
 - `storage.js` uses `this.col.doc(...)` (artifact DB API). It is not the old `doc` element id; never rename it.
 - After accepting a quest, call `world.refreshNpcs()` (NPCs with `until` / `hideWhile`).
+- Realtime: never trust client-sent appearance or items; the server reads them from the database. `world.loadMap` must call `net.entered()` so the server resends the map's players.
 - `rollEquip(id, luck, minRarity)`: pass the minimum rarity in. Raising `r` afterwards leaves items without bonus stats.
 
 ## Git and PRs

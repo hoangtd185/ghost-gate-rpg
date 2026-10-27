@@ -11,6 +11,7 @@ import { MAPS } from './data/maps.js';
 import { monsterSheet } from './gfx/monsters.js';
 import { drawFrame } from './gfx/draw.js';
 import { GAME } from './config.js';
+import { Realtime } from './net/realtime.js';
 
 const stage = document.getElementById('stage');
 const canvas = document.getElementById('game');
@@ -20,6 +21,7 @@ const screenRoot = document.getElementById('screen');
 
 const input = new Input();
 let world = null, ui = null, saver = null, storage = null, autoSaveT = 0;
+let net = null; // realtime multiplayer connection (server backend only)
 let scale = 1;
 
 // Keep 16:9, sharp canvas for the device pixel ratio
@@ -70,7 +72,10 @@ function doSave(onExit = false) {
 
 function enterGame(ch, isNew) {
   hudRoot.hidden = false;
-  if (!saver) saver = new SaveQueue(storage, (st, msg) => ui && ui.world && ui.saveStatus(st, msg));
+  if (!saver) saver = new SaveQueue(storage, (st, msg) => {
+    if (ui && ui.world) ui.saveStatus(st, msg);
+    if (st === 'saved' && net) net.saved(); // others see our new gear/level/title
+  });
   const hooks = {
     toast: (m, k) => ui.toast(m, k),
     chat: (n, m, t) => ui.addChat(n, m, t),
@@ -86,6 +91,14 @@ function enterGame(ch, isNew) {
   };
   world = new GameWorld(ch, hooks);
   ui.attach(world);
+  if (storage.kind === 'api') {
+    net = new Realtime(storage, {
+      chat: (name, text, type) => ui.addChat(name, text, type),
+      online: (n) => ui.setOnline(n),
+      toast: (m, k) => ui.toast(m, k),
+    });
+    net.attach(world);
+  }
   ui.setMap(world.map);
   ui.addChat('Hệ thống', `Chào mừng ${ch.name} đến với Quỷ Môn Quan!`, 'system');
   if (isNew) {
@@ -95,6 +108,7 @@ function enterGame(ch, isNew) {
 }
 
 function exitGame() {
+  if (net) { net.disconnect(); net = null; }
   doSave();
   world = null;
   ui.detach();
@@ -108,7 +122,7 @@ async function boot() {
   ui = new GameUI(hudRoot, input, {
     save: (manual) => { doSave(); if (manual === true) ui.toast('Đã lưu tiến trình'); },
     exit: exitGame,
-    logout: () => { doSave(true); saver && saver.reset(); storage.logout(); world = null; ui.detach(); hudRoot.hidden = true; screens.showAuth('login'); },
+    logout: () => { doSave(true); saver && saver.reset(); if (net) { net.disconnect(); net = null; } storage.logout(); world = null; ui.detach(); hudRoot.hidden = true; screens.showAuth('login'); },
     storage,
   });
   screens = new Screens(screenRoot, storage, (ch, isNew) => enterGame(ch, isNew));

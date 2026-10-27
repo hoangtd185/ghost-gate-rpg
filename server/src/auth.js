@@ -38,13 +38,17 @@ export function signToken(secret, payload, days = 30) {
   return `${body}.${sig}`;
 }
 
+// Returns the token payload, or null for anything invalid. Never throws on malformed input.
 export function verifyToken(secret, token) {
-  if (!token || !token.includes('.')) return null;
+  if (typeof token !== 'string' || !token.includes('.')) return null;
   const [body, sig] = token.split('.');
-  const expect = crypto.createHmac('sha256', secret).update(body).digest('base64url');
-  if (sig.length !== expect.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return null;
+  const expect = Buffer.from(crypto.createHmac('sha256', secret).update(body).digest('base64url'));
+  const got = Buffer.from(sig || '');
+  // compare byte lengths: timingSafeEqual throws when they differ (a multi-byte character has the same
+  // string length but more bytes)
+  if (got.length !== expect.length || !crypto.timingSafeEqual(got, expect)) return null;
   try {
     const p = JSON.parse(Buffer.from(body, 'base64url').toString());
-    return p.exp > Date.now() ? p : null;
+    return p && typeof p === 'object' && p.exp > Date.now() ? p : null;
   } catch { return null; }
 }
