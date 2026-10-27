@@ -38,7 +38,7 @@ JSON text frames, `t` is the message type.
 
 - Auth at connect; bad token or someone else's character → close code 4003.
 - One connection per character: the newest wins, the old one gets `kicked` and close code 4000 (it does not reconnect, so two tabs do not fight).
-- Position messages are rate-limited (20/s) and clamped to the map; the map id must exist; the animation name must be known.
+- Position messages are rate-limited (20/s) and clamped to the map; the map id must exist; the animation name must be known. Map entries (`enter`, which answer with a full snapshot) have their own limit (4/s): extra ones are merged into one, applied when the window opens.
 - Chat: token bucket (burst 5, one token per 1.5 s), control characters stripped, 80 characters max. The client escapes HTML when drawing.
 - Appearance always comes from the saved character, never from the message, so nobody can show gear they do not own.
 - `maxPayload` 4 KB, a 5 s hello timeout, ping every 25 s to drop dead connections.

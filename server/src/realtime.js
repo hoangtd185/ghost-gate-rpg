@@ -50,6 +50,16 @@ export function attachRealtime(server, { db, secret }) {
     if (same) s.dirty = true; else toMap(map, { t: 'join', p: pub(s) }, s);
   }
 
+  // Apply a position update that passed its rate limit
+  function applyPos(s, m) {
+    const map = String(m.map || '');
+    if (!MAPS[map]) return;
+    s.x = clamp(num(m.x), 0, MAPS[map].width); s.y = clamp(num(m.y), -200, 400);
+    s.vx = clamp(num(m.vx), -1000, 1000); s.f = m.f < 0 ? -1 : 1; s.a = ANIMS.has(m.a) ? m.a : 'idle';
+    // `enter`: the client (re)loaded the map and cleared its player list, so it needs a fresh snapshot
+    if (map !== s.map || m.enter) enterMap(s, map); else s.dirty = true;
+  }
+
   function leave(s) {
     if (players.get(s.id) !== s) return;
     players.delete(s.id);
@@ -82,7 +92,7 @@ export function attachRealtime(server, { db, secret }) {
         const old = players.get(ch.id);
         if (old) { send(old, { t: 'kicked', reason: 'elsewhere' }); old.ws.close(4000, 'elsewhere'); leave(old); }
         s = { ws, id: ch.id, uid: user.uid, name: ch.name, app: appearanceOf(ch), map: null, x: 0, y: 0, vx: 0, f: 1, a: 'idle',
-          dirty: false, posAt: 0, chatTokens: NET.chatBurst, chatAt: Date.now() };
+          dirty: false, posAt: 0, enterAt: 0, enterTimer: null, pendingEnter: null, chatTokens: NET.chatBurst, chatAt: Date.now() };
         players.set(s.id, s);
         send(s, { t: 'welcome', id: s.id, online: players.size });
         broadcastOnline();
@@ -90,15 +100,27 @@ export function attachRealtime(server, { db, secret }) {
       }
 
       if (m.t === 'pos') {
+        // Rate limits: plain moves at NET.maxPosPerSec; map entries (each sends a snapshot) at the looser
+        // NET.maxEnterPerSec. An entry that comes too soon is not dropped (the client would never get its
+        // snapshot): the newest one is kept and applied when its window opens.
         const now = Date.now();
-        if (!m.enter && now - s.posAt < 1000 / NET.maxPosPerSec) return; // rate limit (map entries always pass)
-        s.posAt = now;
-        const map = String(m.map || '');
-        if (!MAPS[map]) return;
-        s.x = clamp(num(m.x), 0, MAPS[map].width); s.y = clamp(num(m.y), -200, 400);
-        s.vx = clamp(num(m.vx), -1000, 1000); s.f = m.f < 0 ? -1 : 1; s.a = ANIMS.has(m.a) ? m.a : 'idle';
-        // `enter`: the client (re)loaded the map and cleared its player list, so it needs a fresh snapshot
-        if (map !== s.map || m.enter) enterMap(s, map); else s.dirty = true;
+        if (m.enter) {
+          const wait = s.enterAt + 1000 / NET.maxEnterPerSec - now;
+          if (wait > 0) {
+            s.pendingEnter = m;
+            if (!s.enterTimer) s.enterTimer = setTimeout(() => {
+              s.enterTimer = null;
+              const p = s.pendingEnter; s.pendingEnter = null;
+              if (p && players.get(s.id) === s) { s.enterAt = Date.now(); applyPos(s, p); }
+            }, wait);
+            return;
+          }
+          s.enterAt = now;
+        } else {
+          if (now - s.posAt < 1000 / NET.maxPosPerSec) return;
+          s.posAt = now;
+        }
+        applyPos(s, m);
       } else if (m.t === 'chat') {
         const now = Date.now();
         s.chatTokens = Math.min(NET.chatBurst, s.chatTokens + (now - s.chatAt) / NET.chatRefillMs); s.chatAt = now;
@@ -119,7 +141,7 @@ export function attachRealtime(server, { db, secret }) {
       }
     });
 
-    ws.on('close', () => { clearTimeout(helloTimer); if (s) leave(s); });
+    ws.on('close', () => { clearTimeout(helloTimer); if (s) { clearTimeout(s.enterTimer); leave(s); } });
     ws.on('error', () => {});
   });
 

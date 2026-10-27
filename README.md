@@ -20,7 +20,7 @@ It plays like an MMO. On the Node server, real players on the same map see each 
 - A pet ghost (Tiểu Quỷ) that follows you and picks up loot in range, even on high platforms
 - Double jump and variable jump height
 - Chibi characters with big heads and big eyes. Every graphic is drawn in code; no art from any other game is used
-- **Plain JavaScript on a canvas**, with a small Node server (`node:http`, `node:sqlite`, `node:crypto`). No runtime dependencies yet; external libraries are allowed when they earn their place (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
+- **Plain JavaScript on a canvas**, with a small Node server (`node:http`, `node:sqlite`, `node:crypto`). One runtime dependency, `ws` (WebSocket, multiplayer), so run `npm install` before starting the server; external libraries are allowed when they earn their place (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 
 
 > Picking up the project (new developer or AI)? Start with [HANDOFF.md](HANDOFF.md) (content ids, conventions, traps, history, open items) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (stack, why each technology was chosen, saving/queue design, decisions log, multiplayer plan). AI agents also read [CLAUDE.md](CLAUDE.md).

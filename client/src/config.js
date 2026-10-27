@@ -107,6 +107,7 @@ export const GAME = {
     sendHz: 10, // client position updates per second (only when something changed)
     tickHz: 10, // server state broadcasts per second
     maxPosPerSec: 20, // server drops position updates beyond this
+    maxEnterPerSec: 4, // map entries (a fresh snapshot each): extra ones within this window are merged into one
     interpDelayMs: 120, // remote players are drawn this far in the past for smooth movement
     chatMaxLen: 80,
     chatBurst: 5, // chat rate limit: up to 5 messages at once, then one per chatRefillMs

@@ -111,5 +111,23 @@ describe('multiplayer presence and chat', { timeout: 180_000 }, () => {
     assert.equal((await server.api('health')).ok, true);
   });
 
+  it('a flood of map entries is throttled, and the last one still gets its snapshot', async () => {
+    const { WebSocket } = await import('ws');
+    const { newCharacter } = await import('../../client/src/game/character.js');
+    const { token } = await server.api('auth/register', { username: uniqueName('flood'), password: 'matkhau99' });
+    const ch = (await server.api('characters', { character: newCharacter('Flood' + (Date.now() % 1e4), 'swordsman') }, token)).character;
+    const ws = new WebSocket(server.url.replace('http', 'ws') + 'ws');
+    const snaps = [];
+    ws.on('message', (d) => { const m = JSON.parse(d.toString()); if (m.t === 'snap') snaps.push(m.map); });
+    await new Promise((r) => ws.on('open', r));
+    ws.send(JSON.stringify({ t: 'hello', token, char: ch.id }));
+    await new Promise((r) => setTimeout(r, 300));
+    for (let i = 0; i < 60; i++) ws.send(JSON.stringify({ t: 'pos', map: i === 59 ? 'forest' : 'village', x: 100 + i, y: 250, vx: 0, f: 1, a: 'idle', enter: 1 }));
+    await new Promise((r) => setTimeout(r, 1200));
+    ws.close();
+    assert.ok(snaps.length >= 2 && snaps.length <= 4, `60 entries -> ${snaps.length} snapshots`);
+    assert.equal(snaps.at(-1), 'forest', 'the newest entry is the one applied');
+  });
+
   it('no page errors', () => assert.deepEqual(errors, []));
 });
