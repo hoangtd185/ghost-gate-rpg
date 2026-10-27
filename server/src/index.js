@@ -1,4 +1,4 @@
-// Game server: REST API + serves the client files. Uses only Node built-ins.
+// Game server: REST API + realtime WebSocket (presence, chat) + serves the client files.
 //   node server/src/index.js          -> serves the build (client/dist), use this when deploying
 //   node server/src/index.js --dev    -> serves the client/ sources directly, for editing and testing
 //   Configure via environment variables or a .env file (see .env.example)
@@ -9,6 +9,7 @@ import { config, ROOT } from './config.js';
 import { openDb } from './db.js';
 import { hashPassword, verifyPassword, signToken, verifyToken, loadSecret } from './auth.js';
 import { GAME } from '../../client/src/config.js'; // game rules shared with the client
+import { attachRealtime } from './realtime.js';
 
 const DEV = process.argv.includes('--dev');
 const DB_FILE = path.join(config.dataDir, 'game.db');
@@ -133,7 +134,7 @@ const route = (method, pattern, handler, needAuth = false) => {
   routes.push({ method, re, keys, handler, needAuth });
 };
 
-route('GET', '/api/health', () => [200, { ok: true, game: 'quy-mon-quan' }]);
+route('GET', '/api/health', () => [200, { ok: true, game: 'quy-mon-quan', online: realtime.online() }]);
 
 route('POST', '/api/auth/register', async (req) => {
   if (!config.allowRegister) return [403, { error: 'Máy chủ đang tạm khoá đăng ký tài khoản mới' }];
@@ -240,6 +241,8 @@ const server = http.createServer(async (req, res) => {
 server.headersTimeout = 15_000;
 server.requestTimeout = 30_000;
 
+const realtime = attachRealtime(server, { db, secret: SECRET });
+
 server.listen(config.port, config.host, () => {
   console.log(`Quỷ Môn Quan server running: http://localhost:${config.port}`);
   console.log(`  Client:   ${path.relative(ROOT, STATIC_DIR) || '.'}${DEV ? ' (dev mode)' : ''}`);
@@ -250,6 +253,7 @@ server.listen(config.port, config.host, () => {
 // clean shutdown: flush the WAL into the database file
 function shutdown(sig) {
   console.log(`Received ${sig}, shutting down…`);
+  realtime.close();
   server.close(() => { db.close(); process.exit(0); });
   setTimeout(() => process.exit(0), 5000).unref();
 }

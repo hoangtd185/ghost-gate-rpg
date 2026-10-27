@@ -71,6 +71,8 @@ export class GameWorld {
     this.time = 0;
     this.player = new Player(ch, ch.x);
     this.bots = new BotManager(this);
+    this.remotes = new Map(); // other real players on this map (multiplayer), filled by net/realtime.js
+    this.net = null;
     this.pet = null;
     this.recalc();
     this.loadMap(ch.map in MAPS ? ch.map : 'village', ch.x);
@@ -88,6 +90,8 @@ export class GameWorld {
     const map = MAPS[id];
     this.mapId = id; this.map = map;
     this.ch.map = id;
+    this.remotes.clear();
+    this.net?.entered(); // ask the server for this map's players (also when re-entering the same map)
     this.gfx = buildMapGraphics(map);
     const p = this.player;
     p.x = clamp(x ?? map.spawnX ?? 100, 10, map.width - 30); p.y = GROUND_Y - p.h - 40; p.vx = 0; p.vy = 0;
@@ -239,6 +243,8 @@ export class GameWorld {
     for (const m of this.monsters) this.updateMonster(m, dt);
     this.monsters = this.monsters.filter((m) => !(m.dead && m.fadeT <= 0));
     this.bots.update(dt);
+    for (const r of this.remotes.values()) r.update(dt);
+    if (this.net) this.net.tick(dt);
     for (const n of this.npcs) { n.updateAnim(dt); n.facing = this.player.cx < n.cx ? -1 : 1; if (n.say) { n.say.t -= dt; if (n.say.t <= 0) n.say = null; } }
     this.updateNpcChatter(dt);
     this.updateNamed(dt);
@@ -1225,6 +1231,12 @@ export class GameWorld {
     }
     for (const m of this.monsters) m.draw(ctx, cam, t);
     this.bots.render(ctx, cam);
+    for (const r of this.remotes.values()) {
+      r.draw(ctx, cam);
+      this.nameTag(ctx, r.name, r.cx - cam, r.y + r.h + 10, '#ffe08a', 8, true);
+      if (r.title) this.nameTag(ctx, '「' + r.title + '」', r.cx - cam, r.y - 24, '#ffd36a', 7);
+      if (r.say) this.bubble(ctx, r.say.text, r.cx - cam, r.y - (r.title ? 34 : 24));
+    }
     const p = this.player;
     const look = p.look || {};
     if (look.aura && !p.dead) { // outfit aura

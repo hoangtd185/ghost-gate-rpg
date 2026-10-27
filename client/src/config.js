@@ -101,4 +101,19 @@ export const GAME = {
     retryMinMs: 2000, // failed uploads retry with backoff up to retryMaxMs
     retryMaxMs: 30000,
   },
+
+  // ----- Multiplayer (realtime presence + chat, server/src/realtime.js) -----
+  net: {
+    sendHz: 10, // client position updates per second (only when something changed)
+    tickHz: 10, // server state broadcasts per second
+    maxPosPerSec: 20, // server drops position updates beyond this
+    interpDelayMs: 120, // remote players are drawn this far in the past for smooth movement
+    chatMaxLen: 80,
+    chatBurst: 5, // chat rate limit: up to 5 messages at once, then one per chatRefillMs
+    chatRefillMs: 1500,
+    maxPayload: 4096, // bytes per WebSocket message
+    helloTimeoutMs: 5000,
+    pingMs: 25000,
+    reconnectMs: [1000, 2000, 5000, 10000], // client reconnect backoff
+  },
 };

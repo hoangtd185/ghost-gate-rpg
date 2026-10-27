@@ -1,7 +1,7 @@
 # Quỷ Môn Quan (Ghost Gate)
 
 A 2D side-scrolling RPG in the style of Ghost Online / MapleStory, set in an Asian wuxia world full of ghosts and demons.
-It plays like an MMO, but it is single-player: the world is populated by bots that pretend to be other players (they hunt, rest, chat, and reply when you talk).
+It plays like an MMO. On the Node server, real players on the same map see each other move and can chat (map chat, or world chat with a leading `!`). Monsters and loot are still per player for now, and bots that pretend to be other players (they hunt, rest, chat, and reply when you talk) keep the maps lively. See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 
 - **3 classes**: Kiếm Khách (swordsman, melee), Đạo Sĩ (taoist, talismans and elements), Thích Khách (assassin, throwing darts)
 - **4 active skills + 4 passive skills per class**, arranged in a skill tree, with a respec option
@@ -135,7 +135,17 @@ pm2 start server/src/index.js --name quymonquan
 pm2 save && pm2 startup
 ```
 
-For a domain name and HTTPS, put Nginx or Caddy in front and proxy to `localhost:3000`.
+For a domain name and HTTPS, put Nginx or Caddy in front and proxy to `localhost:3000`. Multiplayer uses a WebSocket at `/ws` on the same port: Caddy forwards it automatically; Nginx needs the upgrade headers:
+
+```nginx
+location /ws {
+  proxy_pass http://localhost:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_read_timeout 120s;
+}
+```
 
 ### Option 2: Docker
 
@@ -256,7 +266,7 @@ git commit -m "Quỷ Môn Quan"
 **Limits to keep in mind:**
 
 - Client code (`client/`) is always visible in the browser, even if the repo is private. Never put secrets in client code.
-- Game logic runs in the browser and the result is sent to the server, so the server rejects impossible values but cannot fully prevent cheating. That is fine for a single-player game.
+- Game logic runs in the browser and the result is sent to the server, so the server rejects impossible values but cannot fully prevent cheating. Multiplayer stage 2 moves drops and pickups to the server (see docs/MULTIPLAYER.md).
 - The `__game()` debug helpers are only exposed on `localhost`, when opening the file locally, or with `?debug` in the URL.
 - To keep the source private, set the GitHub repo to **Private**. If you make it public, add a LICENSE file stating how others may use the code.
 
@@ -289,9 +299,11 @@ client/
       chatter.js        picks context-aware NPC lines without repeating
     ui/                 HUD, inventory / skills / quests / shop / forge / crafting windows, login screens
     storage/            the 3 storage backends (API / Claude / browser)
+    net/realtime.js     WebSocket client: position sync, other players, chat, reconnect
     style.css
 server/src/
   index.js              HTTP server, API routing, security headers, rate limits, static files
+  realtime.js           WebSocket server at /ws: presence, movement, chat (multiplayer stage 1)
   config.js             reads environment variables and .env
   db.js                 SQLite schema, migrations, character read / write
   auth.js               password hashing (scrypt), login tokens (HMAC)
@@ -376,7 +388,7 @@ __game().loadMap('ghost_gate', 200) // teleport to the first boss
 | 1 / 2 | HP potion / MP potion |
 | ↑ / E | Use portal, talk to NPC |
 | I C K L | Inventory, Character, Skills, Quests |
-| Enter | Chat (bots reply) |
+| Enter | Chat with players on this map (bots reply); start with `!` for world chat |
 | P | Summon / dismiss the pet |
 | Esc | Close window / system menu |
 

@@ -87,7 +87,7 @@ export class GameUI {
       <div class="hud-map"><div id="hMap"></div><small id="hOnline"></small></div>
       <canvas class="hud-mini" id="hMini" width="160" height="56"></canvas>
       <div class="hud-chat" id="hChat"><div class="chat-log" id="chatLog"></div>
-        <form id="chatForm" autocomplete="off"><input id="chatIn" maxlength="80" placeholder="Enter để chat…" aria-label="Tin nhắn chat"></form></div>
+        <form id="chatForm" autocomplete="off"><input id="chatIn" maxlength="80" placeholder="Enter để chat · bắt đầu bằng ! để chat kênh thế giới" aria-label="Tin nhắn chat"></form></div>
       <div class="hud-bar" id="hSkills"></div>
       <div class="hud-menu">
         <button data-win="inv" title="Túi đồ (I)">Túi đồ<kbd>I</kbd></button>
@@ -117,9 +117,14 @@ export class GameUI {
       const t = inp.value.trim();
       inp.value = ''; inp.blur();
       if (!t || !this.world) return;
-      this.addChat(this.world.ch.name, t, 'me');
-      this.world.player.say = { text: t, t: 4 };
-      this.world.bots.onPlayerChat(t);
+      // "!text" goes to the world channel, plain text to everyone on this map
+      const world = t.startsWith('!');
+      const text = world ? t.slice(1).trim() : t;
+      if (!text) return;
+      this.addChat(this.world.ch.name, text, world ? 'world' : 'me');
+      this.world.player.say = { text, t: 4 };
+      if (this.world.net && this.world.net.connected) this.world.net.chat(text, world ? 'world' : 'map');
+      this.world.bots.onPlayerChat(text);
     });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Escape') inp.blur(); });
     // Touch buttons
@@ -150,6 +155,8 @@ export class GameUI {
     this.refreshAll();
     $('#hOnline', this.root).textContent = `${world.bots.onlineCount() + 1} người đang online`;
   }
+  // Real player count from the multiplayer server (replaces the bot count while connected)
+  setOnline(n) { const el = $('#hOnline', this.root); if (el) el.textContent = `${n} người chơi online`; }
   detach() { this.world = null; this.close(); }
 
   // ================= HUD =================
@@ -510,7 +517,7 @@ export class GameUI {
       <tr><td><kbd>↓</kbd>+<kbd>Space</kbd> / <kbd>Ctrl</kbd>+<kbd>↓</kbd></td><td>Nhảy xuống bục</td><td><kbd>↓</kbd></td><td>Ngồi nghỉ (hồi nhanh)</td></tr>
       <tr><td><kbd>Z</kbd> / <kbd>J</kbd></td><td>Đánh thường (giữ)</td><td><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Kỹ năng</td></tr>
       <tr><td><kbd>1</kbd> <kbd>2</kbd></td><td>Bình máu / linh khí</td><td><kbd>↑</kbd> / <kbd>E</kbd></td><td>Qua cổng, nói chuyện</td></tr>
-      <tr><td><kbd>I</kbd><kbd>C</kbd><kbd>K</kbd><kbd>L</kbd></td><td>Các cửa sổ</td><td><kbd>Enter</kbd></td><td>Chat</td></tr>
+      <tr><td><kbd>I</kbd><kbd>C</kbd><kbd>K</kbd><kbd>L</kbd></td><td>Các cửa sổ</td><td><kbd>Enter</kbd></td><td>Chat (gõ <kbd>!</kbd> đầu câu = kênh thế giới)</td></tr>
       <tr><td><kbd>P</kbd></td><td>Gọi / cất pet Tiểu Quỷ</td><td></td><td></td></tr></table></div>`;
   }
 

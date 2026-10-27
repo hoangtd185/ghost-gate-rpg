@@ -240,3 +240,42 @@ export class NPC extends Humanoid {
     this.atkDur = 0.3;
   }
 }
+
+// ===== Other real players (multiplayer) =====
+// Positions arrive about 10×/s; they are drawn `interpDelayMs` in the past and interpolated for smooth movement.
+export class RemotePlayer extends Humanoid {
+  constructor(p) {
+    super(p.x, p.y, lookFor({ cls: p.cls, equip: {} }));
+    this.id = p.id; this.name = p.name;
+    this.buf = [];
+    this.setAppearance(p);
+    this.push(p);
+    this.x = p.x; this.y = p.y;
+  }
+  // p: { cls, lv, title, look: { weapon, hat, armor, outfit } } (item ids)
+  setAppearance(p) {
+    this.cls = p.cls; this.lv = p.lv; this.title = p.title || null;
+    const equip = {};
+    for (const [slot, id] of Object.entries(p.look || {})) equip[slot] = { id };
+    this.setLook(lookFor({ cls: p.cls, equip }));
+  }
+  push(p, now = performance.now()) {
+    this.buf.push({ t: now, x: p.x, y: p.y, vx: p.vx || 0, f: p.f || 1, a: p.a || 'idle' });
+    if (this.buf.length > 20) this.buf.shift();
+  }
+  update(dt, now = performance.now()) {
+    const t = now - GAME.net.interpDelayMs;
+    const b = this.buf;
+    let i = b.length - 1;
+    while (i > 0 && b[i - 1].t > t) i--;
+    const s1 = b[i], s0 = b[i - 1] || s1;
+    const k = s1.t === s0.t ? 1 : Math.max(0, Math.min(1, (t - s0.t) / (s1.t - s0.t)));
+    this.x = s0.x + (s1.x - s0.x) * k;
+    this.y = s0.y + (s1.y - s0.y) * k;
+    this.vx = s1.vx; this.facing = s1.f;
+    const a = s1.a === 'run' && !this.sheet.frames.run ? 'walk' : s1.a;
+    if (a !== this.anim) { this.anim = a; this.animT = 0; } else this.animT += dt;
+    if (this.anim === 'atk') { this.atkDur = 0.3; this.atkT = 0.3 - (this.animT % 0.3); } // cycle the swing poses
+    if (this.say) { this.say.t -= dt; if (this.say.t <= 0) this.say = null; }
+  }
+}
