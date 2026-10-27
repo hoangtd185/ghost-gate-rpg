@@ -71,8 +71,11 @@ export function attachRealtime(server, { db, secret }) {
 
       if (!s) {
         if (m.t !== 'hello') return;
-        const user = verifyToken(secret, String(m.token || ''));
-        const ch = user && db.listCharacters(user.uid).find((c) => c.id === String(m.char || ''));
+        let user = null, ch = null;
+        try {
+          user = verifyToken(secret, String(m.token || ''));
+          ch = user && db.listCharacters(user.uid).find((c) => c.id === String(m.char || ''));
+        } catch { ch = null; } // malformed hello: treat as a failed login, never let it escape the handler
         if (!ch) { ws.send(JSON.stringify({ t: 'error', msg: 'auth' })); ws.close(4003, 'auth'); return; }
         clearTimeout(helloTimer);
         // one connection per character: the newest wins (e.g. a refreshed tab)

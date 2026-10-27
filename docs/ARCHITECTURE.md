@@ -90,7 +90,7 @@ External libraries are welcome when they replace code we would otherwise write a
 - Prefer **small, widely used, maintained** packages; pin versions and commit `package-lock.json`.
 - Note the reason for each new dependency in the decisions log (§4) or the PR description.
 - Keep `client/src/config.js` and `client/src/data/*` **plain data** (no imports of browser or Node-only packages), because both sides import them.
-- When the first runtime dependency is added, the Dockerfile must install it (`npm ci --omit=dev`); the current Dockerfile already does this automatically when a `package-lock.json` exists.
+- Runtime dependencies are installed with `npm ci --omit=dev` by the Dockerfile and the CI `check` job; developers run `npm install` before `npm run dev` / `npm start` (see README).
 
 In use: `ws` (WebSocket server, multiplayer), `playwright-core` (dev only, e2e scenarios).
 

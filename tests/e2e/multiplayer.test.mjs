@@ -97,5 +97,19 @@ describe('multiplayer presence and chat', { timeout: 180_000 }, () => {
     assert.ok(await until(A.page, "document.querySelector('#hOnline').textContent.includes('1 người chơi')"));
   });
 
+  it('a malformed login on the socket is refused and the server keeps running', async () => {
+    const { WebSocket } = await import('ws');
+    const ws = new WebSocket(server.url.replace('http', 'ws') + 'ws');
+    const reply = await new Promise((resolve, reject) => {
+      ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', token: 'abc.' + 'é'.repeat(43), char: 'x' })));
+      ws.on('message', (d) => resolve(JSON.parse(d.toString())));
+      ws.on('error', reject);
+      setTimeout(() => reject(new Error('no answer')), 3000);
+    });
+    ws.close();
+    assert.deepEqual(reply, { t: 'error', msg: 'auth' });
+    assert.equal((await server.api('health')).ok, true);
+  });
+
   it('no page errors', () => assert.deepEqual(errors, []));
 });

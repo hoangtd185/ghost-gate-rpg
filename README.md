@@ -51,8 +51,11 @@ cd path\to\quy-mon-quan
 
 ```powershell
 copy .env.example .env
+npm install
 npm run dev
 ```
+
+`npm install` is needed once (and again after pulling changes to `package.json`): the server uses the `ws` package for multiplayer and will not start without it.
 
 When you see `Quỷ Môn Quan đang chạy: http://localhost:3000`, open that address in your browser.
 The first time, click "Tạo tài khoản" (create account), pick a name, create a character and play.
@@ -68,17 +71,20 @@ The line `ExperimentalWarning: SQLite is an experimental feature` is a normal No
 **Step 5. Production build**
 
 ```powershell
+npm ci --omit=dev
 npm run build
 npm start
 ```
 
+`npm ci --omit=dev` installs only the runtime dependencies (`ws`) exactly as pinned in `package-lock.json`.
 `npm run build` creates `client/dist/index.html` (a single file containing the whole game).
 `npm start` runs the server against the built file. This is also the command hosting platforms run.
 
 ## Requirements
 
 - **Node.js 22.13 or newer** (for `node:sqlite`). Check with `node -v`.
-- Playing and running the server need no `npm install` (no runtime dependencies yet). Run `npm install` only to run the tests (it installs `playwright-core`), then `npm run uat:browser` once.
+- **Run `npm install` (or `npm ci`) before `npm run dev` or `npm start`.** The server needs the `ws` runtime dependency (WebSocket, multiplayer); without it it fails with `Cannot find package 'ws'`. `npm install` also installs `playwright-core` for the tests; run `npm run uat:browser` once after it.
+- Opening `client/dist/index.html` straight from disk (single-player, no server) needs no install.
 
 ## Scripts
 
@@ -121,6 +127,7 @@ The server is a plain Node process that listens on `PORT` and keeps its database
 
 ```bash
 git clone <your repo> quy-mon-quan && cd quy-mon-quan
+npm ci --omit=dev
 npm run build
 cp .env.example .env
 # edit .env: NODE_ENV=production, DATA_DIR=/var/lib/quymonquan, TOKEN_SECRET=<random string>, TRUST_PROXY=true if Nginx/Caddy sits in front
@@ -201,7 +208,7 @@ Railway rebuilds and redeploys automatically; the data in the volume is kept.
 ### Option 3b: Render / Fly.io
 
 Same idea as Railway: create a service from the GitHub repo and let the platform pick up the `Dockerfile`.
-Without Docker: build command `npm run build`, start command `npm start`.
+Without Docker: build command `npm ci --omit=dev && npm run build`, start command `npm start`.
 Attach a **Persistent Disk** at `/data` and set `DATA_DIR=/data`, `NODE_ENV=production`, `TRUST_PROXY=true` and `TOKEN_SECRET`.
 Note: Render's free tier has no persistent disk, so data is lost on every redeploy.
 
