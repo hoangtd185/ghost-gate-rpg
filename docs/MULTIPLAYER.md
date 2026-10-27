@@ -27,7 +27,7 @@ JSON text frames, `t` is the message type.
 | C → S | `hello {token, char}` | First message. The server checks the token (same HMAC token as REST) and that the character belongs to that account. |
 | C → S | `pos {map, x, y, vx, f, a, enter?}` | Our state, 10×/s and only when it changed. `enter: 1` after loading a map: the client cleared its player list and needs a fresh `snap`. |
 | C → S | `chat {ch: 'map'\|'world', text}` | Chat. In the chat box a leading `!` means world channel. |
-| C → S | `saved {}` | We just saved. The server re-reads gear/level/title **from the database** and tells the map. |
+| C → S | `saved {}` | We just saved. The server re-reads gear/level/title **from the database** and tells the map. At most once per second; a later one is applied when the second is up. |
 | S → C | `welcome {id, online}` · `online {n}` | Connected; player count. |
 | S → C | `snap {map, players}` · `join {p}` · `leave {id}` | Who is on our map. |
 | S → C | `st {s: [[id, x, y, vx, f, a], …]}` | Batched movement, one message per map per tick (10 Hz). |

@@ -129,5 +129,35 @@ describe('multiplayer presence and chat', { timeout: 180_000 }, () => {
     assert.equal(snaps.at(-1), 'forest', 'the newest entry is the one applied');
   });
 
+  it('"saved" is throttled to one database read per second, and a later one is not lost', async () => {
+    const { WebSocket } = await import('ws');
+    const { newCharacter } = await import('../../client/src/game/character.js');
+    const open = async (tag) => {
+      const { token } = await server.api('auth/register', { username: uniqueName(tag), password: 'matkhau99' });
+      const ch = (await server.api('characters', { character: newCharacter(tag + (Date.now() % 1e4), 'swordsman') }, token)).character;
+      const ws = new WebSocket(server.url.replace('http', 'ws') + 'ws');
+      const msgs = [];
+      ws.on('message', (d) => msgs.push(JSON.parse(d.toString())));
+      await new Promise((r) => ws.on('open', r));
+      ws.send(JSON.stringify({ t: 'hello', token, char: ch.id }));
+      await new Promise((r) => setTimeout(r, 200));
+      ws.send(JSON.stringify({ t: 'pos', map: 'swamp', x: 300, y: 250, vx: 0, f: 1, a: 'idle', enter: 1 }));
+      await new Promise((r) => setTimeout(r, 200));
+      return { ws, msgs, token, ch };
+    };
+    const watcher = await open('Watch'), saver = await open('Saver');
+    saver.ws.send(JSON.stringify({ t: 'saved' })); // nothing changed yet: opens the one-second window
+    const ch = { ...saver.ch, equip: { ...saver.ch.equip, hat: { uid: 'flhat1', id: 'hat_cloth', qty: 1, r: 0, b: {} } } };
+    await fetch(server.url + 'api/characters/' + ch.id, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + saver.token }, body: JSON.stringify({ character: ch }) });
+    for (let i = 0; i < 30; i++) saver.ws.send(JSON.stringify({ t: 'saved' })); // inside the window: merged into one
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(watcher.msgs.filter((m) => m.t === 'look').length, 0, 'not applied inside the window');
+    await new Promise((r) => setTimeout(r, 1200));
+    const looks = watcher.msgs.filter((m) => m.t === 'look');
+    assert.equal(looks.length, 1, 'applied once when the window opened');
+    assert.equal(looks[0].look.hat, 'hat_cloth');
+    watcher.ws.close(); saver.ws.close();
+  });
+
   it('no page errors', () => assert.deepEqual(errors, []));
 });

@@ -60,6 +60,16 @@ export function attachRealtime(server, { db, secret }) {
     if (map !== s.map || m.enter) enterMap(s, map); else s.dirty = true;
   }
 
+  // The client saved: refresh what others see (gear, level, title) from the database, not from the message.
+  // Only the session's own (already authenticated) character is loaded.
+  function refreshLook(s) {
+    s.savedAt = Date.now();
+    const ch = db.getCharacter(s.id);
+    if (!ch) return;
+    const app = appearanceOf(ch);
+    if (JSON.stringify(app) !== JSON.stringify(s.app)) { s.app = app; if (s.map) toMap(s.map, { t: 'look', id: s.id, ...app }, s); }
+  }
+
   function leave(s) {
     if (players.get(s.id) !== s) return;
     players.delete(s.id);
@@ -92,7 +102,7 @@ export function attachRealtime(server, { db, secret }) {
         const old = players.get(ch.id);
         if (old) { send(old, { t: 'kicked', reason: 'elsewhere' }); old.ws.close(4000, 'elsewhere'); leave(old); }
         s = { ws, id: ch.id, uid: user.uid, name: ch.name, app: appearanceOf(ch), map: null, x: 0, y: 0, vx: 0, f: 1, a: 'idle',
-          dirty: false, posAt: 0, enterAt: 0, enterTimer: null, pendingEnter: null, chatTokens: NET.chatBurst, chatAt: Date.now() };
+          dirty: false, posAt: 0, savedAt: 0, savedTimer: null, enterAt: 0, enterTimer: null, pendingEnter: null, chatTokens: NET.chatBurst, chatAt: Date.now() };
         players.set(s.id, s);
         send(s, { t: 'welcome', id: s.id, online: players.size });
         broadcastOnline();
@@ -133,15 +143,17 @@ export function attachRealtime(server, { db, secret }) {
         if (msg.ch === 'world') { const data = JSON.stringify(msg); for (const o of players.values()) if (o !== s && o.ws.readyState === 1) o.ws.send(data); }
         else if (s.map) toMap(s.map, msg, s);
       } else if (m.t === 'saved') {
-        // the client saved: refresh what others see (gear, level, title) from the database, not from the message
-        const ch = db.listCharacters(s.uid).find((c) => c.id === s.id);
-        if (!ch) return;
-        const app = appearanceOf(ch);
-        if (JSON.stringify(app) !== JSON.stringify(s.app)) { s.app = app; if (s.map) toMap(s.map, { t: 'look', id: s.id, ...app }, s); }
+        // at most one database read per NET.savedMinMs; one that comes too soon runs when the window opens
+        const wait = s.savedAt + NET.savedMinMs - Date.now();
+        if (wait > 0) {
+          if (!s.savedTimer) s.savedTimer = setTimeout(() => { s.savedTimer = null; if (players.get(s.id) === s) refreshLook(s); }, wait);
+          return;
+        }
+        refreshLook(s);
       }
     });
 
-    ws.on('close', () => { clearTimeout(helloTimer); if (s) { clearTimeout(s.enterTimer); leave(s); } });
+    ws.on('close', () => { clearTimeout(helloTimer); if (s) { clearTimeout(s.enterTimer); clearTimeout(s.savedTimer); leave(s); } });
     ws.on('error', () => {});
   });
 
