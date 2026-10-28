@@ -23,7 +23,7 @@ flowchart LR
 ```
 
 - **The whole game simulation runs in the browser**: movement, combat, monster AI, drops, quests, bots. The game loop has a fixed 1/60 s step (`main.js`).
-- **The server is a thin persistence layer plus a realtime relay**: register/login, character list, save/load and a leaderboard over REST; presence, movement and chat over WebSocket (multiplayer stage 1, see [MULTIPLAYER.md](MULTIPLAYER.md)). It validates saves for impossible values (`sanitizeCharacter`) but does not simulate monsters or loot yet.
+- **The server is a thin persistence layer plus a realtime relay**: register/login, character list, save/load and a leaderboard over REST; presence, movement, chat, shared monsters, parties, personal loot and trades over WebSocket (see [MULTIPLAYER.md](MULTIPLAYER.md)). Online, the server runs the monsters (the same AI module as the offline game), splits EXP and loot, commits pickups (batched) and trades with a ledger row, and applies item-custody rules to every uploaded save. Each client still does its own hit detection (which skill touched which monster) and applies the damage it takes; the server computes the damage of every hit on a shared monster with the shared formulas (`game/combat.js`).
 - **One codebase, three storage backends** (`storage/storage.js`): the Node API with SQLite, the Claude artifact database, and browser localStorage. The game does not know which one it is using.
 - **Shared rules**: `client/src/config.js` (tuning numbers) and `client/src/data/*` (content) are plain data modules. The server imports `config.js` directly, so class ids, equipment slots, level cap and point rules come from one place.
 
@@ -44,12 +44,14 @@ flowchart LR
 
 ## 3. Saving and the "queue"
 
-The project has a **save queue, not a message broker**. It solves one problem: never lose loot when the network drops or the tab closes.
+The project has a **save queue, not a message broker**. It solves one problem: never lose progress when the network drops or the tab closes.
 
 1. Every save is written **synchronously** to a localStorage **outbox** first, so it survives a crash, Alt+F4 or a lost connection.
 2. It is then uploaded in the background. Only the newest snapshot is kept, at most one request is in flight, and failures retry with backoff (2 → 30 s) and again on the browser `online` event.
 3. Rare drops trigger an immediate save. Closing the page also sends a `fetch(..., { keepalive: true })`.
 4. On the next login, any outbox copy that is at least as far along as the server copy (by `playTime`) wins and is re-uploaded.
+
+Online, the outbox only carries what the client still decides (EXP, position, quests, purchases, forging). Monster drops and trades are committed by the server, and an uploaded save cannot undo or invent them (item custody, [MULTIPLAYER.md](MULTIPLAYER.md) §3).
 
 ### Why not RabbitMQ, Kafka or Redis?
 
@@ -70,17 +72,23 @@ Short ADR-style records. Add a new row (or a file under `docs/decisions/`) when 
 | # | Decision | Status | Why | Revisit when |
 |---|---|---|---|---|
 | 1 | Plain JS + canvas, no UI framework | Active | Canvas game; zero-build dev; single-file artifact build | HUD becomes a large app of its own |
-| 2 | Simulation on the client, server only persists | Active (single-player) | Simple, offline-capable, no netcode | **Multiplayer stage 2** (server becomes authoritative) |
+| 2 | Simulation on the client, server only persists | Offline only; online the server runs monsters, loot and trades (#14–#18) | Simple, offline-capable, no netcode | — |
 | 3 | SQLite as the only database | Active | Zero ops, one file | More than one server process, or managed backups needed |
 | 4 | One monorepo (client + server + tools) | Active | One person, shared data and config, atomic changes | Separate teams/release cycles (unlikely) |
 | 5 | Zero dependencies | **Superseded (2026-10-22)** by #6 | Started as a single-file artifact with no toolchain | — |
 | 6 | **External libraries are allowed** | Active | Rewriting solved problems (WebSocket protocol, bundling, validation) costs more than a dependency | — |
 | 7 | All tuning numbers in `config.js`, shared with the server | Active | One place to balance; client and server cannot disagree | — |
 | 8 | Old saves migrate on load (`data/legacy.js`) instead of DB migrations for game ids | Active | Works for all three storage backends | A `saveVersion` field would make migrations explicit |
-| 9 | Local outbox + background upload for saves (§3) | Active (single-player and stage 1) | Loot is never lost on disconnect or tab close | Multiplayer stage 2: the server saves, the outbox keeps only settings |
+| 9 | Local outbox + background upload for saves (§3) | Active (still used online for client-side progress; server items win, see #15) | Progress is never lost on disconnect or tab close | When forge/shop/quests become server actions, the outbox keeps only settings |
 | 10 | E2E acceptance tests with pass/fail in CI | Active | Gameplay regressions show up on every push | — |
 | 11 | Tests in JavaScript on `node --test` (+ `playwright-core` for e2e), replacing the earlier Python scripts | Active (2026-10-22) | Same language as the code, no Python toolchain, unit tests can import game modules directly | Move e2e to `@playwright/test` if traces/HTML reports are needed |
 | 12 | WebSocket via `ws` on the same HTTP server, JSON messages, one room per map | Active (2026-10-23) | Standard, tiny library; same port and token as REST; JSON is easy to debug at 10 Hz | Binary encoding only if bandwidth becomes a problem |
+| 14 | Personal loot: the client reports kills, the server checks them, rolls drops (shared `game/loot.js`) and commits pickups before answering | Active (2026-10-27) | Ghost Online style (only the killer sees drops); stops invented drops without moving combat to the server yet | — (shared monsters now report their own deaths, #17) |
+| 15 | Item custody on saves: `item_rev` revisions, server keeps item identity, client may only add free or earned items | Active (2026-10-27) | Saves stay whole-character (simple, offline-capable) but cannot undo server changes or invent items | Server actions for forge/shop/quests |
+| 16 | Trades swap both sides in one SQLite transaction after both lock and confirm | Active (2026-10-27) | Võ Lâm Truyền Kỳ style; no partial trades, no duplication | — |
+| 17 | Shared monsters: one `MobSim` per occupied map on the server, same module as the offline game; clients report hits, the server owns HP, deaths and rewards | Active (2026-10-27) | One AI implementation for both modes; kills can no longer be invented | Damage computed on the server (intents) |
+| 19 | Server-side damage: clients send `hit {uid, sid}`, the server computes the number with the shared `combat.js` from the saved character and buffs | Active (2026-10-27) | A client cannot send a damage number; one formula for offline and online | Server-side hit detection (needs player projectiles on the server) |
+| 18 | No Redis for loot decisions; pickups go through an in-process group-commit queue with admission control | Active (2026-10-27) | One event loop already makes every decision atomic; batching cuts disk syncs; drops are personal so nobody races for an item | More than one server process |
 | 13 | No message broker; item safety comes from a DB commit before the ack (+ item ledger, idempotent requests) | Active (2026-10-23) | A queue in front of the database adds no durability; see [MULTIPLAYER.md](MULTIPLAYER.md) §5 | More than one server process (Redis pub/sub) or an analytics pipeline (outbox table → broker) |
 
 ## 5. Dependency policy
@@ -111,8 +119,8 @@ Details, protocol, the data-safety design and the message-queue question: [MULTI
 
 | Stage | Scope | Server work | Notes |
 |---|---|---|---|
-| **1. Presence and chat** (done) | See other players on the same map, real chat | WebSocket (`ws`) on the existing server, token auth at connect, one room per map, relay position/animation/look about 10×/s, chat with rate limits | Monsters stay per client ("parallel worlds"). Bots can stay to fill empty maps |
-| **2. Shared, server-authoritative world** | Same monsters, bosses and loot for everyone | Move monster AI, damage, drops, EXP and quest progress into a module that runs on Node; per-map tick at 10–20 Hz; clients send intents ("cast skill D facing right"); server saves characters | Movement can stay client-side with server speed/position checks. Loot ownership rules. The save outbox then only stores settings |
-| **3. Social** | Party (EXP share), trade, friends, guilds, real leaderboard, PvP later | Atomic server-side trades; party state | — |
+| **1. Presence and chat** (done) | See other players on the same map, real chat | WebSocket (`ws`), token auth at connect, one room per map, position/animation/look about 10×/s, chat with rate limits | Monsters stay per client. Bots fill empty maps |
+| **2. Personal loot, item custody, trades, shared monsters, parties** (done) | Drops only their owner sees, committed at pickup; saves cannot invent items; Võ Lâm–style trades; everyone fights the same monsters; party EXP sharing | `mobsim.js` on the server, server-side damage (`combat.js`), reward rules, `item_ledger`, `item_rev`, `reconcileItems`, `commitTrade`, pickup commit queue | Clients still do their own hit detection |
+| **3. Shared world and social** | Same monsters and bosses for everyone, parties, guilds, PvP | Monster AI, damage and EXP on Node (per-map tick 10–20 Hz), clients send intents; forge/shop/quests as server actions | See [MULTIPLAYER.md](MULTIPLAYER.md) §8 |
 
 Scale target: a single Node process + SQLite handles the first ~100 concurrent players. Add Redis (and move to PostgreSQL) only when a second process is needed.

@@ -117,5 +117,41 @@ export const GAME = {
     helloTimeoutMs: 5000,
     pingMs: 25000,
     reconnectMs: [1000, 2000, 5000, 10000], // client reconnect backoff
+    // Server-side loot (online play). Shared monsters are rewarded by the server itself; kill reports are only
+    // accepted for personal story bosses
+    loot: {
+      killBurst: 10, // story-boss kill reports accepted at once, then killPerSec
+      killPerSec: 0.5,
+      storyBossCooldownSec: 60,
+      maxDropsPerPlayer: 60, // oldest unpicked drops are forgotten beyond this
+      dropGraceSec: 15, // server keeps a drop this much longer than it shows on the ground
+      pickRange: 420, // max distance (px) between the player and a drop being picked up (the pet picks from afar)
+      pickBurst: 20, // pickups accepted at once per player, then pickPerSec
+      pickPerSec: 10,
+      commitMs: 25, // pickups are collected this long and written in one transaction (group commit)
+      commitBatch: 200, // ... or as soon as this many are waiting
+      queueMax: 5000, // admission control: beyond this many waiting pickups, new ones are answered "busy"
+    },
+    // Shared monsters run by the server (online)
+    mobs: {
+      tickHz: 20, // simulation ticks per second (each split into `substeps` steps)
+      substeps: 3,
+      snapHz: 10, // monster position updates sent to players per second
+      idleSec: 30, // a map nobody is on keeps its monsters this long, then stops
+      hitSlack: 160, // a hit may land this much further (px) than the skill's reach (movement, latency)
+      hitRangeY: 300, // and at most this far up or down
+    },
+    // Parties: EXP split evenly between members on the map, each member gets their own drops
+    party: {
+      maxSize: 4,
+      inviteRange: 220,
+      inviteTimeoutSec: 20,
+    },
+    // Player-to-player trade
+    trade: {
+      range: 220, // must stand this close (px) to ask for a trade
+      askTimeoutSec: 20, // an unanswered request expires
+      maxItems: 12, // items each side can put in
+    },
   },
 };

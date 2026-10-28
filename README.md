@@ -1,7 +1,7 @@
 # Quỷ Môn Quan (Ghost Gate)
 
 A 2D side-scrolling RPG in the style of Ghost Online / MapleStory, set in an Asian wuxia world full of ghosts and demons.
-It plays like an MMO. On the Node server, real players on the same map see each other move and can chat (map chat, or world chat with a leading `!`). Monsters and loot are still per player for now, and bots that pretend to be other players (they hunt, rest, chat, and reply when you talk) keep the maps lively. See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
+It plays like an MMO. On the Node server, real players on the same map see each other move and can chat (map chat, or world chat with a leading `!`), each player gets personal loot that only they can see (rolled and saved by the server the moment it is picked up), and players can trade (T). Monsters are shared: everyone on a map fights the same ones; in a party (G) EXP is split evenly and each member gets their own drops, otherwise EXP follows damage and the top damager gets the loot. Bots that pretend to be other players (they hunt, rest, chat, and reply when you talk) keep the maps lively. See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 
 - **3 classes**: Kiếm Khách (swordsman, melee), Đạo Sĩ (taoist, talismans and elements), Thích Khách (assassin, throwing darts)
 - **4 active skills + 4 passive skills per class**, arranged in a skill tree, with a respec option
@@ -273,7 +273,7 @@ git commit -m "Quỷ Môn Quan"
 **Limits to keep in mind:**
 
 - Client code (`client/`) is always visible in the browser, even if the repo is private. Never put secrets in client code.
-- Game logic runs in the browser and the result is sent to the server, so the server rejects impossible values but cannot fully prevent cheating. Multiplayer stage 2 moves drops and pickups to the server (see docs/MULTIPLAYER.md).
+- Game logic runs in the browser and the result is sent to the server, so the server rejects impossible values but cannot fully prevent cheating. Online, drops, pickups and trades are decided by the server, and uploaded saves cannot add monster-only items or change item stats (see docs/MULTIPLAYER.md).
 - The `__game()` debug helpers are only exposed on `localhost`, when opening the file locally, or with `?debug` in the URL.
 - To keep the source private, set the GitHub repo to **Private**. If you make it public, add a LICENSE file stating how others may use the code.
 
@@ -301,16 +301,23 @@ client/
     game/
       character.js      stats, EXP, inventory, equipment, gems, crafting, passives, quest state
       entities.js       physics (gravity, one-way platforms), player, monsters, projectiles
-      world.js          core logic: combat, monster AI, bosses, drops, rendering
+      world.js          core logic: combat, drops, rendering
+      mobsim.js         monster AI, spawns, bosses (shared with the server)
+      physics.js        gravity and platforms (shared with the server)
+      combat.js         damage formulas (shared with the server)
       bots.js           fake-player bot AI and chat
       chatter.js        picks context-aware NPC lines without repeating
     ui/                 HUD, inventory / skills / quests / shop / forge / crafting windows, login screens
     storage/            the 3 storage backends (API / Claude / browser)
-    net/realtime.js     WebSocket client: position sync, other players, chat, reconnect
+    net/realtime.js     WebSocket client: position sync, other players, chat, loot, trades, reconnect
     style.css
 server/src/
   index.js              HTTP server, API routing, security headers, rate limits, static files
-  realtime.js           WebSocket server at /ws: presence, movement, chat (multiplayer stage 1)
+  realtime.js           WebSocket server at /ws: presence, movement, chat, loot, trades
+  mobs.js               shared monsters: one simulation per map, hits, rewards
+  party.js              parties
+  loot.js               personal loot: drops, pickup commit queue
+  trade.js              player-to-player trades
   config.js             reads environment variables and .env
   db.js                 SQLite schema, migrations, character read / write
   auth.js               password hashing (scrypt), login tokens (HMAC)
@@ -343,7 +350,8 @@ To inspect the data, open `data/game.db` with [DB Browser for SQLite](https://sq
 | POST | `/api/auth/login` | `{username, password}` → `{token}` |
 | GET | `/api/characters` | List characters (token required) |
 | POST | `/api/characters` | Create a character `{character}` |
-| PUT | `/api/characters/:id` | Save progress `{character}` |
+| PUT | `/api/characters/:id` | Save progress `{character}` → `{ok, itemRev, stale, items?}` (see docs/MULTIPLAYER.md §3) |
+| GET | `/api/characters/:id/changes?since=rev` | Item and gold changes the server made after `rev` (pickups, trades) |
 | DELETE | `/api/characters/:id` | Delete a character |
 | GET | `/api/leaderboard` | Top 10 by level |
 
@@ -372,7 +380,7 @@ Almost all content lives in `client/src/data/`, so most changes are data edits:
 - **New item**: add it to `items.js`, then to a monster's drop table, an NPC shop in `npcs.js`, or a recipe in `recipes.js`.
 - **New quest**: add it to `QUESTS` in `npcs.js` (side quests) or to `story.js` (story, tutorials), then add its id to the NPC's `quests` list.
 - **New NPC line**: add it to `data/chatter.js`. Conditional lines are written as `['line', { a: 'st7' }]` (only said after quest st7 is done).
-- **Balancing**: stat formulas in `calcStats`, EXP curve in `expToNext` (`game/character.js`), damage in `damageMonster` (`game/world.js`).
+- **Balancing**: stat formulas in `calcStats`, EXP curve in `expToNext` (`game/character.js`), damage in `hitDamage` (`game/combat.js`, used by the browser and the server).
 
 While testing, open DevTools (F12) and type:
 
@@ -397,6 +405,8 @@ __game().loadMap('ghost_gate', 200) // teleport to the first boss
 | I C K L | Inventory, Character, Skills, Quests |
 | Enter | Chat with players on this map (bots reply); start with `!` for world chat |
 | P | Summon / dismiss the pet |
+| T | Trade with the player standing next to you (online) |
+| G | Invite the player standing next to you to your party (online) |
 | Esc | Close window / system menu |
 
 On phones, touch buttons appear automatically the first time you touch the screen.

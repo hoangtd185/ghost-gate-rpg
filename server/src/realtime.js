@@ -1,16 +1,24 @@
-// Realtime layer (multiplayer stage 1): presence and chat over WebSocket.
-// Players on the same map see each other move and can chat. The game simulation (monsters, loot, saves)
-// is still per client in this stage; see docs/MULTIPLAYER.md for the plan.
+// Realtime layer over WebSocket: presence and chat, shared monsters run by the server (mobs.js), personal loot
+// (loot.js), parties (party.js) and trades (trade.js). The server decides drops, commits pickups and trades,
+// and replays item changes the client missed. Full protocol: docs/MULTIPLAYER.md.
 //
-// Protocol: JSON text frames, `t` = message type.
-//   client -> server  hello {token, char} · pos {map,x,y,vx,f,a} · chat {ch:'map'|'world', text} · saved {}
-//   server -> client  welcome {id, online} · snap {map, players} · join {p} · leave {id} · st {s:[[id,x,y,vx,f,a]…]}
-//                     look {id, look, lv, title} · chat {ch, id, from, text} · online {n} · kicked {reason} · error {msg}
+//   client -> server  hello {token, char, rev} · pos {map,x,y,vx,f,a,g,sy,d,enter?} · chat {ch, text} · saved {}
+//                     hit {uid, sid} · cast {sid} · kill {k, map, mob, x, y, named} (personal story bosses) · pick {id}
+//                     party_invite {to} · party_answer {from, yes} · party_leave
+//                     trade_ask {to} · trade_answer {from, yes} · trade_offer {items, gold} · trade_lock {on} · trade_confirm · trade_cancel
+//   server -> client  welcome {id, online} · snap {map, players} · join · leave · st · look · chat · online · kicked · error
+//                     mobs {map, list} · mspawn {m} · ms {s} · mev {list} · mhit {uid, by, dmg, ab, crit, em, el} · mdie {uid, by} · mkill {uid, exp, gold?, drops?}
+//                     chg {list, rev} · loot {k, drops} · drops {map, drops} · pick {id, ok, why?}
+//                     party_ask · party_state · party_err · trade_ask · trade_open · trade_state · trade_end · trade_err
 import { WebSocketServer } from 'ws';
 import { verifyToken } from './auth.js';
 import { MAPS } from '../../client/src/data/maps.js';
 import { ITEMS } from '../../client/src/data/items.js';
 import { GAME } from '../../client/src/config.js';
+import { createLoot } from './loot.js';
+import { createTrades } from './trade.js';
+import { createMobs } from './mobs.js';
+import { createParties } from './party.js';
 
 const NET = GAME.net;
 const ANIMS = new Set(['idle', 'walk', 'run', 'jump', 'atk', 'hurt', 'sit']);
@@ -41,12 +49,28 @@ export function attachRealtime(server, { db, secret }) {
   const toMap = (map, msg, except) => { const data = JSON.stringify(msg); for (const o of inMap(map, except)) if (o.ws.readyState === 1) o.ws.send(data); };
   const toAll = (msg) => { const data = JSON.stringify(msg); for (const o of players.values()) if (o.ws.readyState === 1) o.ws.send(data); };
   const broadcastOnline = () => toAll({ t: 'online', n: players.size });
+  // Send the item and gold changes this client has not received yet (s.rev = the last revision it was sent)
+  const pushChanges = (s) => {
+    const rev = db.itemRev(s.id);
+    if (rev <= s.rev) return;
+    send(s, { t: 'chg', list: db.changesSince(s.id, s.rev), rev });
+    s.rev = rev;
+  };
+  const loot = createLoot({ db });
+  const trades = createTrades({ db, players, send, pushChanges });
+  const parties = createParties({ players, send });
+  const mobs = createMobs({ players, send, loot, parties });
 
   function enterMap(s, map) {
     const same = s.map === map; // re-entering the same map: only the client itself needs the snapshot
     if (s.map && !same) toMap(s.map, { t: 'leave', id: s.id }, s);
+    if (!same) trades.cancel(s, 'moved');
     s.map = map;
     send(s, { t: 'snap', map, players: inMap(map, s).map(pub) });
+    mobs.enter(s, map); // the map's shared monsters
+    if (!same) parties.touch(s.id);
+    const mine = loot.onMap(s, map); // this player's unpicked drops here
+    if (mine.length) send(s, { t: 'drops', map, drops: mine });
     if (same) s.dirty = true; else toMap(map, { t: 'join', p: pub(s) }, s);
   }
 
@@ -56,6 +80,8 @@ export function attachRealtime(server, { db, secret }) {
     if (!MAPS[map]) return;
     s.x = clamp(num(m.x), 0, MAPS[map].width); s.y = clamp(num(m.y), -200, 400);
     s.vx = clamp(num(m.vx), -1000, 1000); s.f = m.f < 0 ? -1 : 1; s.a = ANIMS.has(m.a) ? m.a : 'idle';
+    s.g = m.g ? 1 : 0; s.sy = clamp(num(m.sy, s.y + 32), 0, 400); s.dead = !!m.d; // for the monsters' AI
+    s.hpPct = clamp(num(m.h, 100), 0, 100); // for the low-HP passive in the damage formula
     // `enter`: the client (re)loaded the map and cleared its player list, so it needs a fresh snapshot
     if (map !== s.map || m.enter) enterMap(s, map); else s.dirty = true;
   }
@@ -66,6 +92,9 @@ export function attachRealtime(server, { db, secret }) {
     s.savedAt = Date.now();
     const ch = db.getCharacter(s.id);
     if (!ch) return;
+    const lvBefore = s.ch?.level;
+    s.ch = ch; s.stats = null; // cached for the hot paths (hits, kills, loot): no database reads there
+    if (ch.level !== lvBefore) parties.touch(s.id);
     const app = appearanceOf(ch);
     if (JSON.stringify(app) !== JSON.stringify(s.app)) { s.app = app; if (s.map) toMap(s.map, { t: 'look', id: s.id, ...app }, s); }
   }
@@ -73,6 +102,8 @@ export function attachRealtime(server, { db, secret }) {
   function leave(s) {
     if (players.get(s.id) !== s) return;
     players.delete(s.id);
+    trades.cancel(s, 'left');
+    parties.leave(s.id);
     if (s.map) toMap(s.map, { t: 'leave', id: s.id }, s);
     broadcastOnline();
   }
@@ -101,10 +132,12 @@ export function attachRealtime(server, { db, secret }) {
         // one connection per character: the newest wins (e.g. a refreshed tab)
         const old = players.get(ch.id);
         if (old) { send(old, { t: 'kicked', reason: 'elsewhere' }); old.ws.close(4000, 'elsewhere'); leave(old); }
-        s = { ws, id: ch.id, uid: user.uid, name: ch.name, app: appearanceOf(ch), map: null, x: 0, y: 0, vx: 0, f: 1, a: 'idle',
-          dirty: false, posAt: 0, savedAt: 0, savedTimer: null, enterAt: 0, enterTimer: null, pendingEnter: null, chatTokens: NET.chatBurst, chatAt: Date.now() };
+        s = { ws, id: ch.id, uid: user.uid, name: ch.name, ch, buffs: [], stats: null, app: appearanceOf(ch), map: null, x: 0, y: 0, vx: 0, f: 1, a: 'idle',
+          dirty: false, posAt: 0, savedAt: 0, savedTimer: null, enterAt: 0, enterTimer: null, pendingEnter: null, chatTokens: NET.chatBurst, chatAt: Date.now(), rev: Math.max(0, Math.floor(num(m.rev))) };
         players.set(s.id, s);
         send(s, { t: 'welcome', id: s.id, online: players.size });
+        // items or gold changed on the server while this client was away (a pickup whose answer was lost, a trade)
+        pushChanges(s);
         broadcastOnline();
         return;
       }
@@ -142,6 +175,19 @@ export function attachRealtime(server, { db, secret }) {
         // the sender already shows its own line locally
         if (msg.ch === 'world') { const data = JSON.stringify(msg); for (const o of players.values()) if (o !== s && o.ws.readyState === 1) o.ws.send(data); }
         else if (s.map) toMap(s.map, msg, s);
+      } else if (m.t === 'kill') {
+        if (String(m.map || '') !== s.map) return send(s, { t: 'loot', k: m.k, drops: [], why: 'map' });
+        send(s, loot.kill(s, m));
+      } else if (m.t === 'hit') {
+        mobs.hit(s, m);
+      } else if (m.t === 'cast') {
+        mobs.cast(s, m);
+      } else if (m.t === 'pick') {
+        loot.pick(s, m, (res) => { if (res.ok) pushChanges(s); send(s, res); });
+      } else if (typeof m.t === 'string' && m.t.startsWith('party_')) {
+        parties.handle(s, m);
+      } else if (typeof m.t === 'string' && m.t.startsWith('trade_')) {
+        trades.handle(s, m);
       } else if (m.t === 'saved') {
         // at most one database read per NET.savedMinMs; one that comes too soon runs when the window opens
         const wait = s.savedAt + NET.savedMinMs - Date.now();
@@ -176,6 +222,7 @@ export function attachRealtime(server, { db, secret }) {
 
   // Heartbeat: drop connections that stopped answering pings
   const heartbeat = setInterval(() => {
+    loot.sweep();
     for (const ws of wss.clients) {
       if (!ws.isAlive) { ws.terminate(); continue; }
       ws.isAlive = false;
@@ -185,6 +232,7 @@ export function attachRealtime(server, { db, secret }) {
 
   return {
     online: () => players.size,
-    close() { clearInterval(tick); clearInterval(heartbeat); for (const ws of wss.clients) ws.close(1001, 'server shutdown'); wss.close(); },
+    mobs,
+    close() { clearInterval(tick); clearInterval(heartbeat); mobs.close(); loot.flush(); for (const ws of wss.clients) ws.close(1001, 'server shutdown'); wss.close(); },
   };
 }

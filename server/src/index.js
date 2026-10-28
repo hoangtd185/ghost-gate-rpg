@@ -179,8 +179,19 @@ route('PUT', '/api/characters/:id', async (req, user, params) => {
   if (!ch || ch.id !== params.id) return [400, { error: 'Dữ liệu không khớp' }];
   const bad = sanitizeCharacter(ch);
   if (bad) return [400, { error: bad }];
-  if (!db.saveCharacter(user.id, ch)) return [404, { error: 'Không tìm thấy nhân vật' }];
-  return [200, { ok: true }];
+  const res = db.saveCharacter(user.id, ch);
+  if (!res) return [404, { error: 'Không tìm thấy nhân vật' }];
+  // itemRev: the item revision the server has; stale: items/gold were not taken from this upload;
+  // items: the server refused or corrected some uploaded items, this is what it kept
+  return [200, { ok: true, ...res }];
+}, true);
+
+// Item and gold changes the server made after `since` (pickups, trades): for clients without a realtime connection
+route('GET', '/api/characters/:id/changes', (req, user, params) => {
+  const ch = db.listCharacters(user.id).find((c) => c.id === params.id);
+  if (!ch) return [404, { error: 'Không tìm thấy nhân vật' }];
+  const since = Math.max(0, Math.floor(+new URL(req.url, 'http://x').searchParams.get('since') || 0));
+  return [200, { list: db.changesSince(ch.id, since), rev: ch.itemRev }];
 }, true);
 
 route('DELETE', '/api/characters/:id', (req, user, params) => {

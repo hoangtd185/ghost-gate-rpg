@@ -1,18 +1,21 @@
 // Game world: logic updates, combat, monsters, drops, and drawing everything on the canvas
 import { MAPS, GROUND_Y } from '../data/maps.js';
-import { MONSTERS, BOSS_RESPAWN } from '../data/monsters.js';
+import { MONSTERS } from '../data/monsters.js';
 import { CLASSES, SKILLS } from '../data/classes.js';
 import { ITEMS } from '../data/items.js';
-import { CHIEF } from '../data/affixes.js';
 import { NPCS, QUESTS } from '../data/npcs.js';
 import { AFFIXES, NAMED } from '../data/affixes.js';
-import { ELEMENTS, elementMult } from '../data/elements.js';
+import { ELEMENTS } from '../data/elements.js';
 import { buildMapGraphics, drawPortal, drawLayer, VIEW_W, VIEW_H } from '../gfx/backgrounds.js';
 import { projSprite, itemIcon, iconForItem } from '../gfx/icons.js';
-import { Player, Monster, Drop, Projectile, NPC, stepBody, platformAt, MOVE_SPEED, JUMP_V, lookFor } from './entities.js';
+import { Player, Monster, Drop, Projectile, NPC, MOVE_SPEED, JUMP_V, lookFor } from './entities.js';
+import { stepBody } from './physics.js';
 import { Pet } from './pet.js';
+import { rollDrops, killExp } from './loot.js';
+import { hitDamage, botDamage } from './combat.js';
+import { MobSim } from './mobsim.js';
 import {
-  calcStats, gainExp, addItem, rollEquip, resolveItemId, onKillForQuests, expToNext, countItem, INV_SIZE,
+  calcStats, gainExp, addItem, onKillForQuests, expToNext, countItem, INV_SIZE,
   questDropsFor, npcMarker, questStatus, npcPresent, questEvent, questProgress,
 } from './character.js';
 import { npcLine, pickBanter } from './chatter.js';
@@ -20,8 +23,6 @@ import { BotManager } from './bots.js';
 import { clamp, rand, randInt, chance, overlap, centerDist, pick } from '../engine/util.js';
 import { GAME } from '../config.js';
 
-// flying monsters dodge projectiles: fly up if there is room, otherwise swoop down
-const pr_up = (m) => m.y > 90;
 const dist2 = (a, b) => Math.abs(a.cx - b.cx);
 // '#rrggbb' + alpha
 const rbg = (hex, a) => rgbaHex(hex, a);
@@ -70,8 +71,11 @@ export class GameWorld {
     this.hooks = hooks; // toast, chat, openNpc, death, changed, save, mapChanged
     this.time = 0;
     this.player = new Player(ch, ch.x);
+    this.player.id = ch.id; // monsters aggro on player ids (see mobsim.js)
     this.bots = new BotManager(this);
     this.remotes = new Map(); // other real players on this map (multiplayer), filled by net/realtime.js
+    this.kills = new Map(); // kill report number -> monster name, until the server answers with the drops
+    this.pendingPicks = new Map(); // server drop id -> drop, while a pickup waits for the server
     this.net = null;
     this.pet = null;
     this.recalc();
@@ -91,21 +95,135 @@ export class GameWorld {
     this.mapId = id; this.map = map;
     this.ch.map = id;
     this.remotes.clear();
+    this.pendingPicks.clear(); // answers still arrive; a picked item comes in as an item change
     this.net?.entered(); // ask the server for this map's players (also when re-entering the same map)
     this.gfx = buildMapGraphics(map);
     const p = this.player;
     p.x = clamp(x ?? map.spawnX ?? 100, 10, map.width - 30); p.y = GROUND_Y - p.h - 40; p.vx = 0; p.vy = 0;
-    this.monsters = []; this.drops = []; this.projs = []; this.effects = []; this.texts = []; this.zones = []; this.timers = []; this.particles = [];
+    this.drops = []; this.projs = []; this.effects = []; this.texts = []; this.zones = []; this.timers = []; this.particles = [];
     this.npcs = []; this.banter = null; this.banterCd = rand(12, 25);
     this.namedT = this.namedT || {}; this.namedCheckT = 1.5;
     this.refreshNpcs();
-    this.spawnGroups = map.spawns.map((s) => ({ ...s, alive: 0, pending: [] }));
-    for (const g of this.spawnGroups) for (let i = 0; i < g.count; i++) this.spawnMonster(g, 0.05 * i);
+    this.newSim();
     this.bots.onMapLoad(id);
     if (this.pet) this.pet.warp();
     this.camX = clamp(p.cx - VIEW_W / 2, 0, map.width - VIEW_W);
     this.portalCd = 0.6;
     this.hooks.mapChanged && this.hooks.mapChanged(map);
+  }
+
+  // Monsters of this map. Offline: every spawn and field boss is simulated here. Online: the server runs the
+  // shared monsters (they arrive as remote monsters, see serverMobs); only personal story bosses run here.
+  newSim() {
+    const online = !!this.net;
+    this.sim = new MobSim(this.mapId, {
+      make: (...a) => new Monster(...a), spawn: !online, fieldBosses: !online, namedT: this.namedT,
+      poisonTick: (m) => this.damageMonster(m, m.poisonDmg, 'player', undefined, undefined, 'poison'),
+    });
+    this.remoteMobs = new Map(); // uid -> remote monster (online)
+  }
+  // ===== Shared monsters (online, see server/src/mobs.js) =====
+  addRemoteMob(info) {
+    if (this.remoteMobs.has(info.uid) || !MONSTERS[info.mob]) return null;
+    const m = new Monster(info.mob, info.x, info.standY, info.range, null, { uid: info.uid, lvBonus: info.lvBonus, elite: info.elite, chief: info.chief, named: info.named, affix: info.affix });
+    m.remote = true;
+    m.x = info.x; m.y = info.y; m.tx = info.x; m.ty = info.y;
+    m.hp = info.hp; m.shield = info.shield;
+    this.remoteMobs.set(m.uid, m);
+    this.sim.monsters.push(m);
+    return m;
+  }
+  clearRemoteMobs() {
+    this.sim.monsters = this.sim.monsters.filter((m) => !m.remote);
+    this.remoteMobs.clear();
+  }
+  // The full list when we enter a map
+  serverMobs(list) {
+    this.clearRemoteMobs();
+    for (const info of list) { const m = this.addRemoteMob(info); if (m) m.alpha = 1; }
+  }
+  mobSpawn(info) { this.addRemoteMob(info); }
+  // Positions and state 10×/s: [uid, x, y, facing, hp, shield, state bits]
+  mobSnap(list) {
+    for (const [uid, x, y, f, hp, sh, st] of list) {
+      const m = this.remoteMobs.get(uid);
+      if (!m || m.dead) continue;
+      m.tx = x; m.ty = y; m.facing = f; m.hp = hp; m.shield = sh;
+      m.attacking = !!(st & 1);
+      if (st & 2 && !(m.hurtT > 0)) m.hurtT = 0.12;
+      m.charging = st & 4 ? 0.1 : 0; m.chargeDir = f;
+      m.poison = st & 8 ? 0.5 : 0;
+    }
+  }
+  mobDie({ uid, by }) {
+    const m = this.remoteMobs.get(uid);
+    if (!m || m.dead) return;
+    m.dead = true; m.fadeT = 0.4; m.hp = 0;
+    this.addFx('poof', m.cx, m.cy, 0.5, { color: m.def.boss ? '#ff3a5a' : '#c8c8ff', big: m.def.boss });
+    if (m.named) { this.shakeT = 0.6; if (NAMED[m.named].every && by) this.hooks.chat('Hệ thống', `${by} đã hạ ${NAMED[m.named].name}!`, 'system'); }
+    if (m.def.boss) { this.shakeT = 0.8; this.hooks.chat('Hệ thống', `${by || 'Ai đó'} đã tiêu diệt ${m.def.name}! Thiên hạ chấn động.`, 'system'); }
+  }
+  // Our reward for a shared monster: EXP (our share), and if we earned the loot, gold and our personal drops
+  onServerKill(k) {
+    const ch = this.ch, m = this.remoteMobs.get(k.uid);
+    const name = m ? m.def.name : (MONSTERS[k.mob] || {}).name;
+    if (this.stats.pas.killHeal) {
+      const f = this.stats.pas.killHeal / 100;
+      ch.hp = Math.min(this.stats.maxHp, ch.hp + this.stats.maxHp * f); ch.mp = Math.min(this.stats.maxMp, ch.mp + this.stats.maxMp * f);
+    }
+    if (k.exp) this.giveExp(k.exp);
+    if (k.gold) this.drops.push(new Drop(k.x - 6, k.y, 'gold', k.gold));
+    if (k.drops) this.serverDrops(k.drops, name);
+    for (const id of questDropsFor(ch, k.mob)) this.drops.push(new Drop(k.x - 6 + rand(-8, 8), k.y, 'item', { id, qty: 1, r: 0, b: {} }));
+    const changed = onKillForQuests(ch, k.mob);
+    if (k.named) changed.push(...onKillForQuests(ch, k.named));
+    for (const qid of changed) this.hooks.questProgress(qid);
+    this.hooks.changed('bars');
+  }
+
+  // Shared monsters (online): move toward the server's latest positions, fade out after death
+  updateRemoteMobs(dt) {
+    for (const m of this.remoteMobs.values()) {
+      if (m.dead) { m.fadeT -= dt; if (m.fadeT <= 0) { this.remoteMobs.delete(m.uid); this.sim.monsters = this.sim.monsters.filter((x) => x !== m); } continue; }
+      m.animT += dt; m.alpha = Math.min(1, m.alpha + dt * 2);
+      if (m.hurtT > 0) m.hurtT -= dt;
+      if (m.tx === undefined) continue;
+      const k = Math.min(1, dt * 10);
+      m.vx = (m.tx - m.x) * 10; // only used to pick the walk/idle animation
+      m.x += (m.tx - m.x) * k; m.y += (m.ty - m.y) * k;
+    }
+  }
+  get monsters() { return this.sim.monsters; }
+  set monsters(v) { this.sim.monsters = v; }
+  get spawnGroups() { return this.sim.groups; }
+  set spawnGroups(v) { this.sim.groups = v; }
+  spawnMonster(g, delay = 0) { this.sim.spawnGroup(g, delay); this.drainMobEvents(); }
+  spawnNamed(id) { const m = this.sim.spawnNamed(id); this.drainMobEvents(); return m; }
+
+  // Turn monster events (mobsim.js, or the server's) into effects, chat, projectiles and damage to our player
+  drainMobEvents() { for (const e of this.sim.drain()) this.mobEvent(e); }
+  mobEvent(e) {
+    const p = this.player;
+    switch (e.type) {
+      case 'announce': this.hooks.chat('Hệ thống', e.chat, 'system'); this.hooks.toast(e.toast, 'rare'); break;
+      case 'text': this.floatText(e.x, e.y, e.text, e.color, false, true); break;
+      case 'fx': this.addFx(e.kind, e.x, e.y, e.dur, e.data || {}); if (e.shake) this.shakeT = Math.max(this.shakeT || 0, e.shake); break;
+      case 'chat': this.hooks.chat(e.name, e.text, e.kind); break;
+      case 'shoot': this.projs.push(new Projectile({ owner: 'monster', kind: e.kind, x: e.x, y: e.y, vx: e.vx, vy: e.vy, range: e.range, atk: e.atk, el: e.el, w: e.w, h: e.h, src: e.m || this.remoteMobs.get(e.src) || null })); break;
+      case 'slam': {
+        this.shakeT = 0.4;
+        this.addFx('shock', e.x, GROUND_Y, 0.6, {});
+        if (p.onGround && p.standY === GROUND_Y && Math.abs(p.cx - e.x) < e.r) this.hurtPlayer(e.atk, p.cx > e.x ? 1 : -1, e.el, e.m || this.remoteMobs.get(e.src) || null);
+        break;
+      }
+      case 'explode': {
+        this.addFx('ring', e.x, e.y, 0.5, { color: '#ffb040', r: e.r });
+        this.burst(e.x, e.y, '#ffb040', 30, 160, { shape: 'star' }); this.shakeT = 0.3;
+        if (!p.dead && Math.hypot(p.cx - e.x, p.cy - e.y) < e.r) this.hurtPlayer(e.atk, p.cx > e.x ? 1 : -1, e.el, null);
+        break;
+      }
+      case 'die': this.onMobDie(e.m, e.by); break;
+    }
   }
 
   // Story-driven NPCs and portals: some NPCs appear/disappear with quests, some portals open only after a quest
@@ -122,15 +240,9 @@ export class GameWorld {
   }
 
   // ===== Named monsters: story bosses (while the quest is active) and field bosses (on a timer) =====
+  // (field-boss timers run inside the monster simulation)
   updateNamed(dt) {
     this.namedCheckT -= dt;
-    for (const [id, n] of Object.entries(NAMED)) {
-      if (n.map !== this.mapId || !n.every) continue;
-      if (this.namedT[id] === undefined) this.namedT[id] = rand(45, 120); // first visit to the map
-      if (this.monsters.some((m) => m.named === id && !m.dead)) continue;
-      this.namedT[id] -= dt;
-      if (this.namedT[id] <= 0) { this.namedT[id] = rand(n.every[0], n.every[1]); this.spawnNamed(id); }
-    }
     if (this.namedCheckT > 0) return;
     this.namedCheckT = 2;
     for (const [id, n] of Object.entries(NAMED)) {
@@ -138,21 +250,6 @@ export class GameWorld {
       if (questStatus(this.ch, n.quest) !== 'active') continue;
       if (this.monsters.some((m) => m.named === id)) continue;
       this.spawnNamed(id);
-    }
-  }
-
-  spawnNamed(id) {
-    const n = NAMED[id], base = MONSTERS[n.mob];
-    const x = clamp(n.x, 60, this.map.width - 100);
-    const m = new Monster(n.mob, x, GROUND_Y, [Math.max(30, x - 320), Math.min(this.map.width - 80, x + 320)], null, { named: id });
-    if (base.behavior === 'float') { m.y = GROUND_Y - m.h - 60; m.homeY = m.y; }
-    this.monsters.push(m);
-    this.addFx('poof', m.cx, m.cy, 0.8, { color: '#ff6a5a', big: true });
-    this.shakeT = 0.5;
-    if (n.lines && n.lines.appear) this.hooks.chat(n.name, n.lines.appear, 'boss');
-    if (n.every) {
-      this.hooks.chat('Hệ thống', `${n.name} (Lv.${n.lv}) đã xuất hiện ở ${this.map.name}!`, 'system');
-      this.hooks.toast(`⚠ <b>${n.name}</b> đã xuất hiện!`, 'rare');
     }
   }
 
@@ -206,30 +303,6 @@ export class GameWorld {
     }
   }
 
-  spawnMonster(g, delay = 0) {
-    g.alive++;
-    const make = () => {
-      const def = MONSTERS[g.mob];
-      let x1 = g.x1, x2 = g.x2;
-      const plat = platformAt(this.map.platforms, (g.x1 + g.x2) / 2, g.y);
-      if (plat) { x1 = Math.max(x1, plat.x + 2); x2 = Math.min(x2, plat.x + plat.w - def.w - 2); }
-      else x2 -= def.w;
-      const x = rand(x1, Math.max(x1, x2));
-      let y = g.y;
-      // now and then a regular spawn becomes a chieftain (mini boss), at most one per map at a time
-      const chief = !def.boss && !this.monsters.some((o) => o.chief && !o.dead) && Math.random() < CHIEF.chance;
-      const m = new Monster(g.mob, x, y, [x1, Math.max(x1, x2)], g, { chief });
-      if (chief) {
-        this.hooks.chat('Hệ thống', `♛ ${m.def.name} (Lv.${m.def.lv}) đang lảng vảng ở ${this.map.name}!`, 'system');
-        this.hooks.toast(`♛ <b>${m.def.name}</b> xuất hiện!`, 'rare');
-      }
-      if (def.behavior === 'float') { m.y = y - m.h - rand(4, 20); m.homeY = m.y; }
-      m.x = clamp(m.x, x1, Math.max(x1, x2 + def.w - m.w));
-      this.monsters.push(m);
-    };
-    if (delay <= 0) make(); else this.timers.push({ t: delay, fn: make });
-  }
-
   // ================= LOOP =================
   update(dt, input) {
     this.time += dt;
@@ -240,8 +313,10 @@ export class GameWorld {
     due.forEach((t) => t.fn());
 
     this.updatePlayer(dt, input);
-    for (const m of this.monsters) this.updateMonster(m, dt);
-    this.monsters = this.monsters.filter((m) => !(m.dead && m.fadeT <= 0));
+    this.sim.update(dt, this.player.dead ? [] : [this.player], this.projs);
+    this.updateRemoteMobs(dt);
+    this.drainMobEvents();
+    for (const m of this.monsters) if (m.charging > 0 && !m.dead && Math.random() < dt * 30) this.spark(m.cx - m.chargeDir * m.w / 2, m.y + m.h - 2, { vx: -m.chargeDir * 40, vy: rand(-20, 0), color: '#d8c8b0', size: rand(1.5, 2.5), life: 0.4, glow: false });
     this.bots.update(dt);
     for (const r of this.remotes.values()) r.update(dt);
     if (this.net) this.net.tick(dt);
@@ -435,7 +510,7 @@ export class GameWorld {
         for (let i = 0; i < (sk.hits || 1); i++) {
           this.timers.push({ t: 0.06 + i * 0.11, fn: () => {
             const area = { x: dir > 0 ? p.cx - 4 : p.cx - sk.range + 4, y: p.y + p.h - sk.height - 2, w: sk.range, h: sk.height + 4 };
-            this.hitArea(area, mult, sk.maxTargets, 'player', undefined, el);
+            this.hitArea(area, mult, sk.maxTargets, 'player', undefined, el, sid);
             this.addFx('slash', p.cx + dir * 18, p.cy - 2, 0.2, { dir, big: sk.hits > 1, i, color: el ? ELEMENTS[el].color : SKILL_FX[sid] });
             if (sk.hits > 1) this.burst(p.cx + dir * 30, p.cy - 4, SKILL_FX[sid], 4, 60, { shape: 'star' });
           } });
@@ -449,7 +524,7 @@ export class GameWorld {
           this.projs.push(new Projectile({
             owner: 'player', kind: sk.proj, x: p.cx + dir * 8 - 6, y: p.cy - 6,
             vx: Math.cos(ang) * sk.speed * dir, vy: Math.sin(ang) * sk.speed, range: sk.range,
-            mult, maxTargets: sk.maxTargets, pierce: sk.pierce, dir, el,
+            mult, maxTargets: sk.maxTargets, pierce: sk.pierce, dir, el, sid,
             w: sk.proj === 'wave' ? 22 : sk.proj === 'fire' ? 26 : 12, h: sk.proj === 'wave' ? 36 : sk.proj === 'fire' ? 18 : 10,
           }));
         }
@@ -463,7 +538,7 @@ export class GameWorld {
           this.addFx('lightning', m.cx, m.y + m.h, 0.3, {});
           this.burst(m.cx, m.y + m.h - 4, '#bfe0ff', 10, 90, { shape: 'star', grav: 200 });
           this.shakeT = Math.max(this.shakeT || 0, 0.08);
-          this.damageMonster(m, mult, 'player', undefined, undefined, el);
+          this.damageMonster(m, mult, 'player', undefined, undefined, el, { sid });
         } }));
         if (!targets.length) this.addFx('lightning', p.cx + dir * 60, p.y + p.h, 0.25, {});
         break;
@@ -476,15 +551,16 @@ export class GameWorld {
         for (let i = 0; i < 14; i++) this.timers.push({ t: i * 0.01, fn: () => this.spark(p.cx + rand(-4, 4), p.cy + rand(-10, 8), { vx: -dir * rand(10, 40), vy: rand(-20, 10), color: pick(['#c08aff', '#e8c8ff', '#8a5aff']), size: rand(2, 3.5), life: rand(0.4, 0.8), shape: 'petal', drag: 0.94 }) });
         this.timers.push({ t: 0.15, fn: () => {
           const x1 = Math.min(startX, p.x), x2 = Math.max(startX, p.x) + p.w;
-          this.hitArea({ x: x1 - 6, y: p.y - 6, w: x2 - x1 + 12, h: p.h + 10 }, mult, sk.maxTargets, 'player', undefined, el);
+          this.hitArea({ x: x1 - 6, y: p.y - 6, w: x2 - x1 + 12, h: p.h + 10 }, mult, sk.maxTargets, 'player', undefined, el, sid);
         } });
         break;
       }
       case 'cloud': {
-        this.zones.push({ x: p.cx + dir * 50, y: p.y + p.h - 20, r: sk.radius, t: 0, dur: sk.dur, tick: sk.tick, tickT: 0, mult, owner: 'player', el });
+        this.zones.push({ x: p.cx + dir * 50, y: p.y + p.h - 20, r: sk.radius, t: 0, dur: sk.dur, tick: sk.tick, tickT: 0, mult, owner: 'player', el, sid });
         break;
       }
       case 'buff': {
+        if (this.net) this.net.cast(sid); // online the server applies the buff to its damage formula too
         p.buffs = p.buffs.filter((b) => b.sid !== sid);
         p.buffs.push({ sid, ...sk.buff, t: sk.dur, max: sk.dur, name: sk.name });
         this.addFx('aura', p.cx, p.cy, 0.8, { color: '#ffd84a' });
@@ -500,7 +576,7 @@ export class GameWorld {
           this.projs.push(new Projectile({
             owner: 'player', kind: 'thunderorb', x: p.cx - 7, y: p.cy - 14,
             vx: Math.cos(a) * 170, vy: Math.sin(a) * 170, range: 99999, life: sk.life,
-            mult, maxTargets: 1, dir, el, w: 14, h: 14,
+            mult, maxTargets: 1, dir, el, sid, w: 14, h: 14,
             homing: true, target, speed: sk.speed, seekAt: 0.1 + i * 0.07, seekRange: sk.range + 120,
           }));
         }
@@ -508,6 +584,7 @@ export class GameWorld {
         break;
       }
       case 'heal': {
+        if (this.net) this.net.cast(sid);
         const amt = Math.floor(this.stats.maxHp * sk.heal);
         ch.hp = Math.min(this.stats.maxHp, ch.hp + amt);
         this.floatText(p.cx, p.y - 6, '+' + amt, '#7dff9a');
@@ -553,74 +630,74 @@ export class GameWorld {
     pr.vy += (Math.sin(ang) * speed - pr.vy) * turn;
   }
 
-  hitArea(area, mult, maxTargets, owner, atk, el) {
+  hitArea(area, mult, maxTargets, owner, atk, el, sid) {
     let n = 0;
     const list = this.monsters.filter((m) => !m.dead && overlap(area, m))
       .sort((a, b) => Math.abs(a.cx - this.player.cx) - Math.abs(b.cx - this.player.cx));
     for (const m of list) {
       if (n >= maxTargets) break;
-      this.damageMonster(m, mult, owner, atk, undefined, el);
+      this.damageMonster(m, mult, owner, atk, undefined, el, { sid });
       n++;
     }
     return n;
   }
 
-  damageMonster(m, mult, owner, botAtk, botName, el) {
+  // Damage from our player (or a bot) to a monster, with the shared formulas (game/combat.js).
+  //  - our own simulation (offline, personal story bosses): computed here, applied to the simulation
+  //  - shared monsters online (m.remote): we only report which skill hit which monster; the SERVER computes the
+  //    damage with the same formulas and tells everyone (mobHit). opts.sid is the skill that hit.
+  damageMonster(m, mult, owner, botAtk, botName, el, opts = {}) {
     if (m.dead) return;
     const isPlayer = owner === 'player';
+    if (m.remote) {
+      if (!isPlayer || !opts.sid || !this.net) return; // bots exist only on our screen: they never hurt shared monsters
+      this.net.hit({ uid: m.uid, sid: opts.sid });
+      m.hurtT = 0.16;
+      return;
+    }
+    let dmg, crit = false, em = 1;
+    if (isPlayer) ({ dmg, crit, em } = hitDamage(this.stats, mult, m.def, el, this.ch.hp < this.stats.maxHp * 0.35));
+    else dmg = botDamage(botAtk, mult, m.def);
+    const by = isPlayer ? { id: this.ch.id, player: true, cx: this.player.cx } : { id: 'bot:' + botName, player: false, name: botName };
+    const res = this.sim.damage(m, dmg, by, { show: isPlayer, poison: el === 'poison' && mult === m.poisonDmg });
+    if (isPlayer) this.showOwnHit(m, res.dealt, crit, em, el);
+    else if (res.dealt > 0) this.floatText(m.cx, m.y - 2, res.dealt, '#b8b8c8', false, true);
+    this.drainMobEvents();
+  }
+
+  // What our own hit looks like and does to us: element texts, the number, lifesteal, reflect
+  showOwnHit(m, dealt, crit, em, el) {
     const st = this.stats, pas = st.pas;
-    let atk = isPlayer ? st.atk : botAtk;
-    if (isPlayer && pas.lowHp && this.ch.hp < st.maxHp * 0.35) atk *= 1 + pas.lowHp / 100;
-    let dmg = atk * mult * rand(0.85, 1.15) - m.def.def * 0.8;
-    let crit = false;
-    if (isPlayer && Math.random() * 100 < st.crit) { dmg *= 1.6 + pas.critDmg / 100; crit = true; }
-    if (isPlayer && el) dmg *= 1 + pas.elemDmg / 100;
-    // elemental weakness/resistance
-    const em = elementMult(el, m.def.res);
-    dmg *= em;
-    if (isPlayer && el && (m.elTextT || 0) < this.time) {
+    if (el && (m.elTextT || 0) < this.time) {
       if (em >= 1.25) { this.floatText(m.cx, m.y - 14, 'Yếu ' + ELEMENTS[el].name + '!', ELEMENTS[el].color, false, true); m.elTextT = this.time + 0.8; }
       else if (em <= 0.6) { this.floatText(m.cx, m.y - 14, 'Kháng ' + ELEMENTS[el].name, '#9aa0b0', false, true); m.elTextT = this.time + 0.8; }
     }
-    if (isPlayer && el && em > 1) this.burst(m.cx, m.cy, ELEMENTS[el].color, 5, 80, { shape: 'star' });
-    dmg = Math.max(1, Math.round(dmg));
-    // Guard shield absorbs first
-    if (m.shield > 0) {
-      const ab = Math.min(m.shield, dmg);
-      m.shield -= ab; dmg -= ab; m.shieldT = 0;
-      if (m.shield <= 0) { this.addFx('ring', m.cx, m.cy, 0.4, { color: '#ffd84a', r: m.w }); this.floatText(m.cx, m.y - 12, 'Vỡ khiên!', '#ffd84a', false, true); }
-      else if (isPlayer && (m.shTextT || 0) < this.time) { this.floatText(m.cx, m.y - 12, 'Đỡ', '#ffd84a', false, true); m.shTextT = this.time + 0.5; }
-      if (dmg <= 0) { m.hurtT = 0.08; return; }
+    if (el && em > 1) this.burst(m.cx, m.cy, ELEMENTS[el].color, 5, 80, { shape: 'star' });
+    if (dealt <= 0) return;
+    // lifesteal (passive)
+    if (pas.lifesteal) {
+      const heal = Math.min(dealt * pas.lifesteal / 100, st.maxHp * 0.04);
+      if (heal >= 1) { this.ch.hp = Math.min(st.maxHp, this.ch.hp + heal); this.hooks.changed('bars'); }
     }
-    m.hp -= dmg;
-    m.hurtT = 0.16;
-    m.lastHitT = this.time;
-    if (isPlayer) {
-      const first = !m.aggro;
-      m.hitByPlayer = true;
-      m.aggro = this.player; m.aggroT = 8;
-      // smart monsters call nearby allies
-      if (first && m.tier >= 2) {
-        for (const o of this.monsters) if (o !== m && !o.dead && !o.aggro && !o.def.boss && Math.abs(o.cx - m.cx) < 220) { o.aggro = this.player; o.aggroT = 8; this.floatText(o.cx, o.y - 10, '!', '#ffdd55', false, true); }
-      }
-      // lifesteal (passive)
-      if (pas.lifesteal) {
-        const heal = Math.min(dmg * pas.lifesteal / 100, st.maxHp * 0.04);
-        if (heal >= 1) { this.ch.hp = Math.min(st.maxHp, this.ch.hp + heal); this.hooks.changed('bars'); }
-      }
-      // Reflect: bounce damage back to the player
-      if (m.affix.has('reflect')) {
-        const r = Math.round(Math.min(dmg * 0.18, st.maxHp * 0.07));
-        if (r > 0) this.reflectPlayer(r);
-      }
-      if (!m.def.boss && m.def.behavior !== 'float') m.knock = (m.cx < this.player.cx ? -1 : 1) * 60;
-      this.floatText(m.cx, m.y - 2, dmg, crit ? '#ffcf3a' : '#ff9a4a', crit);
-      this.burst(m.cx + rand(-4, 4), m.cy + rand(-4, 4), crit ? '#ffe27a' : '#ffffff', crit ? 9 : 4, crit ? 110 : 70, { grav: 160 });
-      if (crit) this.addFx('ring', m.cx, m.cy, 0.3, { color: '#ffd84a', r: 20 });
-    } else {
-      this.floatText(m.cx, m.y - 2, dmg, '#b8b8c8', false, true);
+    // Reflect: bounce damage back to the player
+    if (m.affix.has('reflect')) {
+      const r = Math.round(Math.min(dealt * 0.18, st.maxHp * 0.07));
+      if (r > 0) this.reflectPlayer(r);
     }
-    if (m.hp <= 0) this.killMonster(m, owner, botName);
+    this.floatText(m.cx, m.y - 2, dealt, crit ? '#ffcf3a' : '#ff9a4a', crit);
+    this.burst(m.cx + rand(-4, 4), m.cy + rand(-4, 4), crit ? '#ffe27a' : '#ffffff', crit ? 9 : 4, crit ? 110 : 70, { grav: 160 });
+    if (crit) this.addFx('ring', m.cx, m.cy, 0.3, { color: '#ffd84a', r: 20 });
+  }
+
+  // The server's result for a hit on a shared monster: { uid, by, dmg, ab, crit, em, el }
+  mobHit(h) {
+    const m = this.remoteMobs.get(h.uid);
+    if (!m) return;
+    m.hp = Math.max(0, m.hp - h.dmg); m.shield = Math.max(0, (m.shield || 0) - (h.ab || 0)); m.hurtT = 0.16;
+    if (h.by === this.ch.id) {
+      if (h.dmg <= 0 && h.ab > 0) { this.floatText(m.cx, m.y - 12, 'Đỡ', '#ffd84a', false, true); return; }
+      this.showOwnHit(m, h.dmg, h.crit, h.em, h.el);
+    } else if (h.dmg > 0) this.floatText(m.cx, m.y - 2, h.dmg, '#b8b8c8', false, true);
   }
 
   // Reflected damage: ignores defense and invulnerability frames
@@ -643,31 +720,19 @@ export class GameWorld {
   }
 
   killMonster(m, owner, botName) {
-    m.dead = true; m.fadeT = 0.4; m.hp = 0;
-    // Self-destruct: red warning ring, then explode
-    if (m.affix.has('explode')) {
-      const bx = m.cx, by = m.cy, r = 64 * Math.max(1, m.scale * 0.8), atk = m.def.atk * 1.8, el = m.def.el;
-      this.addFx('danger', bx, by, 1, { r });
-      this.timers.push({ t: 1, fn: () => {
-        this.addFx('ring', bx, by, 0.5, { color: '#ffb040', r });
-        this.burst(bx, by, '#ffb040', 30, 160, { shape: 'star' }); this.shakeT = 0.3;
-        const p = this.player;
-        if (!p.dead && Math.hypot(p.cx - bx, p.cy - by) < r) this.hurtPlayer(atk, p.cx > bx ? 1 : -1, el, null);
-      } });
-    }
+    this.sim.kill(m, owner === 'player' ? { id: this.ch.id, player: true } : { id: 'bot:' + botName, player: false, name: botName });
+    this.drainMobEvents();
+  }
+
+  // A monster of our own simulation died (offline, or a personal story boss online)
+  onMobDie(m, by) {
+    const botName = by && !by.player ? by.name : null;
     if (m.named) {
       const n = NAMED[m.named];
-      if (n.lines && n.lines.die) this.hooks.chat(n.name, n.lines.die, 'boss');
       this.shakeT = 0.6;
       if (m.hitByPlayer && n.every) this.hooks.chat('Hệ thống', `${this.ch.name} đã hạ ${n.name}!`, 'system');
     }
     this.addFx('poof', m.cx, m.cy, 0.5, { color: m.def.boss ? '#ff3a5a' : '#c8c8ff', big: m.def.boss });
-    const g = m.spawnRef;
-    if (g) {
-      g.alive--;
-      const delay = m.def.boss ? BOSS_RESPAWN : rand(...GAME.monsters.respawnSec);
-      this.timers.push({ t: delay, fn: () => { if (this.mapId && g === this.spawnGroups.find((x) => x === g)) this.spawnMonster(g); } });
-    }
     if (m.def.boss) {
       this.shakeT = 0.8;
       this.hooks.chat('Hệ thống', m.hitByPlayer ? `${this.ch.name} đã tiêu diệt ${m.def.name}! Thiên hạ chấn động.` : `${botName || 'Ai đó'} đã hạ gục ${m.def.name}.`, 'system');
@@ -678,35 +743,22 @@ export class GameWorld {
       const k = this.stats.pas.killHeal / 100;
       ch.hp = Math.min(this.stats.maxHp, ch.hp + this.stats.maxHp * k); ch.mp = Math.min(this.stats.maxMp, ch.mp + this.stats.maxMp * k);
     }
-    let mul = 1;
-    const diff = ch.level - m.def.lv;
-    if (diff >= 10) mul = 0.2; else if (diff >= 6) mul = 0.5; else if (diff <= -3) mul = 1.25;
-    const exp = Math.max(1, Math.round(m.def.exp * mul));
+    const exp = killExp(m.def.exp, ch.level, m.def.lv);
     this.giveExp(exp);
     // gold
     const gold = randInt(m.def.gold[0], m.def.gold[1]);
     this.drops.push(new Drop(m.cx - 6, m.cy, 'gold', gold));
-    // items
-    for (const [id0, p] of m.def.drops) {
-      if (!chance(p)) continue;
-      const id = resolveItemId(id0, ch.cls);
-      const it = ITEMS[id];
-      if (!it) continue;
-      let data = { id, qty: 1, r: 0, b: {} };
-      const strong = m.def.boss || m.named || m.elite;
-      if (it.slot === 'outfit') { data.r = 3; data.rare = true; }
-      else if (it.type === 'equip') {
-        const luck = m.chief ? CHIEF.luck : strong ? GAME.monsters.elite.luck : 0;
-        const minR = m.def.boss || m.named ? 2 : m.chief ? CHIEF.minRarity : 0;
-        const roll = rollEquip(id, luck, minR);
-        data.r = roll.r; data.b = roll.bonus;
-        if (data.r >= 3) data.rare = true;
+    // items: online the server rolls them (personal loot, only we see them); offline they are rolled here
+    const kill = { mob: m.id, elite: m.elite, chief: m.chief, named: m.named };
+    if (this.net) {
+      const k = this.net.kill({ ...kill, x: Math.round(m.cx), y: Math.round(m.cy) });
+      this.kills.set(k, m.def.name);
+      if (this.kills.size > 60) this.kills.delete(this.kills.keys().next().value);
+    } else {
+      for (const data of rollDrops(kill, ch.cls, m.def.drops)) {
+        if (data.rare) this.announceDrop(data, m.def.name);
+        this.drops.push(new Drop(m.cx - 6 + rand(-10, 10), m.cy, 'item', data));
       }
-      if (data.rare) {
-        this.hooks.chat('Hệ thống', `✦ ${it.name} rơi ra từ ${m.def.name}!`, 'system');
-        this.hooks.toast(`✦ <b>${it.name}</b> rơi ra!`, 'rare');
-      }
-      this.drops.push(new Drop(m.cx - 6 + rand(-10, 10), m.cy, 'item', data));
     }
     // quest items
     for (const id of questDropsFor(ch, m.id)) {
@@ -716,6 +768,80 @@ export class GameWorld {
     const changed = onKillForQuests(ch, m.id);
     if (m.named) changed.push(...onKillForQuests(ch, m.named));
     for (const qid of changed) this.hooks.questProgress(qid);
+  }
+
+  // The closest other player within trade range, or null
+  nearestRemote() {
+    const p = this.player;
+    let best = null, bd = GAME.net.trade.range;
+    for (const r of this.remotes.values()) { const d = Math.abs(r.cx - p.cx); if (d <= bd) { bd = d; best = r; } }
+    return best;
+  }
+
+  announceDrop(data, from) {
+    const it = ITEMS[data.id];
+    this.hooks.chat('Hệ thống', from ? `✦ ${it.name} rơi ra từ ${from}!` : `✦ ${it.name} rơi ra!`, 'system');
+    this.hooks.toast(`✦ <b>${it.name}</b> rơi ra!`, 'rare');
+  }
+
+  // ===== Online loot (see net/realtime.js and server/src/loot.js) =====
+  // Drops the server rolled for one of our kills
+  serverLoot(m) {
+    const from = this.kills.get(m.k);
+    this.kills.delete(m.k);
+    if (m.map === this.mapId) this.serverDrops(m.drops, from); // otherwise they wait on the server until we come back
+  }
+  // Our server drops on this map (after a kill, a reconnect, or coming back to the map)
+  serverDrops(list, from) {
+    for (const x of list || []) {
+      if (this.drops.some((d) => d.sid === x.id) || this.pendingPicks.has(x.id)) continue;
+      const d = new Drop(x.x - 6 + rand(-10, 10), x.y, 'item', x.it);
+      d.sid = x.id;
+      if (from === undefined) { d.vy = 0; d.t = 0.5; } // re-sent drop: already on the ground, no pop
+      this.drops.push(d);
+      if (x.rare && from !== undefined) this.announceDrop(x.it, from);
+    }
+  }
+  // Answer to a pickup. On success the item itself arrives as an item change (applyChanges).
+  serverPick(m) {
+    const d = this.pendingPicks.get(m.id);
+    this.pendingPicks.delete(m.id);
+    if (m.ok || !d) return;
+    if (m.why === 'gone') return; // expired, or already ours (the change replay brings it)
+    d.taken = false; d.petSkip = m.why === 'full';
+    if (m.why === 'busy') d.retryAt = this.time + 0.6; // the server is busy: try again shortly
+    if (m.why === 'full' && !d.warned) { d.warned = true; this.hooks.toast('Túi đồ đã đầy', 'warn'); }
+    this.drops.push(d);
+  }
+  // Connection lost: pickups in flight are put back on the ground (the server may still have committed them;
+  // then the change replay on reconnect adds the item and the drop is gone on the server)
+  netLost() {
+    for (const d of this.pendingPicks.values()) { d.taken = false; this.drops.push(d); }
+    this.pendingPicks.clear();
+  }
+  // Apply item and gold changes made by the server (pickups, trades), oldest first. rev = the server's revision.
+  applyChanges(list, rev) {
+    const ch = this.ch, got = [];
+    for (const c of list || []) {
+      if (c.rev <= (ch.itemRev || 0)) continue;
+      if (c.kind === 'gain' && c.entry) {
+        const has = ch.inventory.some((e) => e.uid === c.uid) || Object.values(ch.equip).some((e) => e && e.uid === c.uid);
+        if (has) continue;
+        const it = ITEMS[c.entry.id];
+        const stack = it && it.type !== 'equip' && ch.inventory.find((e) => e.id === c.entry.id);
+        if (stack) stack.qty = Math.min(999, stack.qty + c.entry.qty); else ch.inventory.push({ ...c.entry });
+        got.push(c.entry);
+      } else if (c.kind === 'loss') {
+        const i = ch.inventory.findIndex((e) => e.uid === c.uid);
+        if (i >= 0) ch.inventory.splice(i, 1);
+        for (const [slot, e] of Object.entries(ch.equip)) if (e && e.uid === c.uid) ch.equip[slot] = null;
+      } else if (c.kind === 'gold') ch.gold = Math.max(0, ch.gold + c.qty);
+    }
+    ch.itemRev = Math.max(ch.itemRev || 0, rev || 0);
+    for (const e of got) this.hooks.gotItem(e);
+    this.recalc();
+    this.hooks.changed('inv');
+    this.hooks.save(); // write the merged state back soon
   }
 
   giveExp(exp) {
@@ -791,205 +917,6 @@ export class GameWorld {
     if (it.home) this.timers.push({ t: 0.2, fn: () => this.goHome() });
   }
 
-  // ================= MONSTERS =================
-  // AI by smartness tier (m.tier, see data/affixes.js) + traits (m.affix)
-  updateMonster(m, dt) {
-    if (m.dead) { m.fadeT -= dt; return; }
-    m.animT += dt;
-    m.alpha = Math.min(1, m.alpha + dt * 2);
-    if (m.hurtT > 0) m.hurtT -= dt;
-    if (m.aggroT > 0) { m.aggroT -= dt; if (m.aggroT <= 0) m.aggro = null; }
-    const p = this.player;
-    if (p.dead) m.aggro = null;
-    const d = m.def;
-    const dist = Math.abs(p.cx - m.cx);
-    // poison
-    if (m.poison > 0) {
-      m.poison -= dt; m.poisonT -= dt;
-      if (m.poisonT <= 0) { m.poisonT = 0.5; this.damageMonster(m, m.poisonDmg, 'player', undefined, undefined, 'poison'); if (m.dead) return; }
-    }
-    // Guard regenerates its shield, Regen heals when not being hit
-    if (m.maxShield && m.shield <= 0) { m.shieldT += dt; if (m.shieldT >= 10) { m.shield = m.maxShield; m.shieldT = 0; this.addFx('ring', m.cx, m.cy, 0.5, { color: '#ffd84a', r: m.w * 0.8 }); } }
-    if (m.affix.has('regen') && this.time - m.lastHitT > 3 && m.hp < m.maxHp) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.03 * dt);
-    if (d.behavior === 'boss') return this.updateBoss(m, dt, dist);
-    const sameFloor = Math.abs(p.standY - m.standY) < 12 && p.onGround;
-    // charges on sight (tier 1+)
-    if (!m.aggro && !p.dead && m.tier >= 1 && m.alpha >= 1) {
-      const sight = 100 + m.tier * 35;
-      const sees = d.behavior === 'float' ? dist < sight + 20 && Math.abs(p.cy - m.cy) < 110 : sameFloor && dist < sight;
-      if (sees) { m.aggro = p; m.aggroT = 6; this.floatText(m.cx, m.y - 8, '!', '#ffdd55', false, true); }
-    }
-    const fast = (m.enraged ? 1.5 : 1) * (m.tier >= 3 ? 1.1 : 1);
-    // backs off to recover at low HP (tier 3)
-    if (m.tier >= 3 && !m.retreated && m.hp < m.maxHp * 0.25 && m.aggro && !m.named) { m.retreated = true; m.retreatT = 2; }
-    if (m.retreatT > 0) { m.retreatT -= dt; m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.025 * dt); }
-    // Blink: vanishes and reappears next to the player
-    if (m.affix.has('blink') && m.aggro && !p.dead) {
-      m.blinkT -= dt;
-      if (m.blinkT <= 0 && dist > 50) {
-        m.blinkT = rand(4, 7);
-        const side = p.facing > 0 ? -1 : 1; // appear behind the player
-        const nx = p.cx + side * 34 - m.w / 2;
-        const ok = d.behavior === 'float' || (sameFloor && nx >= m.range[0] - 1 && nx <= m.range[1] + 1);
-        if (ok) {
-          this.addFx('poof', m.cx, m.cy, 0.4, { color: '#9fe0ff' });
-          m.x = d.behavior === 'float' ? clamp(nx, 0, this.map.width - m.w) : clamp(nx, m.range[0], m.range[1]);
-          if (d.behavior === 'float') m.y = clamp(p.y - 10, 40, GROUND_Y - m.h);
-          this.addFx('poof', m.cx, m.cy, 0.4, { color: '#9fe0ff' });
-          m.alpha = 0.4;
-        }
-      }
-    }
-    // dodge projectiles (tier 2+)
-    m.dodgeT -= dt;
-    if (m.tier >= 2 && m.dodgeT <= 0 && m.aggro) {
-      const threat = this.projs.find((pr) => pr.owner === 'player' && !pr.pierce && Math.sign(m.cx - pr.x) === Math.sign(pr.vx) && Math.abs(m.cx - pr.x) < 70 && Math.abs(pr.y - m.cy) < m.h);
-      if (threat) {
-        m.dodgeT = m.tier >= 3 ? 1.8 : 2.6;
-        if (chance(m.tier >= 3 ? 0.45 : 0.3)) {
-          if (d.behavior === 'float') m.dodgeVy = (pr_up(m) ? -1 : 1) * 160;
-          else if (!(m.jy > 0)) { m.jy = 0.01; m.jvy = 300; }
-          this.floatText(m.cx, m.y - 8, 'né', '#cfe8ff', false, true);
-        }
-      }
-    }
-    if (d.behavior === 'float') {
-      if (!m.aggro && d.ranged && dist < 170 && Math.abs(p.cy - m.cy) < 100 && !p.dead) { m.aggro = p; m.aggroT = 6; }
-      let tx = m.homeX, ty = m.homeY;
-      if (m.retreatT > 0) { tx = m.cx < p.cx ? m.homeX - 120 : m.homeX + 120; ty = m.homeY - 20; }
-      else if (m.aggro && Math.abs(m.homeX - p.cx) < 360 + m.tier * 40) {
-        // ranged monsters keep their distance; smarter ones stay further away
-        const keep = d.ranged ? (m.tier >= 1 ? 110 : 90) : 0;
-        tx = p.cx - m.w / 2 + (d.ranged ? (m.cx < p.cx ? -keep : keep) : 0); ty = p.y - (d.ranged ? 30 : 4);
-      } else {
-        m.thinkT -= dt;
-        if (m.thinkT <= 0) { m.thinkT = rand(2, 4); m.wanderX = clamp(m.homeX + rand(-70, 70), m.range[0], m.range[1] + 40); }
-        tx = m.wanderX ?? m.homeX; ty = m.homeY + Math.sin(this.time + m.homeX) * 8;
-      }
-      const sp = d.speed * (m.aggro ? 1.6 : 1) * fast;
-      const dx = tx - m.x, dy = ty - m.y;
-      m.vx = clamp(dx * 2, -sp, sp);
-      m.x = clamp(m.x + m.vx * dt, 0, this.map.width - m.w);
-      let vy = clamp(dy * 2, -sp, sp);
-      if (m.dodgeVy) { vy = m.dodgeVy; m.dodgeVy *= 0.85; if (Math.abs(m.dodgeVy) < 10) m.dodgeVy = 0; }
-      m.y = clamp(m.y + vy * dt, 40, GROUND_Y - m.h);
-      if (Math.abs(m.vx) > 2) m.facing = m.vx > 0 ? 1 : -1;
-      if (d.ranged && m.aggro && !(m.retreatT > 0)) {
-        m.atkCd -= dt;
-        m.facing = p.cx > m.cx ? 1 : -1;
-        if (m.atkCd <= 0 && dist < 240 + m.tier * 20) {
-          m.atkCd = rand(2.2, 3) * (m.tier >= 3 ? 0.7 : 1) * (m.enraged ? 0.7 : 1);
-          // tier 3 leads its shots in the direction the player is running
-          const lead = m.tier >= 3 ? (dist / 160) * p.vx * 0.8 : 0;
-          const ang = Math.atan2(p.cy - m.cy, p.cx + lead - m.cx);
-          const sp2 = 150 + m.tier * 12;
-          this.projs.push(new Projectile({ owner: 'monster', kind: d.proj2 || (d.el === 'ice' ? 'waterbolt' : 'ember'), x: m.cx - 6, y: m.cy - 6, vx: Math.cos(ang) * sp2, vy: Math.sin(ang) * sp2, range: 300, atk: d.atk * (m.enraged ? 1.5 : 1), el: d.el, w: 10, h: 10, src: m }));
-          m.attacking = true; this.timers.push({ t: 0.3, fn: () => { m.attacking = false; } });
-        }
-      }
-      return;
-    }
-    // walk / hop: move along its own platform
-    if (m.knock) { m.x += m.knock * dt; m.knock *= 0.85; if (Math.abs(m.knock) < 3) m.knock = 0; }
-    m.thinkT -= dt;
-    let want = 0;
-    if (m.retreatT > 0) want = p.cx > m.cx ? -1 : 1;
-    else if (m.aggro && Math.abs(p.standY - m.standY) < 70) {
-      want = p.cx > m.cx + 6 ? 1 : p.cx < m.cx - 6 ? -1 : 0;
-    } else {
-      if (m.thinkT <= 0) { m.thinkT = rand(1.5, 4); m.walkDir = chance(0.35) ? 0 : chance(0.5) ? 1 : -1; }
-      want = m.walkDir || 0;
-    }
-    // charge (tier 2+): pauses as a tell, then rushes in
-    if (m.tier >= 2 && m.aggro && sameFloor && !(m.retreatT > 0)) {
-      if (m.windup > 0) {
-        m.windup -= dt; want = 0;
-        if (m.windup <= 0) { m.charging = 0.45; m.chargeDir = p.cx > m.cx ? 1 : -1; }
-      } else if (!(m.charging > 0)) {
-        m.chargeT -= dt;
-        if (m.chargeT <= 0 && dist > 50 && dist < 170) { m.chargeT = rand(3.5, 5.5) * (m.tier >= 3 ? 0.75 : 1); m.windup = 0.45; this.floatText(m.cx, m.y - 10, '!!', '#ff7a5a', false, true); }
-      }
-    }
-    if (m.charging > 0) {
-      m.charging -= dt;
-      m.vx = m.chargeDir * d.speed * 3.6;
-      if (Math.random() < dt * 30) this.spark(m.cx - m.chargeDir * m.w / 2, m.y + m.h - 2, { vx: -m.chargeDir * 40, vy: rand(-20, 0), color: '#d8c8b0', size: rand(1.5, 2.5), life: 0.4, glow: false });
-    } else if (d.behavior === 'hop') {
-      m.jy = m.jy || 0; m.jvy = m.jvy || 0;
-      if (m.jy <= 0) {
-        m.vx = 0;
-        m.hopT = (m.hopT || 0) - dt;
-        if (want && m.hopT <= 0) { m.jvy = 240; m.hopDir = want; m.hopT = m.aggro ? 0.35 / fast : 0.8; }
-      }
-      if (m.jvy > 0 || m.jy > 0) m.vx = (m.hopDir || 0) * d.speed * (m.aggro ? 1.3 : 0.8) * fast;
-    } else {
-      m.vx = m.windup > 0 ? 0 : want * d.speed * (m.aggro ? 1.5 : 1) * fast;
-    }
-    // jump (hopping, or jumping to dodge projectiles)
-    if (m.jvy > 0 || m.jy > 0) {
-      m.jy += m.jvy * dt; m.jvy -= 900 * dt;
-      if (m.jy <= 0) { m.jy = 0; m.jvy = 0; }
-    }
-    m.y = m.standY - m.h - (m.jy || 0);
-    if (m.vx) m.facing = m.vx > 0 ? 1 : -1;
-    if (m.windup > 0) m.facing = p.cx > m.cx ? 1 : -1;
-    m.x = clamp(m.x + m.vx * dt, m.range[0], m.range[1]);
-    if (m.x <= m.range[0] + 0.5 || m.x >= m.range[1] - 0.5) { m.walkDir = -(m.walkDir || 1); if (m.charging > 0) m.charging = 0; }
-  }
-
-  updateBoss(m, dt, dist) {
-    const p = this.player, d = m.def;
-    if (!m.aggro && dist < 340 && !p.dead) { m.aggro = p; m.aggroT = 99; this.hooks.chat(d.name, d.lines.aggro, 'boss'); }
-    if (m.aggro) m.aggroT = 99;
-    m.jy = m.jy || 0;
-    const rage = m.hp < m.maxHp * 0.5;
-    if (rage && !m.raged && d.lines.rage) { m.raged = true; this.hooks.chat(d.name, d.lines.rage, 'boss'); this.shakeT = 0.5; this.addFx('ring', m.cx, m.cy, 0.8, { color: '#ff3a4a', r: 60 }); }
-    if (m.slamming) {
-      m.jy += m.jvy * dt; m.jvy -= 1100 * dt;
-      m.x = clamp(m.x + m.vx * dt, 20, this.map.width - m.w - 20);
-      if (m.jy <= 0) {
-        m.jy = 0; m.slamming = false; m.vx = 0;
-        this.shakeT = 0.4;
-        this.addFx('shock', m.cx, GROUND_Y, 0.6, {});
-        if (p.onGround && p.standY === GROUND_Y && Math.abs(p.cx - m.cx) < 170) this.hurtPlayer(d.atk * 1.2, p.cx > m.cx ? 1 : -1, d.el, m);
-      }
-      m.y = m.standY - m.h - m.jy;
-      return;
-    }
-    m.attacking = false;
-    if (!m.aggro) { m.vx = 0; m.y = m.standY - m.h; return; }
-    m.facing = p.cx > m.cx ? 1 : -1;
-    m.vx = dist > 70 ? m.facing * d.speed * (rage ? 1.5 : 1) : 0;
-    m.x = clamp(m.x + m.vx * dt, 20, this.map.width - m.w - 20);
-    m.y = m.standY - m.h;
-    m.actT = (m.actT || 2) - dt;
-    if (m.actT <= 0) {
-      m.actT = rage ? rand(1.8, 2.4) : rand(2.8, 3.6);
-      const r = Math.random();
-      if (r < 0.42) {
-        m.attacking = true;
-        const n = rage ? 7 : 5;
-        const base = Math.atan2(p.cy - m.cy, p.cx - m.cx);
-        for (let i = 0; i < n; i++) {
-          const a = base + (i - (n - 1) / 2) * 0.22;
-          this.projs.push(new Projectile({ owner: 'monster', kind: d.proj, x: m.cx - 8, y: m.cy - 20, vx: Math.cos(a) * 170, vy: Math.sin(a) * 170, range: 420, atk: d.atk * 0.8, el: d.el, w: 14, h: 14, src: m }));
-        }
-        this.hooks.chat(d.name, pick(d.lines.shoot), 'boss');
-      } else if (r < 0.75) {
-        m.slamming = true; m.jvy = 520; m.vx = clamp((p.cx - m.cx) * 1.1, -260, 260);
-      } else {
-        const wisps = this.monsters.filter((x) => !x.dead && x.id === d.summon).length;
-        if (wisps < 4) for (let i = 0; i < 2; i++) {
-          const w = new Monster(d.summon, clamp(m.cx + rand(-120, 120), 20, this.map.width - 40), GROUND_Y, [20, this.map.width - 40], null, { elite: false, lvBonus: 0 });
-          w.y = m.y + rand(0, 30); w.homeY = GROUND_Y - 80; w.aggro = p; w.aggroT = 30;
-          this.monsters.push(w);
-          this.addFx('poof', w.cx, w.cy, 0.5, { color: '#7ff2d6' });
-        }
-        this.hooks.chat(d.name, d.lines.summon, 'boss');
-      }
-    }
-  }
-
   // ================= PROJECTILES / AREAS / DROPS =================
   updateProjectiles(dt) {
     const p = this.player;
@@ -1008,7 +935,7 @@ export class GameWorld {
         if (m.dead || pr.hit.has(m) || !overlap(pr, m)) continue;
         if (pr.homing && pr.target && m !== pr.target) continue; // homing orbs only hit what they chase
         pr.hit.add(m);
-        this.damageMonster(m, pr.mult, pr.owner, pr.atk, pr.botName, pr.el);
+        this.damageMonster(m, pr.mult, pr.owner, pr.atk, pr.botName, pr.el, { sid: pr.sid });
         if (pr.kind === 'thunderorb') {
           this.addFx('lightning', m.cx, m.y + m.h, 0.18, {});
           this.burst(pr.x + pr.w / 2, pr.y + pr.h / 2, '#bfe0ff', 8, 90, { shape: 'star', drag: 0.9 });
@@ -1029,8 +956,11 @@ export class GameWorld {
         for (const m of this.monsters) {
           if (m.dead) continue;
           if (Math.hypot(m.cx - z.x, m.cy - z.y) < z.r + m.w / 2) {
-            this.damageMonster(m, z.mult, 'player', undefined, undefined, z.el || 'poison');
-            if (!m.dead) { m.poison = 2; m.poisonDmg = z.mult * 0.3; }
+            if (m.remote) this.damageMonster(m, z.mult, 'player', undefined, undefined, z.el || 'poison', { sid: z.sid }); // the server adds the poison
+            else {
+              this.damageMonster(m, z.mult, 'player', undefined, undefined, z.el || 'poison');
+              if (!m.dead) { m.poison = 2; m.poisonDmg = z.mult * 0.3; }
+            }
           }
         }
       }
@@ -1060,6 +990,15 @@ export class GameWorld {
   // Pick up an item (player or pet). Returns true if it was picked up.
   pickupDrop(d, tx, ty) {
     if (d.taken) return false;
+    if (d.sid) {
+      // a server drop: ask the server; it commits the item and sends it back as an item change
+      if (d.retryAt && this.time < d.retryAt) return false;
+      if (!this.canTake(d)) { if (!d.warned) { d.warned = true; this.hooks.toast('Túi đồ đã đầy', 'warn'); } return false; }
+      if (!this.net || !this.net.pick(d.sid)) return false;
+      d.taken = true;
+      this.pendingPicks.set(d.sid, d);
+      return true;
+    }
     if (d.kind === 'gold') {
       this.ch.gold += d.data;
       this.floatText(tx, ty - 8, `+${d.data} lượng`, '#ffd84a', false, true);
@@ -1231,9 +1170,12 @@ export class GameWorld {
     }
     for (const m of this.monsters) m.draw(ctx, cam, t);
     this.bots.render(ctx, cam);
+    const tradeHint = this.net && !this.trading ? this.nearestRemote() : null;
     for (const r of this.remotes.values()) {
       r.draw(ctx, cam);
       this.nameTag(ctx, r.name, r.cx - cam, r.y + r.h + 10, '#ffe08a', 8, true);
+      if (r === tradeHint) this.nameTag(ctx, this.party && this.party.members.some((x) => x.id === r.id) ? 'T · Giao dịch' : 'T · Giao dịch  ·  G · Mời tổ đội', r.cx - cam, r.y + r.h + 19, '#bfe6ff', 7);
+      if (this.party && this.party.members.some((x) => x.id === r.id)) this.nameTag(ctx, '◆ Tổ đội', r.cx - cam, r.y - (r.title ? 34 : 24) + (r.say ? -10 : 0), '#8fe8a0', 7);
       if (r.title) this.nameTag(ctx, '「' + r.title + '」', r.cx - cam, r.y - 24, '#ffd36a', 7);
       if (r.say) this.bubble(ctx, r.say.text, r.cx - cam, r.y - (r.title ? 34 : 24));
     }
