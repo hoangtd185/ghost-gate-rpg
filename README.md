@@ -15,6 +15,7 @@ It plays like an MMO. On the Node server, real players on the same map see each 
 - **Crafting** at the embroiderer NPC: outfits and consumables from farmed materials
 - **9 outfits (cosmetic slot)** with capes, crowns, fox ears and tails, animated silk ribbons and auras. Rare drops from bosses, some craftable
 - **Flowing capes (own slot, worn with an outfit)**: simulated cloth that trails while running
+- **Vạn Bảo Các (premium shop)**: capes, outfits and utilities for Nguyên Bảo, earned in game only (daily check-in, chieftains, field bosses, chapter finales); live try-on preview; online the server owns the balance
 - **Main story "Huyền Môn Phong Ấn"**: a prologue + 3 chapters (32 quests), voiced-style dialogue with character portraits, an in-story choice that changes the ending, story-gated zones that require leveling up
 - Tutorial quests, side quests, daily bounty quests, daily gifts, titles shown above the character
 - Context-aware NPC dialogue (story progress, time of day, class, pet, gear…) and NPCs that chat with each other
@@ -408,6 +409,7 @@ __game().loadMap('ghost_gate', 200) // teleport to the first boss
 | Enter | Chat with players on this map (bots reply); start with `!` for world chat |
 | P | Summon / dismiss the pet |
 | T | Trade with the player standing next to you (online) |
+| B | Vạn Bảo Các: premium shop, daily check-in |
 | G | Invite the player standing next to you to your party (online) |
 | Esc | Close window / system menu |
 
@@ -475,6 +477,7 @@ Outfits change the character's look (animated silk ribbons orbiting the body, ca
 |---|---|---|
 | Áo Choàng Lữ Khách | 1 | Crafting (fox tails, ghost straw) |
 | Nguyệt Ảnh Phi Phong | 12 | Crafting (ice silk, wisp flames, ice crystals) |
+| Anh Đào Phi Phong · Băng Tinh Phi Phong · Phượng Hoàng Phi Phong · U Minh Quỷ Bào · Kim Long Phi Phong | 1 | Vạn Bảo Các (120–240 Nguyên Bảo) |
 
 A cape is a small cloth simulation (`gfx/cape.js`, tuned in `GAME.cape`): it hangs behind the back, trails and ripples while running, and some shed particles. A cape replaces an outfit's own cape; outfits with a built-in cape (Hắc Long Bào, Phượng Vũ Y, Huyết Nguyệt Chiến Giáp) now have it flowing too. Other players and some bots show theirs.
 

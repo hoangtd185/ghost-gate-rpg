@@ -6,10 +6,12 @@
 //                     hit {uid, sid} · cast {sid} · kill {k, map, mob, x, y, named} (personal story bosses) · pick {id}
 //                     party_invite {to} · party_answer {from, yes} · party_leave
 //                     trade_ask {to} · trade_answer {from, yes} · trade_offer {items, gold} · trade_lock {on} · trade_confirm · trade_cancel
+//                     prem {op: buy {offer, req} | checkin | claim {quest}}
 //   server -> client  welcome {id, online} · snap {map, players} · join · leave · st · look · chat · online · kicked · error
 //                     mobs {map, list} · mspawn {m} · ms {s} · mev {list} · mhit {uid, by, dmg, ab, crit, em, el} · mdie {uid, by} · mkill {uid, exp, gold?, drops?}
 //                     chg {list, rev} · loot {k, drops} · drops {map, drops} · pick {id, ok, why?}
 //                     party_ask · party_state · party_err · trade_ask · trade_open · trade_state · trade_end · trade_err
+//                     prem {op, ok, why?, req?, got?, streak?, quest?}
 import { WebSocketServer } from 'ws';
 import { verifyToken } from './auth.js';
 import { MAPS } from '../../client/src/data/maps.js';
@@ -19,6 +21,7 @@ import { createLoot } from './loot.js';
 import { createTrades } from './trade.js';
 import { createMobs } from './mobs.js';
 import { createParties } from './party.js';
+import { createPremium } from './premium.js';
 
 const NET = GAME.net;
 const ANIMS = new Set(['idle', 'walk', 'run', 'jump', 'atk', 'hurt', 'sit']);
@@ -59,7 +62,8 @@ export function attachRealtime(server, { db, secret }) {
   const loot = createLoot({ db });
   const trades = createTrades({ db, players, send, pushChanges });
   const parties = createParties({ players, send });
-  const mobs = createMobs({ players, send, loot, parties });
+  const premium = createPremium({ db, send, pushChanges });
+  const mobs = createMobs({ players, send, loot, parties, premium });
 
   function enterMap(s, map) {
     const same = s.map === map; // re-entering the same map: only the client itself needs the snapshot
@@ -184,6 +188,8 @@ export function attachRealtime(server, { db, secret }) {
         mobs.cast(s, m);
       } else if (m.t === 'pick') {
         loot.pick(s, m, (res) => { if (res.ok) pushChanges(s); send(s, res); });
+      } else if (m.t === 'prem') {
+        premium.handle(s, m);
       } else if (typeof m.t === 'string' && m.t.startsWith('party_')) {
         parties.handle(s, m);
       } else if (typeof m.t === 'string' && m.t.startsWith('trade_')) {

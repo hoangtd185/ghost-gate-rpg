@@ -21,6 +21,8 @@ import {
 import { SKILL_GLYPH, SKILL_COLOR } from './skillglyphs.js';
 import { escapeHtml, fmtNum } from '../engine/util.js';
 import { GAME } from '../config.js';
+import { PremiumUI } from './premium.js';
+import { questIngots } from '../game/premium.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -69,6 +71,7 @@ function rewardText(q, cls) {
   for (const [id] of r.random || []) parts.push(`có thể có ${ITEMS[id].name}`);
   if (r.pet) parts.push('pet Tiểu Quỷ');
   if (r.title) parts.push(`danh hiệu 「${r.title}」`);
+  if (r.ingots && !q.daily) parts.push(`${r.ingots} Nguyên Bảo`);
   return parts.join(' · ');
 }
 
@@ -95,6 +98,7 @@ export class GameUI {
         <button data-win="char" title="Nhân vật (C)">Nhân vật<kbd>C</kbd></button>
         <button data-win="skill" title="Kỹ năng (K)">Kỹ năng<kbd>K</kbd></button>
         <button data-win="quest" title="Nhiệm vụ (L)">Nhiệm vụ<kbd>L</kbd></button>
+        <button data-win="premium" class="mprem" title="Vạn Bảo Các (B)">Vạn Bảo<kbd>B</kbd></button>
         <button data-win="sys" title="Hệ thống (Esc)">☰<kbd>Esc</kbd></button>
       </div>
       <div class="hud-track" id="hTrack"></div>
@@ -146,6 +150,7 @@ export class GameUI {
       else if (e.code === 'KeyK') this.toggle('skill');
       else if (e.code === 'KeyL') this.toggle('quest');
       else if (e.code === 'KeyP') this.togglePet();
+      else if (e.code === 'KeyB') this.toggle('premium');
       else if (e.code === 'KeyT') this.askTrade();
       else if (e.code === 'KeyG') this.askParty();
       else if (e.code === 'Escape') { if (this.open) this.close(); else this.toggle('sys'); }
@@ -334,13 +339,15 @@ export class GameUI {
     const body = {
       inv: () => this.winInventory(), char: () => this.winChar(), skill: () => this.winSkills(), quest: () => this.winQuests(),
       sys: () => this.winSystem(), npc: () => this.winNpc(), craft: () => this.winCraft(), shop: () => this.winShop(), death: () => this.winDeath(), forge: () => this.winForge(), dialog: () => this.winDialog(), trade: () => this.winTrade(),
+      premium: () => this.winPremium(),
     }[this.open]();
-    const titles = { inv: 'Túi đồ', char: 'Nhân vật', skill: 'Kỹ năng', quest: 'Nhiệm vụ', sys: 'Hệ thống', npc: '', shop: 'Cửa hàng', death: '', forge: 'Lò rèn của Anh Sắt', craft: 'Tú Nương · Chế tạo', dialog: '', trade: 'Giao dịch' };
+    const titles = { inv: 'Túi đồ', char: 'Nhân vật', skill: 'Kỹ năng', quest: 'Nhiệm vụ', sys: 'Hệ thống', npc: '', shop: 'Cửa hàng', death: '', forge: 'Lò rèn của Anh Sắt', craft: 'Tú Nương · Chế tạo', dialog: '', trade: 'Giao dịch', premium: 'Vạn Bảo Các' };
     const title = this.open === 'npc' ? NPCS[this.npcId].name : this.open === 'shop' ? NPCS[this.shopNpc].name + ' · Cửa hàng' : titles[this.open];
     w.className = 'win w-' + this.open;
     w.innerHTML = (title ? `<header><h2>${escapeHtml(title)}</h2>${this.open === 'death' ? '' : '<button class="x" data-act="close" aria-label="Đóng">✕</button>'}</header>` : '') + `<div class="wb">${body}</div>`;
     w.querySelectorAll('[data-act]').forEach((el) => el.addEventListener('click', (e) => { e.stopPropagation(); this.act(el.dataset.act, el.dataset); }));
     if (this.open === 'dialog') this.drawPortrait();
+    if (this.open === 'premium') this.startPreview();
   }
 
   slotHtml(e, extraCls = '', act = 'sel') {
@@ -527,7 +534,7 @@ export class GameUI {
       <tr><td><kbd>1</kbd> <kbd>2</kbd></td><td>Bình máu / linh khí</td><td><kbd>↑</kbd> / <kbd>E</kbd></td><td>Qua cổng, nói chuyện</td></tr>
       <tr><td><kbd>I</kbd><kbd>C</kbd><kbd>K</kbd><kbd>L</kbd></td><td>Các cửa sổ</td><td><kbd>Enter</kbd></td><td>Chat (gõ <kbd>!</kbd> đầu câu = kênh thế giới)</td></tr>
       <tr><td><kbd>P</kbd></td><td>Gọi / cất pet Tiểu Quỷ</td><td><kbd>T</kbd></td><td>Giao dịch với người chơi đứng gần</td></tr>
-      <tr><td><kbd>G</kbd></td><td>Mời người đứng gần vào tổ đội</td><td></td><td></td></tr></table></div>`;
+      <tr><td><kbd>G</kbd></td><td>Mời người đứng gần vào tổ đội</td><td><kbd>B</kbd></td><td>Vạn Bảo Các (áo choàng, điểm danh)</td></tr></table></div>`;
   }
 
   winNpc() {
@@ -554,6 +561,7 @@ export class GameUI {
     if (npc.shop) html += `<button data-act="shop">Mua bán</button>`;
     if (npc.forge) html += `<button data-act="forge"><em>✦</em> Lò rèn · Cường hóa, ép ngọc</button>`;
     if (npc.craft) html += `<button data-act="craftwin"><em>✿</em> Chế tạo · Thêu ngoại trang</button>`;
+    if (npc.premium) html += `<button class="storybtn" data-act="premwin"><em>◆</em> Vạn Bảo Các · Áo choàng, ngoại trang</button>`;
     html += `<button class="ghost" data-act="close">Tạm biệt</button></div>`;
     return html;
   }
@@ -776,6 +784,7 @@ export class GameUI {
   act(a, d) {
     if (['use', 'equip', 'drop', 'sell', 'sellall', 'fsel'].includes(a) && this.inTrade(d.uid)) { this.toast('Vật phẩm đang trong giao dịch', 'warn'); return; }
     if (a.startsWith('t') && this.tradeAct(a, d)) return;
+    if (a.startsWith('p') && this.premiumAct(a, d)) return;
     const ch = this.ch, w = this.world;
     const changed = () => { w.recalc(); w.player.refreshLook(); this.refreshAll(); this.cb.save(); };
     switch (a) {
@@ -804,6 +813,7 @@ export class GameUI {
         changed(); break;
       }
       case 'tab': this.shopTab = d.t; this.selected = null; this.renderWin(); break;
+      case 'premwin': this.openPremium(); break;
       case 'shop': this.shopNpc = this.npcId; this.shopTab = 'buy'; this.open = 'shop'; this.renderWin(); break;
       case 'stat': if (addStat(ch, d.stat)) { w.event('stat'); changed(); } break;
       case 'skillup': if (upgradeSkill(ch, d.sid)) { w.event('skillup'); changed(); } break;
@@ -1014,6 +1024,12 @@ export class GameUI {
       ch.title = q.reward.title;
       got.push(`danh hiệu 「${q.reward.title}」`);
       this.banner(`<small>Danh hiệu mới</small>${escapeHtml(q.reward.title)}`);
+    }
+    const ingots = questIngots(qid);
+    if (ingots) {
+      // online the server grants them once this completion is saved (world.claimQuest); offline right away
+      if (w.net) w.claimQuest(qid); else ch.ingots = (ch.ingots || 0) + ingots;
+      got.push(`${ingots} Nguyên Bảo`);
     }
     if (q.reward.pet && !ch.pet) {
       ch.pet = { id: q.reward.pet, on: false };
@@ -1230,3 +1246,6 @@ export class GameUI {
     if (this.open === 'inv' || this.open === 'quest') this.renderWin();
   }
 }
+
+// Vạn Bảo Các (premium shop) window and actions
+Object.assign(GameUI.prototype, PremiumUI);

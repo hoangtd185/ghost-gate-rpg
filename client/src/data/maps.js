@@ -18,6 +18,7 @@ export const MAPS = {
       { id: 'healer', x: 560 },
       { id: 'smith', x: 760 },
       { id: 'constable', x: 980 },
+      { id: 'merchant', x: 1085 }, // Vạn Bảo Các (premium shop)
       { id: 'lan', x: 640, after: 'st7', hideWhile: 'st18' }, // appears after being rescued, goes missing again at the end of Chapter 3
       { id: 'priest', x: 1180, until: 'st13' },
       { id: 'embroiderer', x: 1330 }, // leaves the village in Chapter 3

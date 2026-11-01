@@ -78,7 +78,8 @@ async function onSaveResult(res, snap) {
   if (res.stale && (w.ch.itemRev || 0) < res.itemRev && !(net && net.connected)) {
     // no realtime connection to replay the changes: fetch them
     try { const c = await storage.changes(w.ch.id, w.ch.itemRev || 0); if (world === w) w.applyChanges(c.list, c.rev); } catch { /* next save tries again */ }
-  } else if (res.items && (w.ch.itemRev || 0) === res.itemRev) {
+  } else if (!res.stale && net) w.claimPending(); // quest completions are saved now: ask for their Nguyên Bảo
+  if (res.items && !res.stale && (w.ch.itemRev || 0) === res.itemRev) {
     w.ch.inventory = res.items.inventory;
     w.ch.equip = { ...w.ch.equip, ...res.items.equip };
     w.recalc(); w.player.refreshLook(); ui.refreshAll();
@@ -114,6 +115,7 @@ function enterGame(ch, isNew) {
       toast: (m, k) => ui.toast(m, k),
       trade: (m) => ui.onTrade(m),
       party: (m) => ui.onParty(m),
+      premium: (m) => ui.onPremium(m),
     });
     net.attach(world);
   }

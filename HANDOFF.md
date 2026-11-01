@@ -46,6 +46,7 @@ Also exposed: `__ui()` (the GameUI), `__lookFor`, `__humSheet`, `__drawFrame` an
   - `combat.test.mjs`: the shared damage formula (multiplier, defence, weakness/resistance, crit, minimum 1), skill level scaling, learned-skill check, skill reach.
   - `mobs.test.mjs`: shared monsters on the server: damage computed by the server (a client number is ignored), unknown skill / out of reach / rate limit, buffs, EXP shares, party split, loot to the top group, level gap, death broadcast.
   - `custody.test.mjs`: what an uploaded save may change (free / earned / server-only items, revisions, ownership after trades), `grantItem`, batched `grantItems`, `commitTrade`, the ledger, crafted capes, items only in their own slot.
+  - `premium.test.mjs`: offers, check-in streak and day boundary, kill / quest ingots, offline purchases; on the server: saves cannot change the balance, check-in once a day, purchases all-or-nothing and applied once, full bag, quest ingots once and only when saved as done.
   - `cape.test.mjs`: every cape item is drawable; the cloth hangs behind the back, trails while moving, keeps its segment length, never rises over the shoulders, restarts after a teleport.
   - `lootqueue.test.mjs`: pickup commit queue (one batch for many players, answered after the commit, no double queueing, per-player rate limit → `busy`), kill reports only for story bosses.
   - `auth.test.mjs`: login tokens; malformed tokens are rejected without throwing.
@@ -60,6 +61,7 @@ Also exposed: `__ui()` (the GameUI), `__lookFor`, `__humSheet`, `__drawFrame` an
 | `chief.test.mjs` | forced chieftain spawn (only one at a time), stats vs a normal monster, chat announcement, drops |
 | `movement.test.mjs` | walk vs double-tap sprint (and the run animation), slow double tap, Ctrl + ↓ (either order), plain ↓ sits |
 | `craft.test.mjs` | the embroiderer: tutorial recipe, fairy outfit, materials consumed |
+| `premium.test.mjs` | offline: B opens Vạn Bảo Các, check-in once, buy disabled without ingots, live try-on preview, buy and wear a cape, the merchant, a chieftain pays ingots; online: check-in through the server (ingots won elsewhere arrive with it), a console-edited balance is never saved, purchases through the server |
 | `capes.test.mjs` | craft a cape, equip it in its own slot with an outfit on, a cape replaces an outfit's cape (which flows otherwise), the cloth hangs behind standing and flies out while running |
 | `server.test.mjs` | register → create → play → save through the real API |
 | `multiplayer.test.mjs` | two browsers on the server: see each other, re-entering a map, movement sync, player count, map chat + bubble (HTML shown as text), gear change visible after save, an invented outfit refused, other map hidden, world chat (`!`), leaving, malformed login, map-entry flood throttled, `saved` throttled |
@@ -96,6 +98,8 @@ client/src/
   game/pet.js        the imp pet that picks up drops
   gfx/               canvas drawing: humanoid.js (chibi characters + outfit parts), cape.js (flowing capes), monsters.js,
                      backgrounds.js, icons.js, pet.js, draw.js (toolkit)
+  ui/premium.js      Vạn Bảo Các window (premium shop, check-in, try-on preview), mixed into GameUI
+  game/premium.js    SHARED: premium shop rules (offers, check-in streak, where Nguyên Bảo comes from)
   ui/hud.js          GameUI: HUD, all windows (inventory, skills, quests, shop, forge, craft, dialogue,
                      scenes, trade), party panel, quest tracker
   ui/screens.js      login / character select / create
@@ -107,6 +111,7 @@ server/src/
   realtime.js        WebSocket server at /ws: auth, sessions (character cache), rooms per map, movement,
                      chat, rate limits; wires the modules below
   mobs.js            shared monsters: one MobSim per occupied map, server-side damage, rewards (EXP shares, loot)
+  premium.js         premium shop online: buy / check-in / quest claims, Nguyên Bảo for chieftains and field bosses
   party.js           parties (invite, answer, leave)
   loot.js            per-player drops, story-boss kill checks, pickup commit queue (group commit, admission control)
   trade.js           trade sessions: ask, offer, lock, confirm → db.commitTrade
@@ -237,6 +242,11 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
   - Drawn live, not in the sprite sheet: `CapeCloth` (`gfx/cape.js`) is a chain of points pinned at the back of the neck (`capeAnchor(frame)` in `humanoid.js`), stepped at a fixed 1/120 s (Verlet) with gravity, air drag (so it flies out while running), a backward pull (so it drapes over the back standing still), a travelling wave while moving, and constraints (fixed segment length, never in front of the body, never rising over the shoulders). Tuning: `GAME.cape`.
   - `lookFor` sets `look.liveCape`: the cape slot wins over an outfit's own `look.cape`; without a cape item, the outfit's cape is turned into a flowing one (`outfitCape`). `Humanoid.setLook` keeps `liveCape` out of the cached sheet. Players, other players and 30% of bots (`GAME.cape.botChance`) draw it. `world.capeFx` sheds the cape's particles.
   - Server: `cape` is in `GAME.player.equipSlots` (saved like any slot) and in the realtime appearance; `reconcileItems` only keeps an equipped item in its own slot.
+- **Premium shop (Vạn Bảo Các) and Nguyên Bảo (ingots)**: NPC `merchant` (Vạn Bảo Lão, village x 1085) or **B** / the "Vạn Bảo" menu button.
+  - Offers in `data/premium.js` (tabs cape / outfit / util): 5 premium capes (`cape_sakura`, `cape_frost`, `cape_phoenix`, `cape_shadow`, `cape_dragon`, any level), 2 outfits, utility bundles. Cosmetics are granted Legendary.
+  - Earned only in game (`GAME.premium`): daily check-in (10, +40 on every 7th day in a row; the day starts at midnight Vietnam time), chieftains (+2) and field bosses (+5) for the top damage group, quests with `reward.ingots` (chapter finales st7/st12/st18: 30).
+  - Rules shared by both sides in `game/premium.js` (`checkinReward`, `killIngots`, `questIngots`, offers; `buyLocal` / `checkinLocal` offline). Window and try-on preview in `ui/premium.js` (mixed into `GameUI`).
+  - Online the server owns the balance: `characters.ingots` and `checkin` columns, never taken from saves; every change is an `ingots` ledger row replayed through `chg`. `server/src/premium.js` handles `prem` messages (buy / checkin / claim) and kill rewards. See docs/MULTIPLAYER.md §4b.
 - **Pet**: `imp` (Tiểu Quỷ), from side quest `q_pet`. It picks up drops.
 
 ## 5. Conventions and rules
@@ -329,6 +339,8 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
    9. *Server-side damage*: `game/combat.js` shared formulas; clients send `hit {uid, sid}`, buffs via `cast {sid}`; results broadcast as `mhit`.
 
 10. **Capes (2026-11-01, branch `feature/capes`)**: a 6th equipment slot worn with an outfit, simulated cloth drawn live behind every humanoid, two craftable capes, outfit capes now flowing.
+
+11. **Premium shop (2026-11-01, branch `feature/premium-shop`)**: Nguyên Bảo earned in game (check-in, chieftains, field bosses, chapter finales), owned by the server online, Vạn Bảo Các with 5 premium capes, outfits and utilities, live try-on preview.
 
 ## 8. Status: done, not done, open items
 

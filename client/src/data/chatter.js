@@ -212,6 +212,18 @@ export const CHATTER = {
     hi: ['Hừm.', 'Nóng không? Quen là được.'],
   },
 
+  merchant: {
+    lines: [
+      'Vạn Bảo Các, hàng thật giá thật! Chỉ nhận Nguyên Bảo thôi nhé.',
+      'Nguyên Bảo không mua được bằng tiền đâu, phải bằng mồ hôi.',
+      'Áo choàng này bay trong gió đẹp lắm, khoác vào là thành đại hiệp ngay.',
+      'Ghé điểm danh mỗi ngày, lão tặng Nguyên Bảo. Bảy ngày liền thì tặng thêm!',
+      ['Nghe nói Đầu Lĩnh ngoài rừng giữ Nguyên Bảo trong người đấy.', {}],
+      ['Trời tối rồi, lão sắp dọn hàng… à mà thôi, khách tới thì bán tiếp.', { night: true }],
+    ],
+    greet: ['Khách quan muốn xem gì? Áo choàng mới về đấy!', 'Hôm nay điểm danh chưa?'],
+    hi: ['Khách quý, khách quý!', 'Mời vào, mời vào!'],
+  },
   embroiderer: {
     lines: [
       'Một tấm tiên y phải thêu ba ngày ba đêm, không được sai một mũi.',

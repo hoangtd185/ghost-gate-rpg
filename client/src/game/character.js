@@ -27,6 +27,7 @@ export function newCharacter(name, cls) {
     inventory: [], equip: { weapon: null, hat: null, armor: null, acc: null, outfit: null, cape: null },
     quests: {}, flags: {}, map: 'village', x: 380,
     createdAt: Date.now(), playTime: 0,
+    ingots: 0, checkin: null, // Nguyên Bảo (premium shop); online the server owns both
   };
   ch.equip.weapon = makeEntry(`w_${cls}1`, 1, 0, {});
   ch.equip.armor = makeEntry('arm_cloth', 1, 0, {});
@@ -49,6 +50,8 @@ export function normalizeCharacter(ch) {
   for (const k of Object.keys(ch.equip)) if (ch.equip[k] && !ITEMS[ch.equip[k].id]) ch.equip[k] = null;
   ch.quests = ch.quests || {};
   ch.flags = ch.flags && typeof ch.flags === 'object' ? ch.flags : {};
+  ch.ingots = Math.max(0, Math.floor(+ch.ingots || 0));
+  ch.checkin = ch.checkin && typeof ch.checkin === 'object' ? ch.checkin : null;
   for (const qid of Object.keys(ch.quests)) if (!QUESTS[qid] || RETIRED_QUESTS.includes(qid)) delete ch.quests[qid];
   // The main line gained new quests: if a character is further along, earlier steps count as done
   let last = -1;

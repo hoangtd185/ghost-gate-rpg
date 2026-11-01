@@ -96,6 +96,8 @@ export class Realtime {
   pick(id) { if (!this.ready) return false; this.send({ t: 'pick', id }); return true; }
   // Trade
   trade(type, data = {}) { this.send({ t: 'trade_' + type, ...data }); }
+  // Premium shop (Vạn Bảo Các): op = buy {offer, req} | checkin | claim {quest}. Returns false if not connected.
+  premium(op, data = {}) { if (!this.connected) return false; this.send({ t: 'prem', op, ...data }); return true; }
   // After a successful save the server re-reads our gear/level/title so others see the change
   saved() { this.send({ t: 'saved' }); }
 
@@ -107,6 +109,7 @@ export class Realtime {
       case 'welcome':
         this.connected = true; this.retry = 0; this.last = ''; this.sendT = 0; this.enter = true;
         this.setOnline(m.online);
+        w.claimAllQuests(); // Nguyên Bảo of quests completed while the answer was lost (the server gives each once)
         break;
       case 'online': this.setOnline(m.n); break;
       case 'snap':
@@ -146,6 +149,7 @@ export class Realtime {
       case 'party_ask': case 'party_state': case 'party_err':
         if (this.hooks.party) this.hooks.party(m);
         break;
+      case 'prem': if (this.hooks.premium) this.hooks.premium(m); break;
       case 'trade_ask': case 'trade_open': case 'trade_state': case 'trade_end': case 'trade_err':
         if (this.hooks.trade) this.hooks.trade(m);
         break;

@@ -50,7 +50,7 @@ function publicEvent(e) {
   return { type, ...rest };
 }
 
-export function createMobs({ players, send, loot, parties }) {
+export function createMobs({ players, send, loot, parties, premium }) {
   const maps = new Map(); // map id -> { sim, empty (ms since nobody is there, or 0), snapT, last: Map uid -> snapshot key }
   const inMap = (map) => [...players.values()].filter((s) => s.map === map);
   const toMap = (map, msg) => { const data = JSON.stringify(msg); for (const s of inMap(map)) if (s.ws.readyState === 1) s.ws.send(data); };
@@ -99,6 +99,7 @@ export function createMobs({ players, send, loot, parties }) {
         send(s, msg);
       }
     }
+    premium?.kill(top.members, m); // chieftains and field bosses also give Nguyên Bảo to the top group
   }
 
   function handleEvents(map, e) {

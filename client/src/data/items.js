@@ -200,6 +200,25 @@ Object.assign(ITEMS, {
     cape: { c: '#2a3460', c2: '#141a34', t: '#d8e0f8', len: 26, w: 15, hem: 'scallop', motif: 'moon', mc: '#eef2ff', lining: '#6a78b8', fx: { c: '#dce6ff', shape: 'star' } } },
 });
 
+// Premium capes: sold for Nguyên Bảo at Vạn Bảo Các (data/premium.js). Cosmetic first, a few stats, any level.
+Object.assign(ITEMS, {
+  cape_sakura: { name: 'Anh Đào Phi Phong', type: 'equip', slot: 'cape', lv: 1, color: '#ffb8d0', price: 0,
+    stats: { hp: 60, mp: 40 }, src: 'Vạn Bảo Các',
+    cape: { c: '#ffe0ec', c2: '#ff94bc', t: '#ffffff', len: 27, w: 16, hem: 'scallop', motif: 'flower', mc: '#ff6a9c', lining: '#fff4f8', fx: { c: '#ffc0d8', shape: 'petal' } } },
+  cape_frost: { name: 'Băng Tinh Phi Phong', type: 'equip', slot: 'cape', lv: 1, color: '#a8dcff', price: 0,
+    stats: { hp: 70, res_ice: 8 }, src: 'Vạn Bảo Các',
+    cape: { c: '#d8f2ff', c2: '#5aaee8', t: '#ffffff', len: 28, w: 16, hem: 'feather', motif: 'snow', mc: '#ffffff', alpha: 0.9, fx: { c: '#eaf8ff', shape: 'snow' } } },
+  cape_phoenix: { name: 'Phượng Hoàng Phi Phong', type: 'equip', slot: 'cape', lv: 1, color: '#e8442a', price: 0,
+    stats: { atk: 6, hp: 50, res_fire: 8 }, src: 'Vạn Bảo Các',
+    cape: { c: '#e0341e', c2: '#ffb02a', t: '#ffe27a', len: 30, w: 18, hem: 'flame', motif: 'cloud', mc: '#ffe9a0', lining: '#ffcf4a', fx: { c: '#ffb040', shape: 'ember' } } },
+  cape_shadow: { name: 'U Minh Quỷ Bào', type: 'equip', slot: 'cape', lv: 1, color: '#4a2a6a', price: 0,
+    stats: { atk: 5, crit: 2, hp: 40 }, src: 'Vạn Bảo Các',
+    cape: { c: '#2e1a40', c2: '#0a0610', t: '#9a5aff', len: 32, w: 17, hem: 'tattered', motif: 'eye', mc: '#c890ff', alpha: 0.93, fx: { c: '#b98aff', shape: 'wisp' } } },
+  cape_dragon: { name: 'Kim Long Phi Phong', type: 'equip', slot: 'cape', lv: 1, color: '#e8c35a', price: 0,
+    stats: { atk: 8, def: 4, hp: 60 }, src: 'Vạn Bảo Các',
+    cape: { c: '#1c1a24', c2: '#08080e', t: '#e8c35a', len: 30, w: 18, hem: 'plain', motif: 'dragon', mc: '#ffd76a', lining: '#8a1420', fx: { c: '#ffd76a', shape: 'star' } } },
+});
+
 // Cosmetic slots: outfits and capes (no sockets, always Legendary, change how the character looks)
 export const isLookSlot = (slot) => slot === 'outfit' || slot === 'cape';
 

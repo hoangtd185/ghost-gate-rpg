@@ -3,6 +3,7 @@ import { MAPS, GROUND_Y } from '../data/maps.js';
 import { MONSTERS } from '../data/monsters.js';
 import { CLASSES, SKILLS } from '../data/classes.js';
 import { ITEMS, isLookSlot } from '../data/items.js';
+import { killIngots, questIngots } from './premium.js';
 import { NPCS, QUESTS } from '../data/npcs.js';
 import { AFFIXES, NAMED } from '../data/affixes.js';
 import { ELEMENTS } from '../data/elements.js';
@@ -759,6 +760,13 @@ export class GameWorld {
         if (data.rare) this.announceDrop(data, m.def.name);
         this.drops.push(new Drop(m.cx - 6 + rand(-10, 10), m.cy, 'item', data));
       }
+      // chieftains and field bosses give Nguyên Bảo (online the server grants them)
+      const ingots = killIngots(m);
+      if (ingots) {
+        ch.ingots = (ch.ingots || 0) + ingots;
+        this.floatText(m.cx, m.y - 18, `+${ingots} Nguyên Bảo`, '#ffd76a', false, true);
+        this.hooks.chat('Hệ thống', `Nhận ${ingots} Nguyên Bảo!`, 'system');
+      }
     }
     // quest items
     for (const id of questDropsFor(ch, m.id)) {
@@ -768,6 +776,21 @@ export class GameWorld {
     const changed = onKillForQuests(ch, m.id);
     if (m.named) changed.push(...onKillForQuests(ch, m.named));
     for (const qid of changed) this.hooks.questProgress(qid);
+  }
+
+  // ===== Nguyên Bảo from quests (online) =====
+  // The server grants them once the completion is in the saved character: completions wait in claims until a
+  // save went through, then are sent; a 'not_done' answer keeps them for the next save. On every (re)connect all
+  // completed quests with Nguyên Bảo are claimed again; the server gives each one only once.
+  claimQuest(qid) { (this.claims ||= new Set()).add(qid); }
+  claimPending() {
+    if (!this.net || !this.claims) return;
+    for (const qid of this.claims) this.net.premium('claim', { quest: qid });
+  }
+  claimAnswer(m) { if (this.claims && m.why !== 'not_done' && m.why !== 'rate') this.claims.delete(m.quest); }
+  claimAllQuests() {
+    for (const [qid, st] of Object.entries(this.ch.quests)) if (st.s === 'done' && questIngots(qid)) this.claimQuest(qid);
+    this.claimPending();
   }
 
   // The closest other player within trade range, or null
@@ -836,6 +859,7 @@ export class GameWorld {
         if (i >= 0) ch.inventory.splice(i, 1);
         for (const [slot, e] of Object.entries(ch.equip)) if (e && e.uid === c.uid) ch.equip[slot] = null;
       } else if (c.kind === 'gold') ch.gold = Math.max(0, ch.gold + c.qty);
+      else if (c.kind === 'ingots') ch.ingots = Math.max(0, (ch.ingots || 0) + c.qty);
     }
     ch.itemRev = Math.max(ch.itemRev || 0, rev || 0);
     for (const e of got) this.hooks.gotItem(e);

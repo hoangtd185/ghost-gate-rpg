@@ -55,6 +55,11 @@ export const NPCS = {
     shop: ['hp_l', 'mp_l', 'scroll_home', 'hat_flame'],
     quests: ['st11b', 'st11c', 'st12', 'st13', 'q_lava'],
   },
+  merchant: {
+    name: 'Vạn Bảo Lão', title: 'Kim Phúc',
+    look: { robe: '#5a2a6a', trim: '#e8c35a', pants: '#2a1430', hair: '#2a2420', hairStyle: 3, skin: '#f0c8a0', beard: true, hat: 'conical', hatColor: '#e8c35a' },
+    premium: true,
+  },
   embroiderer: {
     name: 'Thợ Thêu', title: 'Tú Nương',
     look: { robe: '#f6d6e2', trim: '#c86a8a', pants: '#e8c8d4', hair: '#2a1a1e', hairStyle: 1, skin: '#fadcc4', eye: '#7a3a5a' },

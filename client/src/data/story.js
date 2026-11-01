@@ -758,4 +758,7 @@ export const TUTORIAL_QUESTS = {
   }),
 };
 
-for (const id of BIG) STORY_QUESTS[id].reward.exp = Math.round(needExp(STORY_QUESTS[id].lv) * EXP_SHARE.chapterFinale / 10) * 10;
+for (const id of BIG) {
+  STORY_QUESTS[id].reward.exp = Math.round(needExp(STORY_QUESTS[id].lv) * EXP_SHARE.chapterFinale / 10) * 10;
+  STORY_QUESTS[id].reward.ingots = GAME.premium.chapterIngots; // Nguyên Bảo for finishing a chapter
+}
