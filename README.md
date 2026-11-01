@@ -14,6 +14,7 @@ It plays like an MMO. On the Node server, real players on the same map see each 
 - **Gem sockets**: 5 gem types × 3 grades, socket, unsocket and fuse gems
 - **Crafting** at the embroiderer NPC: outfits and consumables from farmed materials
 - **9 outfits (cosmetic slot)** with capes, crowns, fox ears and tails, animated silk ribbons and auras. Rare drops from bosses, some craftable
+- **Flowing capes (own slot, worn with an outfit)**: simulated cloth that trails while running
 - **Main story "Huyền Môn Phong Ấn"**: a prologue + 3 chapters (32 quests), voiced-style dialogue with character portraits, an in-story choice that changes the ending, story-gated zones that require leveling up
 - Tutorial quests, side quests, daily bounty quests, daily gifts, titles shown above the character
 - Context-aware NPC dialogue (story progress, time of day, class, pet, gear…) and NPCs that chat with each other
@@ -295,6 +296,7 @@ client/
     gfx/
       draw.js           drawing toolkit: hi-res canvases, outlines, shading, gradients
       humanoid.js       chibi characters (hair, eyes, robes, hats, weapons, outfit parts, 14 frames)
+      cape.js           flowing capes: cloth simulation + drawing, behind the character
       monsters.js       monster and boss sprites
       icons.js          item icons and projectiles
       backgrounds.js    layered backgrounds for every map
@@ -466,6 +468,15 @@ On phones, touch buttons appear automatically the first time you touch the scree
 | Huyết Nguyệt Chiến Giáp | 28 | Huyền Cơ 4%, Huyết Thi Tướng 6%, Bạch Diện Quỷ Chủ 7% |
 
 Outfits change the character's look (animated silk ribbons orbiting the body, capes, crowns, fox ears and tails, masks, auras) and add a few stats. Rare drops show a light pillar on the ground and a chat announcement.
+
+**Capes** (6th equipment slot, `slot: 'cape'`, worn together with an outfit)
+
+| Cape | Level | Source |
+|---|---|---|
+| Áo Choàng Lữ Khách | 1 | Crafting (fox tails, ghost straw) |
+| Nguyệt Ảnh Phi Phong | 12 | Crafting (ice silk, wisp flames, ice crystals) |
+
+A cape is a small cloth simulation (`gfx/cape.js`, tuned in `GAME.cape`): it hangs behind the back, trails and ripples while running, and some shed particles. A cape replaces an outfit's own cape; outfits with a built-in cape (Hắc Long Bào, Phượng Vũ Y, Huyết Nguyệt Chiến Giáp) now have it flowing too. Other players and some bots show theirs.
 
 **Story pacing**
 

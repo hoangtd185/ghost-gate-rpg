@@ -200,3 +200,24 @@ describe('group commit', () => {
     assert.equal(db.changesSince(B, rev).length, 2);
   });
 });
+
+describe('capes', () => {
+  it('a crafted cape is kept, equipped in the cape slot, once its materials are used up', () => {
+    db.grantItem(B, { id: 'mat_tail', qty: 10, r: 0, b: {} }, { reqId: 'cape:t' });
+    db.grantItem(B, { id: 'mat_straw', qty: 5, r: 0, b: {} }, { reqId: 'cape:s' });
+    const ch = load(B);
+    ch.inventory = ch.inventory.filter((e) => e.id !== 'mat_tail' && e.id !== 'mat_straw');
+    ch.equip.cape = { uid: 'cape1', id: 'cape_traveler', qty: 1, r: 3, b: {} };
+    assert.equal(db.saveCharacter(uid, ch).items, undefined, 'nothing refused');
+    assert.equal(load(B).equip.cape?.id, 'cape_traveler');
+  });
+
+  it('an item saved in a slot that is not its own goes back to the bag', () => {
+    const ch = load(B);
+    ch.equip.cape = ch.equip.armor; ch.equip.armor = null; // body armor claimed to be a cape
+    db.saveCharacter(uid, ch);
+    const after = load(B);
+    assert.equal(after.equip.cape, null);
+    assert.ok(after.inventory.some((e) => e.id === 'arm_cloth'));
+  });
+});

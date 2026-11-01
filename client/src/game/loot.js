@@ -1,7 +1,7 @@
 // Loot rules shared by the client (offline / artifact builds) and the server (online play).
 // Plain logic over data modules: no DOM, no Node-only imports.
 import { MONSTERS } from '../data/monsters.js';
-import { ITEMS, GEM_KINDS, gemId } from '../data/items.js';
+import { ITEMS, GEM_KINDS, gemId, isLookSlot } from '../data/items.js';
 import { NAMED, CHIEF } from '../data/affixes.js';
 import { NPCS, QUESTS } from '../data/npcs.js';
 import { RECIPES } from '../data/recipes.js';
@@ -39,7 +39,7 @@ export function rollDrops(kill, cls, table = null) {
     const it = ITEMS[id];
     if (!it) continue;
     const data = { id, qty: 1, r: 0, b: {} };
-    if (it.slot === 'outfit') { data.r = 3; data.rare = true; }
+    if (isLookSlot(it.slot)) { data.r = 3; data.rare = true; }
     else if (it.type === 'equip') {
       const strong = boss || named || elite;
       const luck = chief ? CHIEF.luck : strong ? GAME.monsters.elite.luck : 0;

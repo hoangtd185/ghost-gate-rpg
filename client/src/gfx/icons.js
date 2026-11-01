@@ -187,6 +187,16 @@ export function itemIcon(icon, color, slotLook) {
       paint(ctx, rrect(4.3, 8.5, 7.5, 1.6, 0.6), '#e2b85c', OUTLINE, 0.5);
       break;
     }
+    case 'cape': { // a cape billowing to one side, gold clasp at the collar
+      const c = new Path2D();
+      c.moveTo(5, 2.5); c.quadraticCurveTo(2.5, 7, 1.5, 14.5); c.quadraticCurveTo(5, 13, 8, 14.8); c.quadraticCurveTo(11.5, 13.2, 14.8, 13.8);
+      c.quadraticCurveTo(12.5, 8, 11, 2.5); c.quadraticCurveTo(8, 4, 5, 2.5); c.closePath();
+      paint(ctx, c, linear(ctx, 0, 2, 0, 15, [[0, l], [0.5, color], [1, d]]), OUTLINE, lw);
+      ctx.strokeStyle = rgba('#000000', 0.25); ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(7, 5); ctx.quadraticCurveTo(6, 10, 5.5, 13.5); ctx.moveTo(9.5, 5); ctx.quadraticCurveTo(10, 9, 11.5, 13.2); ctx.stroke();
+      paint(ctx, ellipse(8, 3.2, 1.7, 1.5), '#e8c35a', OUTLINE, 0.6);
+      break;
+    }
     case 'acc':
       ctx.strokeStyle = '#e2b85c'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(5, 1.5); ctx.quadraticCurveTo(8, 5, 11, 1.5); ctx.stroke();
       paint(ctx, ellipse(8, 9.5, 4.8, 5), radial(ctx, 6.6, 8, 0.5, 5.5, [[0, l], [0.6, color], [1, d]]), OUTLINE, lw);
@@ -305,6 +315,7 @@ export function iconForItem(it) {
       return itemIcon('weapon_' + w, it.color);
     }
     if (it.slot === 'hat') return itemIcon('hat', it.color, it.look);
+    if (it.slot === 'cape') return itemIcon('cape', it.color);
     return itemIcon(it.slot === 'armor' || it.slot === 'outfit' ? 'armor' : 'acc', it.color);
   }
   if (it.type === 'gem') return itemIcon('gem', it.color, String(it.gem.g));

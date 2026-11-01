@@ -45,7 +45,8 @@ Also exposed: `__ui()` (the GameUI), `__lookFor`, `__humSheet`, `__drawFrame` an
   - `config.test.mjs`: elite chance and smartness tier tables, aliases, rate sanity.
   - `combat.test.mjs`: the shared damage formula (multiplier, defence, weakness/resistance, crit, minimum 1), skill level scaling, learned-skill check, skill reach.
   - `mobs.test.mjs`: shared monsters on the server: damage computed by the server (a client number is ignored), unknown skill / out of reach / rate limit, buffs, EXP shares, party split, loot to the top group, level gap, death broadcast.
-  - `custody.test.mjs`: what an uploaded save may change (free / earned / server-only items, revisions, ownership after trades), `grantItem`, batched `grantItems`, `commitTrade`, the ledger.
+  - `custody.test.mjs`: what an uploaded save may change (free / earned / server-only items, revisions, ownership after trades), `grantItem`, batched `grantItems`, `commitTrade`, the ledger, crafted capes, items only in their own slot.
+  - `cape.test.mjs`: every cape item is drawable; the cloth hangs behind the back, trails while moving, keeps its segment length, never rises over the shoulders, restarts after a teleport.
   - `lootqueue.test.mjs`: pickup commit queue (one batch for many players, answered after the commit, no double queueing, per-player rate limit → `busy`), kill reports only for story bosses.
   - `auth.test.mjs`: login tokens; malformed tokens are rejected without throwing.
 - `npm run uat`: **end-to-end acceptance scenarios** (`tests/e2e/*.test.mjs`, about 5 minutes). It builds the client, then drives the real game in headless Chromium, one file at a time (the scenarios are timing-sensitive). Each `it(...)` is one acceptance check, and every file ends with a "no page errors" check. Server scenarios start their own throwaway server (free port, temp database) through `startServer()` in `helpers.mjs`.
@@ -59,6 +60,7 @@ Also exposed: `__ui()` (the GameUI), `__lookFor`, `__humSheet`, `__drawFrame` an
 | `chief.test.mjs` | forced chieftain spawn (only one at a time), stats vs a normal monster, chat announcement, drops |
 | `movement.test.mjs` | walk vs double-tap sprint (and the run animation), slow double tap, Ctrl + ↓ (either order), plain ↓ sits |
 | `craft.test.mjs` | the embroiderer: tutorial recipe, fairy outfit, materials consumed |
+| `capes.test.mjs` | craft a cape, equip it in its own slot with an outfit on, a cape replaces an outfit's cape (which flows otherwise), the cloth hangs behind standing and flies out while running |
 | `server.test.mjs` | register → create → play → save through the real API |
 | `multiplayer.test.mjs` | two browsers on the server: see each other, re-entering a map, movement sync, player count, map chat + bubble (HTML shown as text), gear change visible after save, an invented outfit refused, other map hidden, world chat (`!`), leaving, malformed login, map-entry flood throttled, `saved` throttled |
 | `loot.test.mjs` | personal story-boss loot: only the killer gets drops, pickup committed before the answer, boss cooldown, kill reports for shared monsters / field bosses refused, Alt+F4 right after a pickup, invented item refused, missed changes replayed on reconnect |
@@ -92,7 +94,7 @@ client/src/
   game/bots.js       fake players (hunt, chat, change maps, reply to the player)
   game/chatter.js    context-aware NPC lines (no repeats) and NPC-to-NPC banter
   game/pet.js        the imp pet that picks up drops
-  gfx/               canvas drawing: humanoid.js (chibi characters + outfit parts), monsters.js,
+  gfx/               canvas drawing: humanoid.js (chibi characters + outfit parts), cape.js (flowing capes), monsters.js,
                      backgrounds.js, icons.js, pet.js, draw.js (toolkit)
   ui/hud.js          GameUI: HUD, all windows (inventory, skills, quests, shop, forge, craft, dialogue,
                      scenes, trade), party panel, quest tracker
@@ -230,6 +232,11 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
   - Outfits drop at about 1.5–4% from bosses and elites.
   - Three can be crafted at the embroiderer: `r_peach_fairy`, `r_rainbow_fairy`, `r_fox`. The fairy robes need `mat_dew`, `mat_peach` and `mat_icesilk`.
   - An outfit's `look` draws extra parts in `gfx/humanoid.js`. The fairy `ribbons` and the `aura` are animated in `world.js`.
+- **Capes (6th equip slot `cape`, worn together with an outfit)**: `cape_traveler` (lv 1), `cape_moon` (lv 12), both crafted at the embroiderer (`r_cape_traveler`, `r_cape_moon`).
+  - `ITEMS[id].cape` describes the look (colors, length, width, hem, motif, particles; see the top of `gfx/cape.js`).
+  - Drawn live, not in the sprite sheet: `CapeCloth` (`gfx/cape.js`) is a chain of points pinned at the back of the neck (`capeAnchor(frame)` in `humanoid.js`), stepped at a fixed 1/120 s (Verlet) with gravity, air drag (so it flies out while running), a backward pull (so it drapes over the back standing still), a travelling wave while moving, and constraints (fixed segment length, never in front of the body, never rising over the shoulders). Tuning: `GAME.cape`.
+  - `lookFor` sets `look.liveCape`: the cape slot wins over an outfit's own `look.cape`; without a cape item, the outfit's cape is turned into a flowing one (`outfitCape`). `Humanoid.setLook` keeps `liveCape` out of the cached sheet. Players, other players and 30% of bots (`GAME.cape.botChance`) draw it. `world.capeFx` sheds the cape's particles.
+  - Server: `cape` is in `GAME.player.equipSlots` (saved like any slot) and in the realtime appearance; `reconcileItems` only keeps an equipped item in its own slot.
 - **Pet**: `imp` (Tiểu Quỷ), from side quest `q_pet`. It picks up drops.
 
 ## 5. Conventions and rules
@@ -320,6 +327,8 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
    7. *Parties* (G) and reward rules: EXP by damage share between groups, a party splits evenly, loot to the top group (each party member gets their own roll).
    8. *Database load*: pickup commit queue (group commit ≤ 25 ms / 200 pickups), admission control (`busy`), per-player rate limits, session cache (no DB reads on hot paths).
    9. *Server-side damage*: `game/combat.js` shared formulas; clients send `hit {uid, sid}`, buffs via `cast {sid}`; results broadcast as `mhit`.
+
+10. **Capes (2026-11-01, branch `feature/capes`)**: a 6th equipment slot worn with an outfit, simulated cloth drawn live behind every humanoid, two craftable capes, outfit capes now flowing.
 
 ## 8. Status: done, not done, open items
 

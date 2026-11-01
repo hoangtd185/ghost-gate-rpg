@@ -1,6 +1,6 @@
 // In-game UI (HUD + windows) as HTML laid over the canvas
 import { CLASSES, SKILLS, SKILL_MAX_LV, SKILL_KEYS, PASSIVES, PASSIVE_MAX_LV, PASSIVE_NAMES, passivesOf } from '../data/classes.js';
-import { ITEMS, RARITY, SLOT_NAMES, STAT_NAMES, ENHANCE_MAX, ENHANCE_RATE, ENHANCE_SAFE, enhanceCost, GEM_KINDS, GEM_GRADES, GEM_SLOTS, GEM_FUSE, gemId, socketCount, socketCost, unsocketCost } from '../data/items.js';
+import { ITEMS, RARITY, SLOT_NAMES, STAT_NAMES, ENHANCE_MAX, ENHANCE_RATE, ENHANCE_SAFE, enhanceCost, GEM_KINDS, GEM_GRADES, GEM_SLOTS, GEM_FUSE, gemId, socketCount, socketCost, unsocketCost, isLookSlot } from '../data/items.js';
 import { ELEMENTS, ELEMENT_IDS } from '../data/elements.js';
 import { NPCS, QUESTS } from '../data/npcs.js';
 import { SPEAKERS, CHAPTERS, SCENES, MAIN_ORDER } from '../data/story.js';
@@ -361,8 +361,10 @@ export class GameUI {
     html += `<p class="tag">${it.type === 'equip' ? `${SLOT_NAMES[it.slot]} · ${RARITY[e.r || 0].name}${it.cls ? ' · ' + CLASSES[it.cls].name : ''} · Cấp ${it.lv || 1}` : it.type === 'use' ? 'Tiêu hao' : it.type === 'quest' ? 'Vật phẩm nhiệm vụ' : it.type === 'gem' ? `Ngọc khảm · Phẩm ${GEM_GRADES[it.gem.g - 1]}` : 'Nguyên liệu'}</p>`;
     if (it.slot === 'weapon') html += `<p>Hệ: ${elTag(entryElement(e)) || '<span class="muted">Không (dùng ngọc nguyên tố để khảm)</span>'}</p>`;
     if (stats) html += '<ul class="stats">' + Object.entries(stats).map(([k, v]) => `<li><span>${STAT_NAMES[k]}</span><b>+${v}</b></li>`).join('') + '</ul>';
-    if (it.type === 'equip' && it.slot !== 'outfit') html += `<p class="sockets">Lỗ khảm: ${this.socketHtml(e)}</p>`;
-    if (it.slot === 'outfit') html += `<p class="outfit-note">Ngoại trang thay đổi diện mạo nhân vật${it.look && it.look.aura ? ', có hào quang' : ''}.</p>${it.src ? `<p class="muted small">Nguồn: ${escapeHtml(it.src)}</p>` : ''}`;
+    if (it.type === 'equip' && !isLookSlot(it.slot)) html += `<p class="sockets">Lỗ khảm: ${this.socketHtml(e)}</p>`;
+    if (it.slot === 'outfit') html += `<p class="outfit-note">Ngoại trang thay đổi diện mạo nhân vật${it.look && it.look.aura ? ', có hào quang' : ''}.</p>`;
+    if (it.slot === 'cape') html += `<p class="outfit-note">Áo choàng bay theo chuyển động, mặc cùng ngoại trang được (thay áo choàng có sẵn của ngoại trang).</p>`;
+    if (isLookSlot(it.slot) && it.src) html += `<p class="muted small">Nguồn: ${escapeHtml(it.src)}</p>`;
     if (it.type === 'gem') html += `<p class="muted small">Ép được vào: ${Object.entries(GEM_SLOTS).filter(([, ks]) => ks.includes(it.gem.kind)).map(([sl]) => SLOT_NAMES[sl]).join(', ')}. Ép ở Thợ Rèn.</p>`;
     if (it.desc) html += `<p>${escapeHtml(it.desc)}</p>`;
     if (it.src && it.type !== 'equip') html += `<p class="muted small">Rơi từ: ${escapeHtml(it.src)}</p>`;
@@ -402,7 +404,7 @@ export class GameUI {
 
   winInventory(mode = 'inv') {
     const ch = this.ch;
-    const eq = ['weapon', 'hat', 'armor', 'acc', 'outfit'].map((s) => `<div class="eqs"><label>${SLOT_NAMES[s]}</label>${this.slotHtml(ch.equip[s])}</div>`).join('');
+    const eq = GAME.player.equipSlots.map((s) => `<div class="eqs"><label>${SLOT_NAMES[s]}</label>${this.slotHtml(ch.equip[s])}</div>`).join('');
     const cells = [];
     for (let i = 0; i < INV_SIZE; i++) cells.push(this.slotHtml(ch.inventory[i]));
     const sel = this.selected && this.findEntry(this.selected);
@@ -721,7 +723,7 @@ export class GameUI {
     const r = RECIPES.find((x) => x.id === this.craftSel);
     const outIt = (rc) => ITEMS[rc.out[0]] || { name: 'Ngọc ngẫu nhiên (Sơ)', icon: 'gem', color: '#ff4a5e', type: 'gem', gem: { g: 1 } };
     const icon = (it) => iconForItem(it).url;
-    const list = ['outfit', 'use'].map((cat) => `<h4>${cat === 'outfit' ? 'Ngoại trang' : 'Đồ dùng'}</h4>` + RECIPES.filter((x) => x.cat === cat).map((x) => {
+    const list = ['outfit', 'cape', 'use'].map((cat) => `<h4>${{ outfit: 'Ngoại trang', cape: 'Áo choàng', use: 'Đồ dùng' }[cat]}</h4>` + RECIPES.filter((x) => x.cat === cat).map((x) => {
       const it = outIt(x), ok = !canCraft(ch, x);
       return `<button class="rcp ${x.id === this.craftSel ? 'sel' : ''} ${ok ? 'ready' : ''}" data-act="csel" data-r="${x.id}"><img src="${icon(it)}" alt=""><span>${escapeHtml(it.name)}${x.out[1] > 1 ? ' ×' + x.out[1] : ''}</span>${ok ? '<i>✓</i>' : ''}</button>`;
     }).join('')).join('');
@@ -735,7 +737,7 @@ export class GameUI {
     const multi = r.cat === 'use' && !canCraft(ch, r, 5);
     return `<div class="craft"><div class="rlist">${list}</div>
       <div class="detail"><h3><img src="${icon(it)}" alt="" class="big"> ${escapeHtml(it.name)}</h3>
-        ${it.slot === 'outfit' ? `<p class="outfit-note">Ngoại trang · Cấp ${it.lv}</p>` : ''}${stats}
+        ${isLookSlot(it.slot) ? `<p class="outfit-note">${SLOT_NAMES[it.slot]} · Cấp ${it.lv}</p>` : ''}${stats}
         <h4>Nguyên liệu</h4><ul class="need">${need}<li class="${ch.gold >= r.gold ? 'ok' : ''}"><img src="${iconForItem({ icon: 'gold', color: '#e8c35a' }).url}" alt=""><span>Tiền công</span><b>${fmtNum(r.gold)}</b></li></ul>
         <div class="acts"><button class="forgebtn" data-act="craft" data-n="1" ${err ? 'disabled' : ''}>Chế tạo</button>${r.cat === 'use' ? `<button data-act="craft" data-n="5" ${multi ? '' : 'disabled'}>×5</button>` : ''}</div>
         ${err ? `<p class="muted small">${escapeHtml(err)}</p>` : ''}
@@ -856,7 +858,7 @@ export class GameUI {
         if (!res.out || !res.out.length) { this.toast(res.msg, 'warn'); break; }
         const it = ITEMS[res.out[0]];
         this.craftMsg = { cls: 'good', text: `Chế tạo thành công: ${it.name}${res.out.length > 1 ? ' ×' + res.out.length : r.out[1] > 1 ? ' ×' + r.out[1] : ''}` };
-        if (it.slot === 'outfit') { this.banner(`<small>Ngoại trang mới</small>${escapeHtml(it.name)}`); this.addChat('Hệ thống', `${ch.name} vừa thêu xong ${it.name}!`, 'system'); }
+        if (isLookSlot(it.slot)) { this.banner(`<small>${SLOT_NAMES[it.slot]} mới</small>${escapeHtml(it.name)}`); this.addChat('Hệ thống', `${ch.name} vừa thêu xong ${it.name}!`, 'system'); }
         w.burst(w.player.cx, w.player.cy, '#ffc8dc', 24, 110, { shape: 'petal' });
         w.event('craft'); changed(); break;
       }

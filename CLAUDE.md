@@ -36,6 +36,7 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 | Renamed an id that can be stored in a save | Add old → new to `client/src/data/legacy.js` |
 | New monster sprite | Draw in `client/src/gfx/monsters.js`, register it in `MAKERS` |
 | New outfit part | Draw helper in `client/src/gfx/humanoid.js` |
+| New cape | An item with `slot: 'cape'` and a `cape` look in `client/src/data/items.js` (options at the top of `client/src/gfx/cape.js`); cloth feel in `GAME.cape` |
 | Monster behaviour (AI, affixes, bosses, spawns) | `client/src/game/mobsim.js` (runs offline and on the server) |
 | Damage formulas (player hits, skill multipliers, reach) | `client/src/game/combat.js` (runs offline and on the server) |
 | Loot tables and rules (drops, what clients may create) | `client/src/data/*` for tables, `client/src/game/loot.js` for rules, `server/src/loot.js` for kill checks |

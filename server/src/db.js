@@ -215,7 +215,7 @@ class GameDb {
       pet: row.pet ? JSON.parse(row.pet) : null,
       title: row.title || null,
       flags: JSON.parse(row.flags || '{}'),
-      inventory: [], equip: { weapon: null, hat: null, armor: null, acc: null, outfit: null }, quests: {},
+      inventory: [], equip: { weapon: null, hat: null, armor: null, acc: null, outfit: null, cape: null }, quests: {},
       createdAt: row.created_at, itemRev: row.item_rev || 0,
     };
     for (const it of this.q.itemsOf.all(row.id)) {
@@ -335,7 +335,8 @@ class GameDb {
     this.q.clearItems.run(id);
     let pos = 0;
     for (const e of final) {
-      const slot = e.slot && EQUIP_SLOTS.has(e.slot) ? e.slot : null;
+      // equipped only in its own slot (an item claimed to be in another slot goes back to the bag)
+      const slot = e.slot && EQUIP_SLOTS.has(e.slot) && ITEMS[e.id]?.slot === e.slot ? e.slot : null;
       this.q.insertItem.run(e.uid, id, e.id, e.qty, e.r, JSON.stringify(e.b || {}), slot, pos++, e.e || 0, e.el || null, JSON.stringify(e.g || []));
     }
     return fixed;
