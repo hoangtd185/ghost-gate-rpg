@@ -3,6 +3,7 @@
 // a party), loot goes to the top damager (or to every party member, each their own).
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { killExp } from '../../client/src/game/loot.js';
 import { launch, newPage, startServer, register, createCharacter, uniqueName, until, shot } from './helpers.mjs';
 
 describe('shared monsters and parties (online)', { timeout: 240_000 }, () => {
@@ -123,10 +124,15 @@ describe('shared monsters and parties (online)', { timeout: 240_000 }, () => {
   it('party: EXP split evenly, each member gets their own drops', async () => {
     const m = await pickMob(A);
     await goTo(A, m.x); await goTo(B, m.x); await A.page.waitForTimeout(300);
+    // the even split happens before the level-gap adjustment, which is per member (A has levelled up from
+    // earlier kills, B may not have), so compare each with the formula for their own level
+    const def = await A.page.evaluate((uid) => { const d = __game().remoteMobs.get(uid).def; return { exp: d.exp, lv: d.lv }; }, m.uid);
+    const [la, lb] = await Promise.all([A, B].map((p) => p.page.evaluate('__game().ch.level')));
     await killWith(A, m.uid); // B does nothing
     assert.ok(await until(B.page, `__game().killLog.some((k) => k.uid === ${m.uid})`, 4000));
     const [ka] = await kills(A, m.uid), [kb] = await kills(B, m.uid);
-    assert.equal(ka.exp, kb.exp);
+    assert.equal(ka.exp, killExp(def.exp / 2, la, def.lv), `A (lv ${la}) gets half, adjusted for level`);
+    assert.equal(kb.exp, killExp(def.exp / 2, lb, def.lv), `B (lv ${lb}) gets half, adjusted for level`);
     assert.ok(Array.isArray(ka.drops) && Array.isArray(kb.drops), 'both get their own loot roll');
     assert.ok(ka.drops.every((d) => !kb.drops.some((e) => e.id === d.id)), 'different drops');
   });
