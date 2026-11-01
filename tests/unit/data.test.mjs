@@ -117,3 +117,31 @@ test('legacy ids migrate to ids that exist', () => {
   for (const old of ['out_daohoa', 'hat_huyetsat', 'w_kiem3', 'w_dao7', 'orb_hoa', 'acc_wuxing']) assert.ok(ITEMS[legacyItem(old)], old);
   for (const old of ['k_basic', 'd_heal', 't_p4']) assert.ok(SKILLS[legacySkill(old)] || PASSIVES[legacySkill(old)], old);
 });
+
+test('world quest chains: steps, branches, choices and NPCs fit together', async () => {
+  const { WORLD_CHAINS } = await import('../../client/src/data/world.js');
+  const tones = Object.values(WORLD_CHAINS).map((c) => c.tone);
+  assert.ok(tones.filter((t) => t === 'light').length >= 2 && tones.filter((t) => t === 'dark').length >= 2, 'cheerful and dark stories');
+  const onMap = new Map(); // npc id -> map entry
+  for (const m of Object.values(MAPS)) for (const n of m.npcs || []) onMap.set(n.id, n);
+  for (const [id, c] of Object.entries(WORLD_CHAINS)) {
+    assert.ok(['light', 'dark'].includes(c.tone) && c.name && c.blurb && MAPS[c.region], `${id}: chain info`);
+    const flags = new Set(); // flags set by choices earlier in the chain
+    c.steps.forEach((qid, i) => {
+      const q = QUESTS[qid];
+      assert.ok(q && q.cat === 'world' && q.chain === id, `${id}: ${qid} is a world quest of this chain`);
+      if (i > 0) assert.ok(c.steps.slice(0, i).includes(q.requires), `${qid} requires an earlier step`);
+      if (q.needFlag) assert.ok(flags.has(q.needFlag), `${qid}: needFlag ${q.needFlag} is set by an earlier choice`);
+      for (const o of q.choice?.options || []) {
+        assert.ok(o.label && o.lines.length && o.flag.length === 2 && o.flag.every((x) => x.length <= 20), `${qid}: choice option`);
+        flags.add(o.flag.join('='));
+      }
+      if (q.choice) assert.ok(q.choice.options.length >= 2, `${qid}: a real choice`);
+      for (const who of [q.npc, q.turnIn, q.type === 'talk' ? q.target : null].filter(Boolean)) assert.ok(onMap.has(who), `${qid}: ${who} stands on a map`);
+      assert.ok(q.reward.ingots > 0, `${qid}: Nguyên Bảo reward`);
+    });
+    const branches = c.steps.filter((qid) => QUESTS[qid].needFlag);
+    if (branches.length) assert.ok(branches.length >= 2, `${id}: every choice leads somewhere`);
+  }
+  for (const n of onMap.values()) for (const k of ['from', 'gone', 'after', 'until', 'hideWhile']) if (n[k]) assert.ok(QUESTS[n[k]], `map npc ${n.id}.${k}`);
+});

@@ -40,7 +40,7 @@ Also exposed: `__ui()` (the GameUI), `__lookFor`, `__humSheet`, `__drawFrame` an
 **Tests** run on Node's built-in runner (`node --test`). The only dev dependency is `playwright-core` (headless Chromium driver). One-time setup: `npm install` then `npm run uat:browser`.
 
 - `npm test`: **unit tests** (`tests/unit/*.test.mjs`, a few seconds, no browser).
-  - `data.test.mjs`: every id referenced anywhere in the content exists. This covers items in drops, rewards and recipes; quest NPCs and targets; dialogue speakers; portals, spawns and NPCs on maps; named bosses; affixes; legacy id targets. It also checks that `config.js` agrees with the content.
+  - `data.test.mjs`: every id referenced anywhere in the content exists. This covers items in drops, rewards and recipes; quest NPCs and targets; dialogue speakers; portals, spawns and NPCs on maps; named bosses; affixes; legacy id targets; world quest chains (step order, choices, branches set by earlier choices, NPCs on maps). It also checks that `config.js` agrees with the content.
   - `character.test.mjs`: EXP curve, level-up points, `rollEquip` minimum rarity and thresholds, old-save migration, normalization.
   - `config.test.mjs`: elite chance and smartness tier tables, aliases, rate sanity.
   - `combat.test.mjs`: the shared damage formula (multiplier, defence, weakness/resistance, crit, minimum 1), skill level scaling, learned-skill check, skill reach.
@@ -62,6 +62,7 @@ Also exposed: `__ui()` (the GameUI), `__lookFor`, `__humSheet`, `__drawFrame` an
 | `movement.test.mjs` | walk vs double-tap sprint (and the run animation), slow double tap, Ctrl + ↓ (either order), plain ↓ sits |
 | `craft.test.mjs` | the embroiderer: tutorial recipe, fairy outfit, materials consumed |
 | `premium.test.mjs` | offline: B opens Vạn Bảo Các, check-in once, buy disabled without ingots, live try-on preview, buy and wear a cape, the merchant, a chieftain pays ingots; online: check-in through the server (ingots won elsewhere arrive with it), a console-edited balance is never saved, purchases through the server |
+| `worldquests.test.mjs` | discovery banner, the chain in the quest log (mood, progress), accept / hand in with Nguyên Bảo, the finale's choice sets a story flag and a title, the dark chain: ghost appears and leaves, the chosen branch opens and the other stays locked; online: the server grants the quest's Nguyên Bảo once, after the save |
 | `capes.test.mjs` | craft a cape, equip it in its own slot with an outfit on, a cape replaces an outfit's cape (which flows otherwise), the cloth hangs behind standing and flies out while running |
 | `server.test.mjs` | register → create → play → save through the real API |
 | `multiplayer.test.mjs` | two browsers on the server: see each other, re-entering a map, movement sync, player count, map chat + bubble (HTML shown as text), gear change visible after save, an invented outfit refused, other map hidden, world chat (`!`), leaving, malformed login, map-entry flood throttled, `saved` throttled |
@@ -203,8 +204,8 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 - **Affixes**: reflect, vampire, regen, enrage, explode, blink, frost, poison, shield.
   - A species has built-in affixes, and elites roll extra ones.
   - Smartness tier by level (`smartTier`): 0 wander → 1 aggro/kite → 2 dodge, call allies, charge → 3 lead shots, retreat.
-- **Quests (57):**
-  - 32 main, 12 tutorial, 7 side, 6 daily (5 wanted-board hunts + Tiểu Lan's daily gift).
+- **Quests (75):**
+  - 32 main, 18 world, 12 tutorial, 7 side, 6 daily (5 wanted-board hunts + Tiểu Lan's daily gift).
   - Main order (`MAIN_ORDER`, with the recommended level after each id):
 
     ```
@@ -242,6 +243,18 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
   - Drawn live, not in the sprite sheet: `CapeCloth` (`gfx/cape.js`) is a chain of points pinned at the back of the neck (`capeAnchor(frame)` in `humanoid.js`), stepped at a fixed 1/120 s (Verlet) with gravity, air drag (so it flies out while running), a backward pull (so it drapes over the back standing still), a travelling wave while moving, and constraints (fixed segment length, never in front of the body, never rising over the shoulders). Tuning: `GAME.cape`.
   - `lookFor` sets `look.liveCape`: the cape slot wins over an outfit's own `look.cape`; without a cape item, the outfit's cape is turned into a flowing one (`outfitCape`). `Humanoid.setLook` keeps `liveCape` out of the cached sheet. Players, other players and 30% of bots (`GAME.cape.botChance`) draw it. `world.capeFx` sheds the cape's particles.
   - Server: `cape` is in `GAME.player.equipSlots` (saved like any slot) and in the realtime appearance; `reconcileItems` only keeps an equipped item in its own slot.
+- **World quests (`data/world.js`, `cat: 'world'`)**, Genshin style: 4 chains, each with a mood and an ending chosen by the player.
+
+| Chain | Mood | Where | Steps | Choice → branch |
+|---|---|---|---|---|
+| `lantern` Đêm Hội Rước Đèn | cheerful | village / forest (lv 3–5) | `wq_lan1`–`wq_lan4` (Bé Bin, Bà Tư) | `lantern = keep \| gift` (epilogue lines only) |
+| `well` Giếng Cạn Nghĩa Địa | dark | graveyard (lv 8–9, after st5) | `wq_well1`–`wq_well4`, then `wq_well5a` (free) or `wq_well5b` (seal) | `well = free \| seal` |
+| `carp` Lý Ngư Biết Nói | cheerful | swamp (lv 9–10, after st4b) | `wq_carp1`–`wq_carp3` (Ngư Ông, Lý Ngư Tinh) | `carp = wish \| kind` |
+| `bride` Tân Nương Tuyết Sơn | dark | snow peak / ice cave (lv 15–17, after st7) | `wq_bride1`–`wq_bride3`, then `wq_bride4a` (truth) or `wq_bride4b` (lie); both give the cape `cape_bride` | `bride = truth \| lie` |
+
+  - New quest fields: `chain`; `choice: { options: [{ label, flag: [k, v], lines }] }` asked after the outro, before the reward (act `qchoice`); `needFlag: 'k=v'` keeps a quest locked until a choice set that flag (a branch). `reward.ingots` on every step.
+  - New NPCs: `kid_bin` (village), `gravekeeper` + `ghost_girl` (graveyard), `golden_carp` (swamp, after `wq_carp2`), `snow_bride` (snow peak, until `wq_bride4a`). `ghost: true` NPCs are drawn translucent and shimmer. Map NPC entries also take `from` (present once that quest is accepted) and `gone` (absent once it is done).
+  - Discovery: the first time a map holds the giver of a chain's first available step, a banner and a toast announce it (flag `wq_<chain>`). The quest log has a "Nhiệm vụ thế giới" section per chain (mood, progress, where the next step starts); world quest givers show a violet `!` in a diamond.
 - **Premium shop (Vạn Bảo Các) and Nguyên Bảo (ingots)**: NPC `merchant` (Vạn Bảo Lão, village x 1085) or **B** / the "Vạn Bảo" menu button.
   - Offers in `data/premium.js` (tabs cape / outfit / util): 5 premium capes (`cape_sakura`, `cape_frost`, `cape_phoenix`, `cape_shadow`, `cape_dragon`, any level), 2 outfits, utility bundles. Cosmetics are granted Legendary.
   - Earned only in game (`GAME.premium`): daily check-in (10, +40 on every 7th day in a row; the day starts at midnight Vietnam time), chieftains (+2) and field bosses (+5) for the top damage group, quests with `reward.ingots` (chapter finales st7/st12/st18: 30).
@@ -342,11 +355,13 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 
 11. **Premium shop (2026-11-01, branch `feature/premium-shop`)**: Nguyên Bảo earned in game (check-in, chieftains, field bosses, chapter finales), owned by the server online, Vạn Bảo Các with 5 premium capes, outfits and utilities, live try-on preview.
 
+12. **World quests (2026-11-01, branch `feature/world-quests`)**: four Genshin-style chains (two cheerful, two dark) with discovery, choices that set story flags and open different epilogues, ghost NPCs, Nguyên Bảo rewards and a quest cape.
+
 ## 8. Status: done, not done, open items
 
-**Git state (2026-10-28, branch `feat/multiplayer-phase-1` on the owner's PC):**
-- Committed (not yet pushed when this was written): stage 1 and three review fixes (`f37d4a0`, `3673ef0`, `0cea5b9`).
-- **Not committed yet** (already staged with `git add`, except `HANDOFF.md`): everything from step 9.3 onwards (personal loot, custody, trades, shared monsters, parties, commit queue, server-side damage) and this `HANDOFF.md` (untracked: add it too). All tests pass on it: `npm test` 64/64, `npm run uat` 91/91. Suggested message: `feat: shared monsters, server-side damage, parties, personal loot, trades and pickup commit queue (multiplayer phase 2)`.
+**Git state (2026-11-01):** multiplayer phase 2 is committed on `feature/server-side-dmg-calculator` (`daf3162`, `c8badd1`). Three stacked feature branches on top of it, each one commit (plus `docs: add HANDOFF.md` at the bottom), not pushed yet: `feature/capes` → `feature/premium-shop` → `feature/world-quests`. Merge them in that order.
+
+**Done (gameplay, 2026-11-01):** flowing capes (own slot) · Vạn Bảo Các premium shop and Nguyên Bảo · four world quest chains.
 
 **Done (online):** presence and chat · shared monsters run by the server · server-side damage · parties and reward rules · personal loot committed at pickup · item ledger, revisions, change replay · item custody on saves · trades · pickup commit queue, admission control, rate limits · hardening of the realtime server.
 

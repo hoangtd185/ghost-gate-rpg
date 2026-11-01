@@ -1,5 +1,6 @@
 // NPCs and quests. Everyday NPC lines live in data/chatter.js
 import { STORY_QUESTS, TUTORIAL_QUESTS } from './story.js';
+import { WORLD_QUESTS } from './world.js';
 
 export const NPCS = {
   elder: {
@@ -11,7 +12,7 @@ export const NPCS = {
     name: 'Thầy Lang', title: 'Bà Tư',
     look: { robe: '#4a6b4a', trim: '#e6dcc4', pants: '#2b3328', hair: '#4a4a4a', hairStyle: 4, skin: '#e8bd94' },
     shop: ['hp_s', 'hp_l', 'mp_s', 'mp_l', 'scroll_home'],
-    quests: ['m2', 'st2', 'st3', 'tut_potion', 'tut_shop', 'q_tail'],
+    quests: ['m2', 'st2', 'st3', 'tut_potion', 'tut_shop', 'q_tail', 'wq_lan4'],
   },
   smith: {
     name: 'Thợ Rèn', title: 'Anh Sắt',
@@ -36,13 +37,13 @@ export const NPCS = {
     name: 'Ngư Ông', title: 'Lão Chài',
     look: { robe: '#5a6a4a', trim: '#d9c27a', pants: '#2a3020', hair: '#d8d4cc', hairStyle: 3, skin: '#d9a57a', beard: true, hat: 'conical', hatColor: '#d9c27a' },
     shop: ['hp_s', 'hp_l', 'mp_s', 'mp_l', 'scroll_home'],
-    quests: ['st6', 'q_frog', 'q_water_ghost'],
+    quests: ['st6', 'q_frog', 'q_water_ghost', 'wq_carp1', 'wq_carp2', 'wq_carp3'],
   },
   huntress: {
     name: 'Thợ Săn', title: 'A Tuyết',
     look: { robe: '#dce8f4', trim: '#5a7a9a', pants: '#3a4a5a', hair: '#3a2a20', hairStyle: 4, skin: '#f0c8a2', hat: 'helm', hatColor: '#eef2f8' },
     shop: ['hp_l', 'mp_l', 'scroll_home', 'arm_fur', 'hat_fur', 'acc_frost'],
-    quests: ['st8b', 'st9', 'st10', 'st10b', 'st10c', 'st11', 'q_yeti', 'q_golem'],
+    quests: ['st8b', 'st9', 'st10', 'st10b', 'st10c', 'st11', 'q_yeti', 'q_golem', 'wq_bride1', 'wq_bride4b'],
   },
   lan: {
     name: 'Tiểu Lan', title: 'Cháu gái Bà Tư',
@@ -78,6 +79,32 @@ export const NPCS = {
     look: { robe: '#8a2a1a', trim: '#ffb040', pants: '#2a1410', hair: '#c84030', hairStyle: 5, skin: '#e0a880' },
     quests: ['st17'],
   },
+  // ----- World quests (data/world.js) -----
+  kid_bin: {
+    name: 'Bé Bin', title: 'Con nhà hàng xóm',
+    look: { robe: '#e05a3a', trim: '#ffd84a', pants: '#3a2a20', hair: '#17110c', hairStyle: 0, skin: '#f8d0b0' },
+    quests: ['wq_lan1', 'wq_lan2', 'wq_lan3'],
+  },
+  gravekeeper: {
+    name: 'Lão Canh Mộ', title: 'Ông Tư',
+    look: { robe: '#4a4a3a', trim: '#8a8a6a', pants: '#2a2a22', hair: '#d8d4cc', hairStyle: 3, skin: '#d9a57a', beard: true, hat: 'conical', hatColor: '#6a5a3a' },
+    quests: ['wq_well1', 'wq_well4', 'wq_well5a', 'wq_well5b'],
+  },
+  ghost_girl: {
+    name: 'Bé Nụ', title: 'Hồn ma bên giếng', ghost: true,
+    look: { robe: '#dfe8ee', trim: '#8aa0b0', pants: '#c8d4dc', hair: '#1a2228', hairStyle: 4, skin: '#d8e4ea', eye: '#3a4a5a' },
+    quests: ['wq_well2', 'wq_well3'],
+  },
+  golden_carp: {
+    name: 'Lý Ngư Tinh', title: 'Cá chép vàng ba trăm tuổi',
+    look: { robe: '#ffb020', trim: '#ff6a2a', pants: '#c86a10', hair: '#ff8a3a', hairStyle: 1, skin: '#ffe0b0', eye: '#c84a10' },
+    quests: [],
+  },
+  snow_bride: {
+    name: 'Tuyết Nương', title: 'Tân nương áo đỏ', ghost: true,
+    look: { robe: '#c8243a', trim: '#ffd6a0', inner: '#ffe8f0', pants: '#8a1a2a', hair: '#17110c', hairStyle: 1, skin: '#f0e4e8', eye: '#3a1a2a', crown: { kind: 'fairy', c: '#ffd76a' } },
+    quests: ['wq_bride2', 'wq_bride3', 'wq_bride4a'],
+  },
   // Only appears in dialogue (portrait)
   old_master: {
     name: 'Vong Hồn Sư Phụ', title: 'Chưởng môn Huyền Môn',
@@ -87,13 +114,14 @@ export const NPCS = {
 };
 
 // type: kill (kill monsters) | collect (hand in items) | talk | act (tutorial action)
-// cat: main | tut | side | daily
+// cat: main | tut | side | daily | world (world quest chains, see data/world.js)
 // reward: exp, gold, items [[id, qty]], random [[id, chance]], pet, title
 const side = (q) => ({ cat: 'side', ...q });
 
 export const QUESTS = {
   ...STORY_QUESTS,
   ...TUTORIAL_QUESTS,
+  ...WORLD_QUESTS,
 
   q_pet: {
     cat: 'tut', name: 'Bạn Đồng Hành Nhỏ', npc: 'elder', lv: 1, requires: 'm1', type: 'collect', target: 'mat_wisp', count: 3,

@@ -1182,7 +1182,7 @@ export class GameWorld {
         ctx.beginPath(); ctx.arc(z.x - cam + Math.sin(t * 2 + i * 1.3) * z.r * 0.5, z.y + Math.cos(t * 1.7 + i) * 10, z.r * 0.45, 0, 7); ctx.fill();
       }
     }
-    for (const n of this.npcs) n.draw(ctx, cam);
+    for (const n of this.npcs) n.draw(ctx, cam, n.npc.ghost ? 0.6 + Math.sin(t * 2.2 + n.x) * 0.12 : 1); // ghosts shimmer
     // drops
     for (const d of this.drops) {
       const bob = d.onGround ? Math.sin(t * 4 + d.x) * 1.5 : 0;
@@ -1418,11 +1418,11 @@ export class GameWorld {
     ctx.restore();
   }
 
-  // ! marker (new quest, gold; !! = story, red) and ? (turn in) bouncing above NPCs
+  // ! marker (new quest, gold; !! = story, red; !w = world quest, violet) and ? (turn in) bouncing above NPCs
   drawMarker(ctx, mk, x, y) {
     const bob = Math.sin(this.time * 4) * 2;
     const story = mk === '!!';
-    const col = mk === '?' ? '#7dff9a' : story ? '#ff8a5a' : mk === '!t' ? '#6ae0ff' : '#ffd84a';
+    const col = mk === '?' ? '#7dff9a' : story ? '#ff8a5a' : mk === '!t' ? '#6ae0ff' : mk === '!w' ? '#c8a0ff' : '#ffd84a';
     ctx.save();
     ctx.translate(x, y + bob);
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(0, 1, 7, 7, 0, 0, Math.PI * 2); ctx.fill();
@@ -1430,6 +1430,10 @@ export class GameWorld {
     ctx.lineWidth = 3; ctx.strokeStyle = '#2a1408';
     const t = mk === '?' ? '?' : '!';
     ctx.strokeText(t, 0, 6); ctx.fillStyle = col; ctx.fillText(t, 0, 6);
+    if (mk === '!w') { // world quest: a small diamond frame around the mark
+      ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.globalAlpha = 0.75;
+      ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(9, 1); ctx.lineTo(0, 10); ctx.lineTo(-9, 1); ctx.closePath(); ctx.stroke();
+    }
     if (story) { ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.globalAlpha = 0.6 + Math.sin(this.time * 6) * 0.3; ctx.beginPath(); ctx.arc(0, 1, 9, 0, Math.PI * 2); ctx.stroke(); }
     ctx.restore();
   }

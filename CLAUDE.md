@@ -37,6 +37,7 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 | New monster sprite | Draw in `client/src/gfx/monsters.js`, register it in `MAKERS` |
 | New outfit part | Draw helper in `client/src/gfx/humanoid.js` |
 | New cape | An item with `slot: 'cape'` and a `cape` look in `client/src/data/items.js` (options at the top of `client/src/gfx/cape.js`); cloth feel in `GAME.cape` |
+| World quest chains (Genshin-style side stories, choices, branches) | `client/src/data/world.js` (chains + quests), NPCs in `data/npcs.js`, their spots in `data/maps.js` |
 | Premium shop offers, Nguyên Bảo amounts | `client/src/data/premium.js` (offers), `GAME.premium` (check-in, kills, chapter rewards), `reward.ingots` on quests |
 | Monster behaviour (AI, affixes, bosses, spawns) | `client/src/game/mobsim.js` (runs offline and on the server) |
 | Damage formulas (player hits, skill multipliers, reach) | `client/src/game/combat.js` (runs offline and on the server) |
