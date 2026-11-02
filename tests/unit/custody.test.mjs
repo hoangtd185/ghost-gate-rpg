@@ -200,3 +200,58 @@ describe('group commit', () => {
     assert.equal(db.changesSince(B, rev).length, 2);
   });
 });
+
+describe('review fixes: bonus stats, renamed items, quests', () => {
+  it('bonus stats on an item a save adds: none at rarity 0, only rollable stats within range above', () => {
+    const ch = load(A);
+    ch.inventory.push({ uid: 'bon0', id: 'hat_cloth', qty: 1, r: 0, b: { atk: 999 } }); // a shop item
+    db.saveCharacter(uid, ch);
+    const hat = load(A).inventory.find((e) => e.uid === 'bon0');
+    assert.deepEqual(hat.b, {});
+    assert.ok(db.ledger(A).some((r) => r.item_uid === 'bon0' && r.ref === 'bonus'));
+  });
+
+  it('a stored item with a pre-rename id is neither refused nor written back with the old id', () => {
+    const rid = db.grantItem(A, { id: 'out_fox', qty: 1, r: 3, b: {} }, { reqId: 'legacy:1' }).entry.uid;
+    db.db.prepare("UPDATE items SET item_id = 'out_holy' WHERE uid = ?").run(rid); // as saved before the English rename
+    const ch = load(A);
+    const e = ch.inventory.find((x) => x.uid === rid);
+    assert.equal(e.id, 'out_holy');
+    e.id = 'out_fox'; // the client migrates it on load (data/legacy.js)
+    db.saveCharacter(uid, ch);
+    const after = load(A).inventory.find((x) => x.uid === rid);
+    assert.ok(after, 'kept');
+    assert.equal(after.id, 'out_fox');
+  });
+
+  it('a quest done on the server cannot be removed or downgraded by a save', () => {
+    let ch = load(A);
+    ch.quests.q_tail = { s: 'done', p: 6 };
+    db.saveCharacter(uid, ch);
+    ch = load(A);
+    ch.quests.q_tail = { s: 'active', p: 0 };
+    db.saveCharacter(uid, ch);
+    assert.equal(load(A).quests.q_tail.s, 'done');
+    ch = load(A);
+    delete ch.quests.q_tail;
+    db.saveCharacter(uid, ch);
+    assert.equal(load(A).quests.q_tail?.s, 'done');
+  });
+
+  it("a daily completion gets the server's date; it can be taken again on a later day", async () => {
+    const { todayKey } = await import('../../client/src/game/character.js');
+    let ch = load(A);
+    ch.quests.d_hunt1 = { s: 'done', p: 15, day: '2099-12-31' };
+    db.saveCharacter(uid, ch);
+    assert.equal(load(A).quests.d_hunt1.day, todayKey());
+    ch = load(A);
+    ch.quests.d_hunt1 = { s: 'active', p: 0 }; // same day: refused
+    db.saveCharacter(uid, ch);
+    assert.equal(load(A).quests.d_hunt1.s, 'done');
+    db.db.prepare("UPDATE quests SET day = '2000-01-01' WHERE character_id = ? AND quest_id = 'd_hunt1'").run(A);
+    ch = load(A);
+    ch.quests.d_hunt1 = { s: 'active', p: 0 }; // a later day: taken again
+    db.saveCharacter(uid, ch);
+    assert.equal(load(A).quests.d_hunt1.s, 'active');
+  });
+});

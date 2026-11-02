@@ -7,7 +7,7 @@
 //                     party_invite {to} · party_answer {from, yes} · party_leave
 //                     trade_ask {to} · trade_answer {from, yes} · trade_offer {items, gold} · trade_lock {on} · trade_confirm · trade_cancel
 //   server -> client  welcome {id, online} · snap {map, players} · join · leave · st · look · chat · online · kicked · error
-//                     mobs {map, list} · mspawn {m} · ms {s} · mev {list} · mhit {uid, by, dmg, ab, crit, em, el} · mdie {uid, by} · mkill {uid, exp, gold?, drops?}
+//                     mobs {map, list} · mspawn {map, m} · ms {map, s} · mev {map, list} · mhit {map, uid, by, dmg, ab, crit, em, el} · mdie {map, uid, by} · mkill {map, uid, exp, gold?, drops?}
 //                     chg {list, rev} · loot {k, drops} · drops {map, drops} · pick {id, ok, why?}
 //                     party_ask · party_state · party_err · trade_ask · trade_open · trade_state · trade_end · trade_err
 import { WebSocketServer } from 'ws';

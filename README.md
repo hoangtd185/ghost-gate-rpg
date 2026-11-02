@@ -300,7 +300,7 @@ client/
       backgrounds.js    layered backgrounds for every map
     game/
       character.js      stats, EXP, inventory, equipment, gems, crafting, passives, quest state
-      entities.js       physics (gravity, one-way platforms), player, monsters, projectiles
+      entities.js       player, monster sprites (their state lives in mobsim.js), drops, projectiles
       world.js          core logic: combat, drops, rendering
       mobsim.js         monster AI, spawns, bosses (shared with the server)
       physics.js        gravity and platforms (shared with the server)

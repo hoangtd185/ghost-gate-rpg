@@ -142,6 +142,20 @@ describe('shared monsters and parties (online)', { timeout: 240_000 }, () => {
     for (const p of [A, B]) assert.ok(await until(p.page, "document.querySelector('#hParty').hidden"));
   });
 
+  it("messages about another map's monsters are ignored; a kill reward from another map keeps its gold", async () => {
+    const m = await pickMob(A);
+    const hp = await A.page.evaluate((uid) => __game().remoteMobs.get(uid).hp, m.uid);
+    // the same uid on a map we already left (monster uids are per map)
+    await A.page.evaluate((uid) => { const n = __game().net; n.handle({ t: 'mhit', map: 'swamp', uid, by: 'x', dmg: 50, ab: 0 }); n.handle({ t: 'mdie', map: 'swamp', uid, by: 'x' }); }, m.uid);
+    assert.equal(await A.page.evaluate((uid) => __game().remoteMobs.get(uid).hp, m.uid), hp, 'not hurt');
+    assert.equal(await A.page.evaluate((uid) => __game().remoteMobs.get(uid).dead, m.uid), false, 'not dead');
+    const before = await A.page.evaluate(() => ({ gold: __game().ch.gold, drops: __game().drops.length }));
+    await A.page.evaluate(() => __game().net.handle({ t: 'mkill', map: 'swamp', uid: 99999, mob: 'frog', x: 500, y: 200, exp: 1, gold: 7, drops: [] }));
+    const after = await A.page.evaluate(() => ({ gold: __game().ch.gold, drops: __game().drops.length }));
+    assert.equal(after.gold, before.gold + 7, 'gold straight to the purse');
+    assert.equal(after.drops, before.drops, 'nothing dropped on this map');
+  });
+
   it('a monster hurts the player that touches it (client-side contact with server positions)', async () => {
     const m = await pickMob(A);
     const before = await A.page.evaluate('__game().ch.hp');
