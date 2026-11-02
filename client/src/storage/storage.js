@@ -38,7 +38,10 @@ class ApiStorage {
   }
   async list() { return (await this.req('GET', 'characters')).characters; }
   async create(ch) { return (await this.req('POST', 'characters', { character: ch })).character; }
-  async save(ch) { await this.req('PUT', 'characters/' + encodeURIComponent(ch.id), { character: ch }); }
+  // Returns { itemRev, stale, items? } (see the PUT route in server/src/index.js)
+  async save(ch) { return this.req('PUT', 'characters/' + encodeURIComponent(ch.id), { character: ch }); }
+  // Item and gold changes the server made after `rev` (pickups, trades), for clients that missed them
+  async changes(id, rev) { return this.req('GET', `characters/${encodeURIComponent(id)}/changes?since=${rev | 0}`); }
   // Fire-and-forget upload that the browser finishes even after the page closes (keepalive bodies max 64 KB)
   saveKeepalive(ch) {
     const body = JSON.stringify({ character: ch });
@@ -130,16 +133,20 @@ export function mergeOutbox(storage, chars) {
   for (const id of Object.keys(box)) if (!ids.has(id)) delete box[id];
   writeOutbox(storage, box);
   return chars.map((c) => {
-    const o = box[c.id];
+    let o = box[c.id];
     if (!o || (o.playTime || 0) < (c.playTime || 0)) return c;
+    // The server changed items or gold since this copy was made (a pickup, a trade): its items, gold and
+    // quests win, the rest (EXP, position, skills…) comes from the local copy. The server applies the same rule.
+    if ((o.itemRev || 0) < (c.itemRev || 0)) o = { ...o, inventory: c.inventory, equip: c.equip, gold: c.gold, quests: c.quests, itemRev: c.itemRev };
     storage.save(o).then(() => clearOutboxEntry(storage, o)).catch(() => { /* stays in the outbox */ });
     return o;
   });
 }
 
 export class SaveQueue {
-  constructor(storage, onStatus) {
-    this.s = storage; this.onStatus = onStatus;
+  // onStatus(state, msg); onResult(result, snapshot) with what the backend answered to an upload
+  constructor(storage, onStatus, onResult) {
+    this.s = storage; this.onStatus = onStatus; this.onResult = onResult;
     this.useOutbox = storage.kind !== 'local'; // LocalStore already writes to localStorage synchronously
     this.pending = null; this.busy = false; this.retryT = null; this.delay = 0;
     window.addEventListener('online', () => this.kick());
@@ -166,10 +173,11 @@ export class SaveQueue {
     const snap = this.pending; this.pending = null;
     this.onStatus && this.onStatus('saving');
     try {
-      await this.s.save(snap);
+      const res = await this.s.save(snap);
       this.delay = 0;
       if (this.useOutbox) clearOutboxEntry(this.s, snap);
       this.onStatus && this.onStatus('saved');
+      if (res && this.onResult) this.onResult(res, snap);
     } catch (e) {
       if (!this.pending) this.pending = snap; // keep the newest snapshot for the retry
       this.delay = Math.min(GAME.save.retryMaxMs, this.delay ? this.delay * 2 : GAME.save.retryMinMs);

@@ -2,17 +2,7 @@
 // map and world chat, gear changes show up for others, map changes and disconnects are handled.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { launch, newPage, startServer, register, createCharacter, uniqueName, shot } from './helpers.mjs';
-
-// Poll a page expression until it is truthy (network timing varies)
-async function until(page, expr, ms = 4000) {
-  const end = Date.now() + ms;
-  for (;;) {
-    const v = await page.evaluate(expr);
-    if (v || Date.now() > end) return v;
-    await page.waitForTimeout(100);
-  }
-}
+import { launch, newPage, startServer, register, createCharacter, uniqueName, shot, until } from './helpers.mjs';
 
 describe('multiplayer presence and chat', { timeout: 180_000 }, () => {
   let browser, server, A, B, nameA, nameB, idA, idB;
@@ -73,8 +63,15 @@ describe('multiplayer presence and chat', { timeout: 180_000 }, () => {
   });
 
   it('gear changes show up for others after a save', async () => {
+    await B.page.evaluate("(() => { const w = __game(); w.ch.equip.hat = { uid: 'mphat1', id: 'hat_cloth', qty: 1, r: 0, b: {} }; w.recalc(); w.player.refreshLook(); w.hooks.save(); })()");
+    assert.ok(await until(A.page, `__game().remotes.get('${idB}').look.hat === 'band'`, 6000), 'A sees the cloth headband on B');
+  });
+
+  it('an outfit invented in the console is refused by the server, so nobody else sees it', async () => {
     await B.page.evaluate("(() => { const w = __game(); w.ch.equip.outfit = { uid: 'mpout1', id: 'out_peach_fairy', qty: 1, r: 3, b: {} }; w.recalc(); w.player.refreshLook(); w.hooks.save(); })()");
-    assert.ok(await until(A.page, `!!__game().remotes.get('${idB}').look.ribbons`, 6000), 'A sees the fairy outfit (ribbons) on B');
+    assert.ok(await until(B.page, '!__game().ch.equip.outfit', 6000), 'the server answer removes it from B');
+    await A.page.waitForTimeout(500);
+    assert.ok(!(await A.page.evaluate(`__game().remotes.get('${idB}').look.ribbons`)), 'A never sees it');
   });
 
   it('a player on another map is not shown; world chat still arrives', async () => {

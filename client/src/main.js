@@ -70,12 +70,28 @@ function doSave(onExit = false) {
   if (onExit) saver.saveOnExit(world.ch); else saver.save(world.ch);
 }
 
+// What the server did with an upload (online play): it may have refused some items, or ignored items and gold
+// because it changed them since (a pickup or trade this client has not applied yet).
+async function onSaveResult(res, snap) {
+  const w = world;
+  if (!w || w.ch.id !== snap.id) return;
+  if (res.stale && (w.ch.itemRev || 0) < res.itemRev && !(net && net.connected)) {
+    // no realtime connection to replay the changes: fetch them
+    try { const c = await storage.changes(w.ch.id, w.ch.itemRev || 0); if (world === w) w.applyChanges(c.list, c.rev); } catch { /* next save tries again */ }
+  } else if (res.items && (w.ch.itemRev || 0) === res.itemRev) {
+    w.ch.inventory = res.items.inventory;
+    w.ch.equip = { ...w.ch.equip, ...res.items.equip };
+    w.recalc(); w.player.refreshLook(); ui.refreshAll();
+    ui.toast('Máy chủ đã từ chối một số vật phẩm không hợp lệ', 'warn');
+  }
+}
+
 function enterGame(ch, isNew) {
   hudRoot.hidden = false;
   if (!saver) saver = new SaveQueue(storage, (st, msg) => {
     if (ui && ui.world) ui.saveStatus(st, msg);
     if (st === 'saved' && net) net.saved(); // others see our new gear/level/title
-  });
+  }, onSaveResult);
   const hooks = {
     toast: (m, k) => ui.toast(m, k),
     chat: (n, m, t) => ui.addChat(n, m, t),
@@ -84,7 +100,7 @@ function enterGame(ch, isNew) {
     changed: (what) => { if (!ui.world) return; if (what === 'bars') ui.refreshBars(); else ui.refreshAll(); },
     save: () => doSave(),
     mapChanged: (map) => ui && ui.world && ui.setMap(map),
-    levelUp: (lv) => { ui.banner(`<small>Chúc mừng</small>Đạt cấp ${lv}`); ui.toast(`Thăng cấp ${lv}! +${GAME.player.statPointsPerLevel} điểm tiềm năng, +${GAME.player.skillPointsPerLevel} điểm kỹ năng`, 'quest'); ui.refreshAll(); },
+    levelUp: (lv) => { doSave(); /* online the server's damage formula uses the saved level */ ui.banner(`<small>Chúc mừng</small>Đạt cấp ${lv}`); ui.toast(`Thăng cấp ${lv}! +${GAME.player.statPointsPerLevel} điểm tiềm năng, +${GAME.player.skillPointsPerLevel} điểm kỹ năng`, 'quest'); ui.refreshAll(); },
     questProgress: (q) => ui.questProgress(q),
     gotItem: (d) => ui.gotItem(d),
     useItemById: (id) => ui.useItemById(id),
@@ -96,6 +112,8 @@ function enterGame(ch, isNew) {
       chat: (name, text, type) => ui.addChat(name, text, type),
       online: (n) => ui.setOnline(n),
       toast: (m, k) => ui.toast(m, k),
+      trade: (m) => ui.onTrade(m),
+      party: (m) => ui.onParty(m),
     });
     net.attach(world);
   }
@@ -158,7 +176,7 @@ requestAnimationFrame(frame);
 // Open DevTools and type __game() to inspect/tweak the game world.
 const DEBUG = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname) || new URLSearchParams(location.search).has('debug');
 if (DEBUG) {
-  window.__game = () => world;
+  window.__game = () => world; window.__ui = () => ui;
   window.__lookFor = lookFor; window.__humSheet = humanoidSheet; window.__drawFrame = drawFrame; window.__Monster = Monster;
 }
 

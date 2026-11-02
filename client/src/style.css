@@ -434,3 +434,26 @@ button.sock.full:hover { outline: 2px solid #ff9a8a; }
 .need img { width: 1.6em; height: 1.6em; } .need span { display: flex; flex-direction: column; } .need small { color: var(--muted); font-size: .78em; }
 .need b { color: #ff9a8a; font-variant-numeric: tabular-nums; } .need li.ok b { color: #8af0a0; }
 @media (max-width: 760px) { .craft { grid-template-columns: 1fr; } .rlist { max-height: 12em; } }
+
+/* ===== Trade (online) ===== */
+.trade { display: grid; grid-template-columns: auto auto 1fr; gap: 1em; align-items: start; }
+.tside h3 { margin: 0 0 .4em; font-family: var(--font-display); color: var(--gold); font-weight: 600; }
+.tgrid { grid-template-columns: repeat(4, 2.9em); }
+.tbag { grid-template-columns: repeat(12, 2.9em); margin: .4em 0; }
+.tside .gold { display: flex; gap: .4em; align-items: center; margin: .5em 0 .2em; }
+.tside .gold input { width: 6.5em; padding: .25em .4em; background: #0a080e; border: 1px solid var(--line); color: inherit; border-radius: 3px; }
+.tside .gold button { padding: .25em .6em; border-radius: 999px; }
+.islot.intrade { opacity: .45; outline: 2px dashed var(--gold); outline-offset: 1px; }
+.trade .ok { color: #9be89b; }
+.trade-ask { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); z-index: 7; background: linear-gradient(#1d1724f6, #120e16f8); border: 1px solid var(--gold); border-radius: 6px; padding: .7em 1.1em; box-shadow: 0 0 0 3px #000a, 0 1em 3em #000c; text-align: center; }
+.trade-ask p { margin: 0 0 .3em; }
+.trade-ask .acts { justify-content: center; }
+@media (max-width: 760px) { .trade { grid-template-columns: 1fr; } .tbag { grid-template-columns: repeat(6, 2.9em); } }
+
+/* ===== Party (online) ===== */
+.hud-party { position: absolute; left: .6em; top: 9.4em; width: 13em; background: #120e16cc; border: 1px solid var(--line); border-radius: 4px; padding: .35em .5em; font-size: .85em; z-index: 2; }
+.hud-party header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .2em; color: #8fe8a0; }
+.hud-party header button { padding: .05em .6em; border-radius: 999px; font-size: .85em; }
+.hud-party .pm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud-party .pm.me b { color: var(--gold); }
+.hud-party small { color: var(--muted); }

@@ -146,4 +146,14 @@ export async function register(page, username, password) {
   await page.waitForTimeout(1000);
 }
 
+// Poll a page expression until it is truthy (network timing varies). Returns the last value.
+export async function until(page, expr, ms = 4000) {
+  const end = Date.now() + ms;
+  for (;;) {
+    const v = await page.evaluate(expr);
+    if (v || Date.now() > end) return v;
+    await page.waitForTimeout(100);
+  }
+}
+
 export const uniqueName = (prefix) => prefix + (Date.now() % 1e8) + Math.floor(Math.random() * 100);

@@ -2,7 +2,8 @@
 import { MAPS, GROUND_Y } from '../data/maps.js';
 import { CLASSES } from '../data/classes.js';
 import { BOT_NAMES, BOT_CHAT, BOT_LOOKS } from '../data/bots.js';
-import { Humanoid, Projectile, stepBody, MOVE_SPEED, JUMP_V } from './entities.js';
+import { Humanoid, Projectile, MOVE_SPEED, JUMP_V } from './entities.js';
+import { stepBody } from './physics.js';
 import { pick, rand, randInt, chance, clamp } from '../engine/util.js';
 import { GAME } from '../config.js';
 

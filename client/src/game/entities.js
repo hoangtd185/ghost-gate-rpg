@@ -7,41 +7,11 @@ import { humanoidSheet, HUM_W, HUM_FEET } from '../gfx/humanoid.js';
 import { monsterSheet } from '../gfx/monsters.js';
 import { drawFrame } from '../gfx/draw.js';
 import { clamp, rand, randInt } from '../engine/util.js';
-import { NAMED, ELITE_POOL, CHIEF, smartTier, eliteChance } from '../data/affixes.js';
 import { GAME } from '../config.js';
+import { MobState } from './mobsim.js';
 
-export const GRAVITY = GAME.physics.gravity;
 export const JUMP_V = GAME.physics.botJumpV;
 export const MOVE_SPEED = GAME.physics.moveSpeed;
-
-// Basic physics: gravity + one-way platforms
-export function stepBody(b, dt, platforms, mapW) {
-  b.vy = Math.min(b.vy + GRAVITY * dt * (b.floaty ? 0 : 1), 640);
-  b.x = clamp(b.x + b.vx * dt, 0, mapW - b.w);
-  const prevBottom = b.y + b.h;
-  b.y += b.vy * dt;
-  b.onGround = false;
-  if (b.dropTimer > 0) b.dropTimer -= dt;
-  if (b.vy >= 0) {
-    const bottom = b.y + b.h;
-    if (bottom >= GROUND_Y) {
-      b.y = GROUND_Y - b.h; b.vy = 0; b.onGround = true; b.standY = GROUND_Y; b.plat = null;
-      return;
-    }
-    if (b.dropTimer > 0) return;
-    for (const p of platforms) {
-      if (prevBottom <= p.y + 1 && bottom >= p.y && b.x + b.w > p.x + 3 && b.x < p.x + p.w - 3) {
-        b.y = p.y - b.h; b.vy = 0; b.onGround = true; b.standY = p.y; b.plat = p;
-        return;
-      }
-    }
-  }
-}
-
-export function platformAt(platforms, x, y) {
-  if (y >= GROUND_Y) return null;
-  return platforms.find((p) => Math.abs(p.y - y) < 2 && x >= p.x && x <= p.x + p.w) || null;
-}
 
 // ===== Humanoid characters (shared by player, bots and NPCs) =====
 export class Humanoid {
@@ -118,64 +88,12 @@ export class Player extends Humanoid {
 }
 
 // ===== Monsters =====
-// Each monster has its own level (varies around the species' base level); stats scale with level.
-// opt: { named: id in NAMED, elite: true/false, chief: true/false (mini boss), lvBonus }
-export class Monster {
+// State and AI live in mobsim.js (shared with the server); this adds the sprite and drawing.
+export class Monster extends MobState {
   constructor(id, x, standY, range, spawnRef, opt = {}) {
-    const base = MONSTERS[id];
-    const named = opt.named ? NAMED[opt.named] : null;
-    const chief = !named && !base.boss && !!opt.chief;
-    const elite = !named && !base.boss && !chief && (opt.elite ?? Math.random() < eliteChance(base.lv));
-    const LB = GAME.monsters.levelBonus, PL = GAME.monsters.perLevel, EL = GAME.monsters.elite;
-    const bonus = named || base.boss ? 0 : (opt.lvBonus ?? randInt(0, base.lv >= 13 ? LB.maxFromLv13 : LB.max));
-    const lv = named ? named.lv : base.lv + bonus;
-    const k = lv - base.lv;
-    let hp = base.hp * (1 + PL.hp * k), atk = base.atk * (1 + PL.atk * k), df = base.def * (1 + PL.def * k), exp = base.exp * (1 + PL.exp * k);
-    let gold = base.gold.map((g) => Math.round(g * (1 + PL.gold * k)));
-    let affix = [...(base.affix || [])], drops = base.drops, name = base.name, scale = 1;
-    if (elite) {
-      hp *= EL.hp; atk *= EL.atk; df *= EL.def; exp *= EL.exp; gold = gold.map((g) => g * EL.gold); scale = EL.scale;
-      const pool = ELITE_POOL.filter((a) => !affix.includes(a));
-      const n = lv >= 13 ? EL.affixesFromLv13 : EL.affixes;
-      for (let i = 0; i < n && pool.length; i++) affix.push(pool.splice(randInt(0, pool.length - 1), 1)[0]);
-      drops = [...drops, ['GEM1', 0.6], ['stone', 0.7], ['stone', 0.3], ['protect', 0.06], ['out_jade_lotus', 0.004], ['out_wisp_hood', 0.004], ['out_peach_fairy', 0.002], ['mat_dew', 0.08]];
-    }
-    if (chief) {
-      hp *= CHIEF.hp; atk *= CHIEF.atk; df *= CHIEF.def; exp *= CHIEF.exp; gold = gold.map((g) => g * CHIEF.gold); scale = CHIEF.scale;
-      drops = [...drops, ...CHIEF.drops]; name = 'Đầu Lĩnh ' + base.name;
-    }
-    if (named) {
-      hp *= named.hp; atk *= named.atk; df *= 1.3; exp *= named.hp * 0.7; gold = gold.map((g) => g * 10);
-      affix = [...named.affix]; drops = named.drops; name = named.name; scale = named.scale;
-    }
-    this.id = id;
-    this.def = { ...base, lv, name, drops, affix, hp: Math.round(hp), atk: Math.round(atk), def: Math.round(df), exp: Math.round(exp), gold };
-    this.elite = elite; this.chief = chief; this.named = opt.named || null; this.namedDef = named;
-    this.scale = scale; this.tint = named ? named.tint : chief ? 'saturate(1.5) contrast(1.08) brightness(0.96)' : elite ? 'saturate(1.35) brightness(1.08)' : null;
-    this.affix = new Set(affix);
-    this.tier = smartTier(lv);
-    this.w = Math.round(base.w * scale); this.h = Math.round(base.h * scale);
-    this.x = x; this.y = standY - this.h; this.standY = standY;
-    this.vx = 0; this.vy = 0; this.onGround = true; this.dropTimer = 0;
-    this.range = range; // [minX, maxX] patrol range
-    this.homeX = x; this.homeY = this.y;
-    this.maxHp = this.def.hp; this.hp = this.def.hp;
-    this.maxShield = this.affix.has('shield') ? Math.round(this.maxHp * 0.25) : 0; this.shield = this.maxShield; this.shieldT = 0;
-    this.facing = Math.random() < 0.5 ? -1 : 1;
+    super(id, x, standY, range, spawnRef, opt);
     this.sheet = monsterSheet(id);
-    this.animT = Math.random() * 3;
-    this.hurtT = 0; this.aggro = null; this.aggroT = 0;
-    this.thinkT = rand(0.5, 2); this.atkCd = rand(1, 3);
-    this.dead = false; this.hitByPlayer = false;
-    this.spawnRef = spawnRef;
-    this.floaty = base.behavior === 'float';
-    this.phase = 0; this.actT = 0; this.alpha = 0; // fade in when spawning
-    this.poison = 0; this.poisonT = 0; this.poisonDmg = 0;
-    this.lastHitT = 0; this.blinkT = rand(3, 6); this.chargeT = rand(3, 5); this.dodgeT = 0;
   }
-  get cx() { return this.x + this.w / 2; }
-  get cy() { return this.y + this.h / 2; }
-  get enraged() { return this.affix.has('enrage') && this.hp < this.maxHp * 0.35; }
   draw(ctx, camX, time) {
     const s = this.sheet;
     let frames = s.frames.walk;
