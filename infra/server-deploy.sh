@@ -34,6 +34,7 @@ stage_nginx() { # http.conf | https.conf
     "$NGINX_IMAGE" nginx -t
 }
 
+# Copies the checked staging config into the directory the running nginx reads.
 publish_nginx() {
   cp "$CONF_STAGING/proxy.inc" "$CONF_STAGING/default.conf" "$CONF_DIR/"
 }
@@ -44,6 +45,7 @@ stop_game() {
   docker rm quymonquan > /dev/null 2>&1 || true
 }
 
+# Starts the game container from the given image, bound to localhost only, with the data disk mounted.
 run_game() { # image
   docker run -d --name quymonquan --restart unless-stopped \
     --env-file "$DATA_ROOT/app.env" \
@@ -53,6 +55,7 @@ run_game() { # image
     "$1" > /dev/null
 }
 
+# Waits up to 30 s for /api/health to answer. Returns 1 if the game never becomes healthy.
 wait_healthy() {
   for _ in $(seq 1 30); do
     if curl -fsS "$HEALTH_URL" > /dev/null 2>&1; then return 0; fi

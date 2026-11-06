@@ -16,6 +16,7 @@ COMMAND_ID=$(aws ssm send-command \
   --query Command.CommandId --output text)
 echo "SSM command: $COMMAND_ID"
 
+# Prints one field of the SSM command result (Status, StandardOutputContent…). Fails while it does not exist yet.
 invocation() { # field
   aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$DEPLOY_INSTANCE_ID" \
     --query "$1" --output text 2> /dev/null
