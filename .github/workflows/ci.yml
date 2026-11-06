@@ -1,6 +1,7 @@
 # On every push / pull request:
 #   check - scan for committed secrets, unit tests, build the client, smoke-test the server in production mode
 #   uat   - end-to-end acceptance scenarios (tests/e2e) in headless Chromium
+#   deploy - pushes to main only, after check and uat pass: ships the commit to the AWS server (README, Option 2b)
 name: CI
 on:
   push:
@@ -10,7 +11,8 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel main: a new push must not interrupt a deploy that is restarting the server
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -56,3 +58,25 @@ jobs:
           path: tests/e2e/out/
           if-no-files-found: ignore
           retention-days: 7
+
+  deploy:
+    needs: [check, uat]
+    # Skipped until the repository variables exist (terraform output github_variables)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # lets the job exchange a GitHub token for short-lived AWS credentials
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Deploy to the server
+        env:
+          DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
+          DEPLOY_DOCUMENT: ${{ vars.DEPLOY_DOCUMENT }}
+          DEPLOY_INSTANCE_ID: ${{ vars.DEPLOY_INSTANCE_ID }}
+        run: infra/ci-deploy.sh
