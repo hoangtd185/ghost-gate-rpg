@@ -40,7 +40,7 @@ flowchart LR
 | Config | `client/src/config.js` (game tuning) + `.env` (deployment) | Balance changes in one file shared by client and server; secrets never in code. | — |
 | Tests | Node's built-in runner (`node --test`): unit tests in `tests/unit`, end-to-end scenarios in `tests/e2e` driven by `playwright-core` | One language and one runner for everything; unit tests need no dependency at all; the e2e scenarios exercise the whole stack like a player | No HTML report/trace viewer like `@playwright/test`; switch to it if debugging failed scenarios gets painful |
 | CI | GitHub Actions: secret scan → build → server smoke test → UAT | Catches leaked secrets, broken builds and gameplay regressions on every push. | — |
-| Deploy | Docker image (non-root) or any Node host (Railway, Render, VPS) | One process, one volume for `data/`. | Needs a host with WebSocket support once multiplayer starts (all of these have it). |
+| Deploy | Docker image (non-root) or any Node host (Railway, Render, VPS, AWS EC2 through `infra/terraform`) | One process, one volume for `data/`. | Needs a host with WebSocket support once multiplayer starts (all of these have it). |
 
 ## 3. Saving and the "queue"
 
@@ -90,6 +90,7 @@ Short ADR-style records. Add a new row (or a file under `docs/decisions/`) when 
 | 19 | Server-side damage: clients send `hit {uid, sid}`, the server computes the number with the shared `combat.js` from the saved character and buffs | Active (2026-10-27) | A client cannot send a damage number; one formula for offline and online | Server-side hit detection (needs player projectiles on the server) |
 | 18 | No Redis for loot decisions; pickups go through an in-process group-commit queue with admission control | Active (2026-10-27) | One event loop already makes every decision atomic; batching cuts disk syncs; drops are personal so nobody races for an item | More than one server process |
 | 13 | No message broker; item safety comes from a DB commit before the ack (+ item ledger, idempotent requests) | Active (2026-10-23) | A queue in front of the database adds no durability; see [MULTIPLAYER.md](MULTIPLAYER.md) §5 | More than one server process (Redis pub/sub) or an analytics pipeline (outbox table → broker) |
+| 20 | AWS deployment: one free tier EC2 instance, Terraform for the infrastructure, player data on a separate EBS volume with `prevent_destroy`, nginx in front with certbot, `TOKEN_SECRET` generated on the server, pushes to `main` deployed by GitHub Actions through OIDC, S3 and one fixed SSM document | Active (2026-11-05) | Fits the single-process + SQLite design; data and key survive instance replacement; the key stays out of Terraform state; no stored AWS keys or open deploy port. App Runner and Fargate do not fit: SQLite in WAL mode needs a local disk and the game state lives in one process | More than one server process, or player count outgrows the instance |
 
 ## 5. Dependency policy
 
