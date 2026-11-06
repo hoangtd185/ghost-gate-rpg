@@ -179,7 +179,7 @@ terraform plan
 terraform apply
 ```
 
-If this account already has the GitHub Actions OIDC provider, set `create_github_oidc_provider = false`.
+If this account already has the GitHub Actions OIDC provider, set `create_github_oidc_provider = false`. For a fork or a renamed repository, set `github_oidc_subject_prefix` to the output of `gh api repos/OWNER/REPO/actions/oidc/customization/sub --jq .sub_claim_prefix` (this repository uses GitHub's immutable subject, which contains the owner and repository ids).
 
 **2. Connect GitHub Actions**
 

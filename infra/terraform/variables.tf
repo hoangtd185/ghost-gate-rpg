@@ -54,10 +54,17 @@ variable "domain" {
   }
 }
 
-variable "github_repository" {
-  description = "Repository whose main branch may deploy, as owner/name."
+variable "github_oidc_subject_prefix" {
+  description = "Start of the OIDC subject GitHub issues for the repository allowed to deploy. Get it with: gh api repos/OWNER/REPO/actions/oidc/customization/sub --jq .sub_claim_prefix"
   type        = string
-  default     = "hoangtd185/ghost-gate-rpg"
+  # This repository uses GitHub's immutable subject (owner and repository ids), so a deleted and
+  # re-created repository with the same name cannot deploy. The plain form would be "repo:owner/name".
+  default = "repo:hoangtd185@32231913/ghost-gate-rpg@1426446425"
+
+  validation {
+    condition     = startswith(var.github_oidc_subject_prefix, "repo:") && !strcontains(var.github_oidc_subject_prefix, "*")
+    error_message = "github_oidc_subject_prefix must start with repo: and contain no wildcard."
+  }
 }
 
 variable "create_github_oidc_provider" {
