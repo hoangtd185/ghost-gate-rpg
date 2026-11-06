@@ -9,3 +9,4 @@ client/dist
 .env.*
 *.key
 *.pem
+/infra

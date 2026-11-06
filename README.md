@@ -163,6 +163,49 @@ docker run -d -p 3000:3000 -v quymonquan-data:/data -e TOKEN_SECRET=<random-64-c
 
 The image runs in production mode, so `TOKEN_SECRET` is required. Do not pass your dev `.env` with `--env-file`, because it would override `DATA_DIR` and `NODE_ENV`.
 
+### Option 2b: AWS EC2 (Terraform, free tier, automatic deploys)
+
+`infra/terraform` creates one free tier EC2 instance (`t3.micro` in Singapore by default) in the default VPC, with an Elastic IP, a firewall that opens only 80, 443 and SSH from your IP, and a separate encrypted EBS disk for player data. The game runs in Docker behind nginx. Every push to `main` that passes CI is deployed automatically. Everything is created in your AWS account, so review the plan before you apply it.
+
+You need [Terraform](https://developer.hashicorp.com/terraform/install) 1.9+, AWS credentials (`aws configure` or the `AWS_PROFILE` / `AWS_ACCESS_KEY_ID` variables), an SSH key, the [GitHub CLI](https://cli.github.com/) and `jq`.
+
+**1. Create the infrastructure**
+
+```bash
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars   # set ssh_allowed_cidr to your IP
+terraform init
+terraform plan
+terraform apply
+```
+
+If this account already has the GitHub Actions OIDC provider, set `create_github_oidc_provider = false`.
+
+**2. Connect GitHub Actions**
+
+```bash
+terraform output -json github_variables | jq -r 'to_entries[] | "\(.key) \(.value)"' | while read -r name value; do
+  gh variable set "$name" --body "$value"
+done
+```
+
+These values are identifiers rather than secrets, and no AWS keys are stored in GitHub.
+
+**3. Deploy**
+
+Push to `main`. The `deploy` job in `.github/workflows/ci.yml` runs after `check` and `uat` pass, and stays skipped until step 2 is done. To deploy without GitHub Actions, run `infra/deploy.sh` (over SSH). `terraform output game_url` prints the address.
+
+How a deploy works: the job gets short-lived AWS credentials through OIDC (only the `main` branch of this repository can), uploads `git archive HEAD` to a private S3 bucket and runs one fixed SSM document on the instance. That runs `infra/server-deploy.sh`, which builds the image on the server and restarts the game, dropping connected players for a few seconds. If the new version fails its health check, the last working version is started again and the job fails.
+
+- **HTTPS:** without a domain the game runs on plain HTTP, so passwords and login tokens travel unencrypted. Use that only for testing. To enable HTTPS, point a domain's A record at `terraform output public_ip`, set `domain` in `terraform.tfvars`, run `terraform apply` and deploy. certbot gets the certificate and a daily systemd timer renews it.
+- **nginx:** edit `infra/nginx/` (`proxy.inc`, `http.conf`, `https.conf`). The next deploy runs `nginx -t` on the new config before changing anything live. Keep `X-Forwarded-For $remote_addr` in `proxy.inc`: the server rate limits by the first address in that header, so `$proxy_add_x_forwarded_for` would let clients fake their IP.
+- **Cost:** the plan fails unless AWS reports the instance type as free tier eligible for your account. Disks total 18 GB of the 30 GB allowance. CPU credits are set to `standard`, so a busy server slows down rather than adding charges. The free tier has limits (time, credits, traffic), so set up an AWS budget alert. Other instances, disks or an IP left idle in the same account count too.
+- **Secrets:** first boot generates `TOKEN_SECRET` into `/srv/quymonquan/app.env` on the data disk, so it is not in Terraform state or user data. Other settings from the table below (such as `ALLOW_REGISTER`) go in the same file and apply on the next deploy.
+- **Data:** `game.db`, `app.env`, the nginx config and the certificates live on the data disk at `/srv/quymonquan`. They survive replacing the instance, but there are no automatic backups yet (see stage 3d in [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)).
+- **Replacing the instance:** after a replacement, run `ssh-keygen -R <public_ip>` (the host key changes), update `DEPLOY_INSTANCE_ID` by repeating step 2, and deploy again (containers live on the old root disk).
+- **Your IP changed:** update `ssh_allowed_cidr` and run `terraform apply`.
+- **Removing everything:** `terraform destroy` stops at the data disk on purpose. To really delete all player data, remove the `prevent_destroy` block from `aws_ebs_volume.data` in `main.tf` and run it again.
+
 ### Option 3: Railway (easiest for a first deploy)
 
 **3a. Push the code to GitHub**
@@ -325,6 +368,12 @@ tools/
   build.mjs             bundles the client into one HTML file
   check-secrets.mjs     secret scanner used by `npm run check` and the pre-commit hook
 .env.example            configuration template
+infra/
+  terraform/            AWS EC2 free tier server and deploy permissions (see Deployment)
+  nginx/                nginx site config
+  server-deploy.sh      runs on the server: build, restart, roll back on failure, nginx, certificate
+  ci-deploy.sh          runs in GitHub Actions: uploads the release and starts the deploy
+  deploy.sh             manual deploy over SSH
 Dockerfile              production image
 ```
 
