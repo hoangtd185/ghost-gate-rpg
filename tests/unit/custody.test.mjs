@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { openDb } from '../../server/src/db.js';
 import { newCharacter } from '../../client/src/game/character.js';
+import { craftGrants } from '../../client/src/game/loot.js';
 import { GAME } from '../../client/src/config.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qmq-custody-'));
@@ -215,9 +216,21 @@ describe('capes', () => {
   it('an item saved in a slot that is not its own goes back to the bag', () => {
     const ch = load(B);
     ch.equip.cape = ch.equip.armor; ch.equip.armor = null; // body armor claimed to be a cape
-    db.saveCharacter(uid, ch);
+    const res = db.saveCharacter(uid, ch);
     const after = load(B);
     assert.equal(after.equip.cape, null);
     assert.ok(after.inventory.some((e) => e.id === 'arm_cloth'));
+    assert.ok(res.items?.inventory.some((e) => e.id === 'arm_cloth'), 'the client is told where the item really is');
+    assert.equal(res.items.equip.cape, null);
+  });
+
+  it('crafting materials pay for one recipe only', () => {
+    const grants = (used) => craftGrants(new Map(Object.entries(used)), 'swordsman');
+    assert.equal(grants({ mat_tail: 10, mat_straw: 5 }).get('cape_traveler'), 1, 'enough for one craft');
+    const shared = grants({ mat_tail: 60, mat_peach: 15, mat_dew: 1, mat_straw: 5 }); // tails for the fox robe only
+    assert.equal(shared.get('out_fox'), 1);
+    assert.equal(shared.get('cape_traveler'), undefined, 'the same tails cannot also make a cape');
+    const both = grants({ mat_tail: 70, mat_peach: 15, mat_dew: 1, mat_straw: 5 });
+    assert.deepEqual([both.get('out_fox'), both.get('cape_traveler')], [1, 1], 'enough for both');
   });
 });

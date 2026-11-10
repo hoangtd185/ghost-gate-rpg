@@ -106,7 +106,7 @@ The client still uploads the whole character (EXP, position, quests, shop purcha
 3. **Ownership.** An item that now belongs to another character (traded away) is dropped from the upload.
 4. **What the client may add:**
    - *free items*: anything sold in a shop, gems (fusing, unsocketing), quest-only items (`freeItems()` in `client/src/game/loot.js`);
-   - *earned items*: quest gifts and rewards for quests accepted or completed **in that save**, crafting results whose **materials were used up in that save**, the starter kit of a new character (`questGrants`, `craftGrants`, `starterKit`);
+   - *earned items*: quest gifts and rewards for quests accepted or completed **in that save**, crafting results whose **materials were used up in that save** (each material counts for one recipe only), the starter kit of a new character (`questGrants`, `craftGrants`, `starterKit`);
    - nothing else: monster materials, outfits and rolled equipment only come from the server.
 5. **Quantities.** For items that are not free, the total may not grow beyond what the save earned. Stacks may be merged or used up.
 

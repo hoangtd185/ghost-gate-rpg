@@ -337,6 +337,7 @@ class GameDb {
     for (const e of final) {
       // equipped only in its own slot (an item claimed to be in another slot goes back to the bag)
       const slot = e.slot && EQUIP_SLOTS.has(e.slot) && ITEMS[e.id]?.slot === e.slot ? e.slot : null;
+      if (slot !== (e.slot || null)) fixed = true; // the client must learn where the item really is
       this.q.insertItem.run(e.uid, id, e.id, e.qty, e.r, JSON.stringify(e.b || {}), slot, pos++, e.e || 0, e.el || null, JSON.stringify(e.g || []));
     }
     return fixed;
