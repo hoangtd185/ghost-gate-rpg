@@ -165,7 +165,7 @@ export class GameUI {
   }
   // Real player count from the multiplayer server (replaces the bot count while connected)
   setOnline(n) { const el = $('#hOnline', this.root); if (el) el.textContent = `${n} người chơi online`; }
-  detach() { this.world = null; this.close(); this.party = null; this.renderParty(); }
+  detach() { this.world = null; this.close(); this.party = null; this.renderParty(); this.premiumIdle(); this.premReq = null; }
 
   // ================= HUD =================
   buildSkillbar() {

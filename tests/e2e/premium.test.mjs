@@ -117,5 +117,27 @@ describe('premium shop (online, the server owns the balance)', { timeout: 120_00
     assert.ok(saved.inventory.some((e) => e.id === 'cape_shadow' && e.r === 3));
   });
 
+  it('a lost answer does not leave the button disabled, and retrying never buys twice', async () => {
+    // the first request never reaches the server (a dropped connection); later ones do
+    await E(`(() => { const n = __game().net, send = n.send.bind(n); window.__prem = []; window.__drop = true;
+      n.send = (m) => { if (m.t === 'prem') { window.__prem.push(m); if (window.__drop) { window.__drop = false; return; } } return send(m); }; })()`);
+    const price = 120; // pc_sakura
+    const before = db.getCharacter(charId);
+    await page.click('[data-act="psel"][data-o="pc_sakura"]');
+    await page.click('[data-act="pbuy"][data-o="pc_sakura"]');
+    assert.ok(await E("document.querySelector('[data-act=\"pbuy\"]').disabled"), 'disabled while waiting');
+    assert.ok(await until(page, "!document.querySelector('[data-act=\"pbuy\"]').disabled", (PG.replyTimeoutSec + 3) * 1000), 'enabled again after the timeout');
+    assert.equal(db.getCharacter(charId).ingots, before.ingots, 'nothing was bought yet');
+    await page.click('[data-act="pbuy"][data-o="pc_sakura"]');
+    assert.ok(await until(page, "__game().ch.inventory.some((e) => e.id === 'cape_sakura')"), 'the retry buys it');
+    const sent = await E('window.__prem');
+    assert.equal(sent.length, 2);
+    assert.equal(sent[0].req, sent[1].req, 'the retry reuses the request id');
+    await page.waitForTimeout(300);
+    const saved = db.getCharacter(charId);
+    assert.equal(saved.ingots, before.ingots - price, 'charged once');
+    assert.equal(saved.inventory.filter((e) => e.id === 'cape_sakura').length, 1);
+  });
+
   it('no page errors', () => assert.deepEqual(errors, []));
 });

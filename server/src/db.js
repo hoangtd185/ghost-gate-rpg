@@ -173,7 +173,7 @@ class GameDb {
         stat_str=?, stat_dex=?, stat_int=?, stat_vit=?, stat_points=?, skill_points=?, skills=?, pet=?, title=?, flags=?, play_time=?, updated_at=?
         WHERE id = ? AND user_id = ?`),
       setGold: db.prepare('UPDATE characters SET gold = ? WHERE id = ?'),
-      addIngots: db.prepare('UPDATE characters SET ingots = ingots + ? WHERE id = ? RETURNING ingots'),
+      addIngots: db.prepare('UPDATE characters SET ingots = ingots + ? WHERE id = ? AND ingots + ? >= 0 RETURNING ingots'),
       setCheckin: db.prepare('UPDATE characters SET checkin = ? WHERE id = ?'),
       questState: db.prepare('SELECT state FROM quests WHERE character_id = ? AND quest_id = ?'),
       bagOf: db.prepare('SELECT item_id FROM items WHERE character_id = ? AND equip_slot IS NULL'),
@@ -430,12 +430,16 @@ class GameDb {
   // ===== Nguyên Bảo (premium currency) =====
   // The balance changes only here, each change with a ledger row (kind 'ingots') at a new item revision, so the
   // client gets it through the same change replay as pickups. Uploaded saves never touch it.
+  // Run inside a transaction. A change that would take the balance below zero (or an unknown character) throws, so
+  // the whole transaction is undone: no ledger row, no revision bump.
   addIngotsTx(charId, n, reason, ref, reqId) {
     if (reqId && this.q.ledgerByReq.get(reqId)) return { dup: true };
+    const delta = int(n);
+    const now = this.q.addIngots.get(delta, charId, delta);
+    if (!now) throw new Error(`ingots: cannot apply ${delta} to ${charId}`);
     const rev = this.q.bumpRev.get(charId).item_rev;
-    const ingots = this.q.addIngots.get(int(n), charId).ingots;
-    this.q.ledgerAdd.run(Date.now(), charId, rev, 'ingots', null, null, int(n), null, reason, ref, reqId);
-    return { rev, ingots };
+    this.q.ledgerAdd.run(Date.now(), charId, rev, 'ingots', null, null, delta, null, reason, ref, reqId);
+    return { rev, ingots: now.ingots };
   }
 
   // Ingots won outside the shop (field bosses, chieftains). Returns { rev, ingots } | { dup: true } | null

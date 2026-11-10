@@ -2,7 +2,7 @@
 
 This file lets a person or another AI pick up the project from zero: what the game is, how the code is organized, what has been built so far, the decisions behind it, the traps to avoid and what is planned next. Read it together with `README.md`, which covers setup, deployment, the env variables and the API.
 
-Last updated: 2026-10-28.
+Last updated: 2026-11-01.
 
 ---
 

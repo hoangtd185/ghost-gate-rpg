@@ -99,7 +99,7 @@ export function createMobs({ players, send, loot, parties, premium }) {
         send(s, msg);
       }
     }
-    premium?.kill(top.members, m); // chieftains and field bosses also give Nguyên Bảo to the top group
+    premium?.kill(top.members, m, map); // chieftains and field bosses also give Nguyên Bảo to the top group
   }
 
   function handleEvents(map, e) {

@@ -141,6 +141,8 @@ Nguyên Bảo (ingots) is the premium shop's currency (Vạn Bảo Các, merchan
 
 Online the balance is a column the server owns: an uploaded save never changes `ingots` or `checkin`. Every change is a ledger row (`kind: 'ingots'`) at a new `item_rev`, so it reaches the client through the same change replay as pickups. A purchase is one transaction: bag room checked, items granted (cosmetics Legendary), ingots taken; `req` makes a repeated click harmless. Offline the save holds the balance and `game/premium.js` applies the same rules locally.
 
+The balance never goes below zero: `addIngotsTx` only applies a change that leaves it at 0 or more and throws otherwise (the transaction is undone, no ledger row, no revision bump). Kill rewards use the request id `kill:<map>:<time>:<uid>:<char>` (monster uids restart on each map). If an answer to `buy` or `checkin` is lost (the connection drops), the client's button waits `GAME.premium.replyTimeoutSec`, then works again; a retry of the same purchase reuses its `req`, so the server applies it once.
+
 Quest Nguyên Bảo online: the client queues the completion, sends `claim` after the next successful save, keeps it on `not_done` (the save was stale), and claims every finished ingot quest again on each (re)connect; the ledger gives each one once.
 
 ## 5. Protocol

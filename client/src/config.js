@@ -104,6 +104,7 @@ export const GAME = {
     kill: { chief: 2, fieldBoss: 5 }, // for the group that did the most damage (each party member)
     chapterIngots: 30, // for each chapter finale (st7, st12, st18)
     opsPerMin: 30, // premium requests per player per minute (online)
+    replyTimeoutSec: 8, // online: how long a buy / check-in button stays disabled while waiting for the server's answer
   },
 
   // ----- Capes: cloth simulation (gfx/cape.js) -----

@@ -12,6 +12,7 @@ import { PREMIUM_SHOP, PREMIUM_TABS } from '../../client/src/data/premium.js';
 import { newCharacter } from '../../client/src/game/character.js';
 import { checkinReward, premiumDay, killIngots, questIngots, cellsNeeded, offerById, buyLocal, checkinLocal } from '../../client/src/game/premium.js';
 import { openDb } from '../../server/src/db.js';
+import { createPremium } from '../../server/src/premium.js';
 
 const PG = GAME.premium;
 
@@ -156,5 +157,30 @@ describe('premium on the server', () => {
     const before = load().ingots;
     assert.ok(db.grantIngots(A, PG.kill.fieldBoss, 'kill', 'fox', 'kill:x:1:' + A).rev);
     assert.equal(load().ingots, before + PG.kill.fieldBoss);
+  });
+
+  it('the balance never goes below zero: a change that would is refused and leaves no trace', () => {
+    const before = load(), rows = db.ledger(A).length;
+    assert.throws(() => db.transaction(() => db.addIngotsTx(A, -(before.ingots + 1), 'test', null, 'neg:1')), /cannot apply/);
+    const after = load();
+    assert.equal(after.ingots, before.ingots, 'balance unchanged');
+    assert.equal(after.itemRev, before.itemRev, 'no revision bump');
+    assert.equal(db.ledger(A).length, rows, 'no ledger row');
+    assert.doesNotThrow(() => db.transaction(() => db.addIngotsTx(A, -before.ingots, 'test', null, 'neg:2')), 'spending everything is fine');
+    assert.equal(load().ingots, 0);
+    assert.throws(() => db.transaction(() => db.addIngotsTx('nobody', 5, 'test', null, 'neg:3')), 'an unknown character');
+  });
+});
+
+describe('premium kill rewards (server)', () => {
+  it('the key includes the map: the same monster uid on two maps in the same moment pays both', () => {
+    const keys = [];
+    const prem = createPremium({ db: { grantIngots: (id, n, reason, ref, key) => { keys.push(key); return { rev: 1, ingots: n }; } }, send: () => {}, pushChanges: () => {} });
+    const players = [{ id: 'p1' }], mon = { uid: 7, id: 'wisp', chief: true };
+    prem.kill(players, mon, 'forest');
+    prem.kill(players, mon, 'swamp');
+    assert.equal(keys.length, 2);
+    assert.notEqual(keys[0], keys[1]);
+    assert.ok(keys[0].includes('forest') && keys[1].includes('swamp'));
   });
 });
