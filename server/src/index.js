@@ -252,7 +252,7 @@ const server = http.createServer(async (req, res) => {
 server.headersTimeout = 15_000;
 server.requestTimeout = 30_000;
 
-const realtime = attachRealtime(server, { db, secret: SECRET });
+const realtime = attachRealtime(server, { db, secret: SECRET, event: { alwaysOpen: config.eventAlwaysOpen, runSec: config.eventRunSec } });
 
 server.listen(config.port, config.host, () => {
   console.log(`Quỷ Môn Quan server running: http://localhost:${config.port}`);

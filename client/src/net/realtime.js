@@ -92,6 +92,8 @@ export class Realtime {
   // We used a buff skill: the server's damage formula needs it too
   cast(sid) { this.send({ t: 'cast', sid }); }
   party(type, data = {}) { this.send({ t: 'party_' + type, ...data }); }
+  // Party dungeon: 'enter' { d } at the keeper, 'next' at a floor's exit (the server answers dg_go or dg_err)
+  dungeon(type, data = {}) { this.send({ t: 'dg_' + type, ...data }); }
   // Pick up a server drop. Returns false if it could not be sent right now.
   pick(id) { if (!this.ready) return false; this.send({ t: 'pick', id }); return true; }
   // Trade
@@ -130,6 +132,8 @@ export class Realtime {
       }
       case 'look': R.get(m.id)?.setAppearance(m); break;
       case 'chat': {
+        // server announcements (events) come as world chat from 'sys'
+        if (m.id === 'sys') { this.hooks.chat('Hệ thống', m.text, 'system'); break; }
         this.hooks.chat(m.from, m.text, m.ch === 'world' ? 'world' : 'local');
         const r = R.get(m.id);
         if (r && m.ch !== 'world') r.say = { text: m.text, t: 4 };
@@ -149,6 +153,11 @@ export class Realtime {
         break;
       case 'trade_ask': case 'trade_open': case 'trade_state': case 'trade_end': case 'trade_err':
         if (this.hooks.trade) this.hooks.trade(m);
+        break;
+      case 'dg_go': w.dungeonGo(m); break;
+      case 'dg_err': w.dungeonErr(m.why); break;
+      case 'ev_state': case 'ev_rank': case 'ev_end':
+        if (this.hooks.event) this.hooks.event(m);
         break;
       case 'kicked': this.hooks.toast('Nhân vật này vừa được mở ở nơi khác', 'warn'); break;
       case 'error': if (m.msg === 'chat_rate') this.hooks.toast('Chat chậm lại một chút nhé', 'warn'); break;

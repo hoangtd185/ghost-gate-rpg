@@ -95,6 +95,34 @@ export const GAME = {
   // ----- Pet -----
   pet: { pickRange: 330, flySpeed: 240 },
 
+  // ----- Server events (data/dungeons.js, game/traps.js, server/src/dungeon.js) -----
+  dungeon: {
+    // when the event opens: these weekdays (0 = Sunday … 6 = Saturday) at hour:minute in UTC+utcOffset (Vietnam = 7)
+    schedule: { days: [6, 0], hour: 15, minute: 0, utcOffset: 7, durationMin: 30 },
+    announceMin: [5, 1], // world-chat warnings this many minutes before it opens
+    rankEverySec: 2, // the live top-10 damage ranking is sent to participants this often
+    topN: 10, // ranked places that earn a reward
+    npcRange: 140, // stand this close (px) to the keeper to enter
+    exitRange: 50, // and this close to a floor's exit gate to go up
+    minMsgMs: 400, // event requests (enter, next) accepted at most this often per player
+    lostRetryMs: 3000, // a client stuck on a floor it may not be on is sent home at most this often
+    reviveHp: 0.5, // dying in the event: back on your feet at the floor's start with this share of HP/MP, no EXP lost
+    reviveInvuln: 3, // seconds of invulnerability after that
+    summonMax: 4, // a summoning object (pillar) keeps at most this many minions alive
+    trap: {
+      warn: 0.6, // spikes, flames, teeth, lasers, gas and wheels glow this long before they strike
+      crumbleWarn: 0.8, // a crumbling platform shakes this long before it falls away
+      spikeH: 12, // how tall spikes stand (px)
+      laserH: 10, // a laser beam's height above its ledge
+      rock: 22, // falling rock size (px); it falls from the top of the screen during `fall` seconds
+      ball: 14, // rolling fireball size (px)
+    },
+    // damage as a share of max HP (level independent); a trap's own `dmg` overrides it (0.9 = nearly a one-hit kill)
+    trapDmg: { spikes: 0.12, flame: 0.18, pit: 0.2, drop: 0.25, fireball: 0.9, wheel: 0.9, laser: 0.35, gas: 0.06, teeth: 0.5 },
+    gasSlowSec: 2, // gas with `slow` also slows you this long
+    trapKnock: 240, // upward knock when hit
+  },
+
   // ----- Saving -----
   save: {
     autosaveSec: 20,

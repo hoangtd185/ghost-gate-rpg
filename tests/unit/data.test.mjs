@@ -13,6 +13,35 @@ import { RECIPES } from '../../client/src/data/recipes.js';
 import { MAIN_ORDER, SCENES, SPEAKERS } from '../../client/src/data/story.js';
 import { CHATTER, BANTER } from '../../client/src/data/chatter.js';
 import { LEGACY_CLS, LEGACY_MAP, LEGACY_PET, LEGACY_QUEST, legacyItem, legacySkill } from '../../client/src/data/legacy.js';
+import { DUNGEONS, dungeonFloors } from '../../client/src/data/dungeons.js';
+
+test('events: keepers, phases, floors, the final boss and rewards point at things that exist', () => {
+  for (const [id, d] of Object.entries(DUNGEONS)) {
+    assert.ok(MAPS[d.from], `${id} from ${d.from}`);
+    assert.ok(NPCS[d.npc] && NPCS[d.npc].dungeon === id, `${id} keeper ${d.npc}`);
+    assert.ok((MAPS[d.from].npcs || []).some((n) => n.id === d.npc), `${id} keeper stands on ${d.from}`);
+    for (const p of d.phases) {
+      if (p.fixed) continue;
+      assert.ok(p.pick > 0 && p.pick <= p.pool.length, `${id} phase pick`);
+      if (p.first) assert.ok(p.pool.includes(p.first), `${id} phase first ${p.first}`);
+    }
+    for (const f of dungeonFloors(d)) assert.ok(MAPS[f] && MAPS[f].dungeon === id, `${id} floor ${f}`);
+    const lastPhase = d.phases.at(-1), end = (lastPhase.fixed || []).at(-1);
+    assert.ok(end && MAPS[end].goal === 'boss', `${id} ends with a fixed boss floor`);
+    assert.ok((MAPS[end].spawns || []).some((s) => MONSTERS[s.mob]?.final), `${id} final boss on ${end}`);
+    const R = d.rewards;
+    for (const list of [R.all.items, R.win.items, ...R.top.map((t) => t.items)]) {
+      for (const [item, qty] of list) {
+        assert.ok(qty > 0, `${id} reward qty ${item}`);
+        assert.ok(itemExists(item), `${id} reward ${item}`);
+      }
+    }
+    assert.ok(R.top.every((t, i) => i === 0 || t.upTo > R.top[i - 1].upTo), `${id} top tiers in order`);
+    assert.equal(R.top.at(-1).upTo, GAME.dungeon.topN, `${id} rewards the top ${GAME.dungeon.topN}`);
+  }
+  for (const [id, m] of Object.entries(MAPS)) if (m.dungeon) assert.ok(dungeonFloors(DUNGEONS[m.dungeon] || { phases: [] }).includes(id), `${id} belongs to its event`);
+  for (const m of Object.values(MONSTERS)) if (m.final) assert.ok(m.boss, 'a final monster is a boss');
+});
 
 // Drop/reward tokens: 'W2' = class weapon tier 2, 'GEM1' = random gem grade 1
 const itemExists = (id) => !!ITEMS[id] || /^W[1-7]$/.test(id) || /^GEM[1-3]$/.test(id);

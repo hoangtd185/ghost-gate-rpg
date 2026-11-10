@@ -94,6 +94,7 @@ function enterGame(ch, isNew) {
   }, onSaveResult);
   const hooks = {
     toast: (m, k) => ui.toast(m, k),
+    banner: (html) => ui.banner(html),
     chat: (n, m, t) => ui.addChat(n, m, t),
     openNpc: (id) => ui.openNpc(id),
     death: (loss) => ui.showDeath(loss),
@@ -114,6 +115,7 @@ function enterGame(ch, isNew) {
       toast: (m, k) => ui.toast(m, k),
       trade: (m) => ui.onTrade(m),
       party: (m) => ui.onParty(m),
+      event: (m) => ui.onEvent(m),
     });
     net.attach(world);
   }

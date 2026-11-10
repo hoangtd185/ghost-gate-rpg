@@ -5,6 +5,7 @@ import { ELEMENTS, ELEMENT_IDS } from '../data/elements.js';
 import { NPCS, QUESTS } from '../data/npcs.js';
 import { SPEAKERS, CHAPTERS, SCENES, MAIN_ORDER } from '../data/story.js';
 import { RECIPES } from '../data/recipes.js';
+import { DUNGEONS } from '../data/dungeons.js';
 import { npcLine, fillText } from '../game/chatter.js';
 import { humanoidSheet, HUM_W } from '../gfx/humanoid.js';
 import { monsterSheet } from '../gfx/monsters.js';
@@ -41,7 +42,7 @@ function npcMapName(npcId) {
 // Good map to grind on: the highest recommended level the player can already enter
 function grindMap(ch) {
   const opened = (m) => Object.values(MAPS).every((mp) => mp.portals.every((pt) => pt.to !== m || ((!pt.lock || questStatus(ch, pt.lock) === 'done') && (!pt.req || questStatus(ch, pt.req) === 'done'))));
-  const list = Object.entries(MAPS).filter(([id, m]) => m.spawns.length && !m.spawns.some((sp) => sp.mob === 'boss' || sp.mob === 'qilin' || sp.mob === 'blood_demon') && (m.minLv || 1) <= ch.level + 1 && opened(id));
+  const list = Object.entries(MAPS).filter(([id, m]) => m.spawns.length && !m.dungeon && !m.spawns.some((sp) => sp.mob === 'boss' || sp.mob === 'qilin' || sp.mob === 'blood_demon') && (m.minLv || 1) <= ch.level + 1 && opened(id));
   list.sort((a, b) => (b[1].minLv || 1) - (a[1].minLv || 1));
   return list.length ? list[0][1].name : null;
 }
@@ -86,6 +87,7 @@ export class GameUI {
       </div>
       <div class="hud-map"><div id="hMap"></div><small id="hOnline"></small></div>
       <div class="hud-party" id="hParty" hidden></div>
+      <div class="hud-event" id="hEvent" hidden></div>
       <canvas class="hud-mini" id="hMini" width="160" height="56"></canvas>
       <div class="hud-chat" id="hChat"><div class="chat-log" id="chatLog"></div>
         <form id="chatForm" autocomplete="off"><input id="chatIn" maxlength="80" placeholder="Enter để chat · bắt đầu bằng ! để chat kênh thế giới" aria-label="Tin nhắn chat"></form></div>
@@ -164,6 +166,7 @@ export class GameUI {
   // pending offer retry (it checks this.trade) and any invitation popup still waiting for an answer
   detach() {
     this.world = null; this.close(); this.party = null; this.renderParty();
+    this.ev = {}; this.evRank = null; this.renderEvent();
     this.trade = null;
     this.root.querySelectorAll('#tradeAsk, #partyAsk').forEach((el) => el.remove());
   }
@@ -261,6 +264,7 @@ export class GameUI {
     const bf = $('#hBuffs', this.root);
     const html = p.buffs.map((b) => `<span title="${escapeHtml(b.name)}">${SKILL_GLYPH[b.sid]}<small>${Math.ceil(b.t)}</small></span>`).join('');
     if (bf._h !== html) { bf.innerHTML = html; bf._h = html; }
+    this.renderEvent();
     this.drawMinimap();
   }
 
@@ -339,9 +343,9 @@ export class GameUI {
     w.hidden = false;
     const body = {
       inv: () => this.winInventory(), char: () => this.winChar(), skill: () => this.winSkills(), quest: () => this.winQuests(),
-      sys: () => this.winSystem(), npc: () => this.winNpc(), craft: () => this.winCraft(), shop: () => this.winShop(), death: () => this.winDeath(), forge: () => this.winForge(), dialog: () => this.winDialog(), trade: () => this.winTrade(),
+      sys: () => this.winSystem(), npc: () => this.winNpc(), craft: () => this.winCraft(), shop: () => this.winShop(), death: () => this.winDeath(), evend: () => this.winEvEnd(), forge: () => this.winForge(), dialog: () => this.winDialog(), trade: () => this.winTrade(),
     }[this.open]();
-    const titles = { inv: 'Túi đồ', char: 'Nhân vật', skill: 'Kỹ năng', quest: 'Nhiệm vụ', sys: 'Hệ thống', npc: '', shop: 'Cửa hàng', death: '', forge: 'Lò rèn của Anh Sắt', craft: 'Tú Nương · Chế tạo', dialog: '', trade: 'Giao dịch' };
+    const titles = { inv: 'Túi đồ', char: 'Nhân vật', skill: 'Kỹ năng', quest: 'Nhiệm vụ', sys: 'Hệ thống', npc: '', shop: 'Cửa hàng', death: '', evend: '', forge: 'Lò rèn của Anh Sắt', craft: 'Tú Nương · Chế tạo', dialog: '', trade: 'Giao dịch' };
     const title = this.open === 'npc' ? NPCS[this.npcId].name : this.open === 'shop' ? NPCS[this.shopNpc].name + ' · Cửa hàng' : titles[this.open];
     w.className = 'win w-' + this.open;
     w.innerHTML = (title ? `<header><h2>${escapeHtml(title)}</h2>${this.open === 'death' ? '' : '<button class="x" data-act="close" aria-label="Đóng">✕</button>'}</header>` : '') + `<div class="wb">${body}</div>`;
@@ -558,6 +562,7 @@ export class GameUI {
     if (npc.shop) html += `<button data-act="shop">Mua bán</button>`;
     if (npc.forge) html += `<button data-act="forge"><em>✦</em> Lò rèn · Cường hóa, ép ngọc</button>`;
     if (npc.craft) html += `<button data-act="craftwin"><em>✿</em> Chế tạo · Thêu ngoại trang</button>`;
+    if (npc.dungeon) html += this.eventButton(npc.dungeon);
     html += `<button class="ghost" data-act="close">Tạm biệt</button></div>`;
     return html;
   }
@@ -749,6 +754,7 @@ export class GameUI {
   }
 
   winDeath() {
+    if (this.world?.dg) return `<div class="death"><h2>Bạn đã gục ngã</h2><p>Trong sự kiện không mất kinh nghiệm.</p><button data-act="respawn">Hồi sinh tại chỗ</button></div>`;
     return `<div class="death"><h2>Bạn đã gục ngã</h2><p>Mất ${fmtNum(this.deathLoss || 0)} điểm kinh nghiệm.</p><button data-act="respawn">Hồi sinh tại làng</button></div>`;
   }
 
@@ -855,6 +861,7 @@ export class GameUI {
       case 'pet': this.togglePet(); break;
       case 'forge': this.open = 'forge'; this.forgeMsg = null; this.renderWin(); break;
       case 'craftwin': this.open = 'craft'; this.craftMsg = null; this.renderWin(); break;
+      case 'dungeon': this.close(); w.enterDungeon(d.d); break;
       case 'csel': this.craftSel = d.r; this.craftMsg = null; this.renderWin(); break;
       case 'craft': {
         const r = RECIPES.find((x) => x.id === this.craftSel), n = +d.n || 1;
@@ -1041,6 +1048,75 @@ export class GameUI {
     this.toast(`${q.name}: ${n}/${q.count}${n >= q.count ? ' · <b>Xong!</b>' : ''}`, n >= q.count ? 'quest' : '');
     this.refreshTracker();
     if (this.open === 'quest') this.renderWin();
+  }
+
+  // ================= SERVER EVENT (Xâm Lăng Dương Ác) =================
+  // The keeper's button: online it says whether the event is open and when it opens next; offline it is practice
+  eventButton(id) {
+    const d = DUNGEONS[id], st = this.ev?.[id], online = !!this.world?.net;
+    const sc = GAME.dungeon.schedule, days = sc.days.map((x) => (x === 0 ? 'Chủ nhật' : 'thứ ' + ['', 'Hai', 'Ba', 'Tư', 'Năm', 'Sáu', 'Bảy'][x])).join(' và ');
+    const when = `${days} ${String(sc.hour).padStart(2, '0')}:${String(sc.minute).padStart(2, '0')}, ${sc.durationMin} phút`;
+    let small;
+    if (!online) small = `Cấp ${d.lv}+ · luyện tập ngoại tuyến`;
+    else if (st?.open) small = `Đang mở · còn ${Math.max(1, Math.ceil(this.evLeft(st) / 60e3))} phút · mọi người chơi cùng vào`;
+    else small = `Chưa mở · ${when}`;
+    return `<button class="storybtn" data-act="dungeon" data-d="${id}"><em>⚔</em> ${online ? 'Tham chiến' : 'Luyện tập'} · ${escapeHtml(d.name)} <small>${small}</small></button>`;
+  }
+
+  // ms left until m.end, corrected for the difference between the server's clock and ours
+  evLeft(m) { return m.end ? m.end - m.now - (Date.now() - m.at) : 0; }
+
+  onEvent(m) {
+    m = { ...m, at: Date.now() };
+    this.ev = this.ev || {};
+    const d = DUNGEONS[m.d];
+    if (m.t === 'ev_state') {
+      const was = this.ev[m.d]?.open;
+      this.ev[m.d] = m;
+      if (m.open && !was) {
+        this.banner(`<small>Sự kiện máy chủ</small>${escapeHtml(d?.name || '')}`);
+        this.toast(`${escapeHtml(d?.name || '')} đã mở! Gặp Thủ Ải trong làng để tham chiến`, 'quest');
+      }
+      if (!m.open) this.evRank = null;
+      if (this.open === 'npc') this.renderWin();
+    } else if (m.t === 'ev_rank') {
+      this.evRank = m;
+    } else if (m.t === 'ev_end') {
+      this.evRank = null;
+      if (m.exp > 0) this.world?.giveExp(m.exp);
+      this.evEnd = m;
+      this.open = 'evend'; this.renderWin();
+    }
+    this.renderEvent();
+  }
+
+  // Top-right panel while on an event floor: time left, live top 10 by damage and your own place
+  renderEvent() {
+    const el = $('#hEvent', this.root), w = this.world, r = this.evRank;
+    if (!el) return;
+    const on = !!(w && w.dg && r);
+    this.root.classList.toggle('in-event', on); // the panel takes the quest tracker's place
+    if (!on) { if (!el.hidden) { el.hidden = true; el.innerHTML = ''; el._h = ''; } return; }
+    const left = Math.max(0, this.evLeft(r)), mm = Math.floor(left / 60e3), ss = Math.floor(left / 1000) % 60;
+    const i = w.dg.floors.indexOf(w.mapId);
+    const rows = r.top.map((x, k) => `<li class="${k < 3 ? 'p' + (k + 1) : ''}${x.name === this.ch.name ? ' me' : ''}"><i>${k + 1}</i><b>${escapeHtml(x.name)}</b><span>${fmtNum(x.dmg)}</span></li>`).join('');
+    const html = `<header><b>${escapeHtml(DUNGEONS[w.dg.dungeon]?.name || '')}</b><span class="t">${mm}:${String(ss).padStart(2, '0')}</span></header>
+      <div class="fl">Tầng ${i + 1}/${w.dg.floors.length}</div>
+      <ol>${rows || '<li class="none">Chưa ai gây sát thương</li>'}</ol>
+      <div class="mine">Hạng của bạn: <b>${r.rank || '—'}</b> · ${fmtNum(r.dmg || 0)} sát thương</div>`;
+    if (el._h !== html) { el.innerHTML = html; el._h = html; }
+    el.hidden = false;
+  }
+
+  winEvEnd() {
+    const m = this.evEnd, d = DUNGEONS[m.d];
+    const rows = m.top.map((x, k) => `<li class="${k < 3 ? 'p' + (k + 1) : ''}${x.name === this.ch.name ? ' me' : ''}"><i>${k + 1}</i><b>${escapeHtml(x.name)}</b><span>${fmtNum(x.dmg)}</span></li>`).join('');
+    const items = m.items.map(([id, q]) => `<span class="evitem">${escapeHtml(ITEMS[id]?.name || id)}${q > 1 ? ' ×' + q : ''}</span>`).join('');
+    return `<div class="evend ${m.win ? 'win' : 'lose'}"><small>${escapeHtml(d?.name || '')}</small><h2>${m.win ? 'Chiến thắng!' : 'Sự kiện kết thúc'}</h2>
+      <p>${m.win ? 'Ngân Vệ Tướng đã bị đánh bại.' : 'Quỷ Thành vẫn đứng vững… hẹn lần sau.'} Hạng của bạn: <b>${m.rank || '—'}</b> · ${fmtNum(m.dmg)} sát thương</p>
+      <h3>Top ${GAME.dungeon.topN} sát thương</h3><ol class="evtop">${rows || '<li class="none">Không ai gây sát thương</li>'}</ol>
+      <h3>Phần thưởng</h3><div class="evitems">${items}${m.exp ? `<span class="evitem exp">+${fmtNum(m.exp)} EXP</span>` : ''}</div>
+      <button data-act="close">Nhận thưởng</button></div>`;
   }
 
   // ================= PARTY (online) =================

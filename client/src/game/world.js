@@ -14,6 +14,8 @@ import { Pet } from './pet.js';
 import { rollDrops, killExp } from './loot.js';
 import { hitDamage, botDamage } from './combat.js';
 import { MobSim } from './mobsim.js';
+import { trapState, trapBox, trapDamage, solidCrumbles, trapHit } from './traps.js';
+import { DUNGEONS, rollFloors } from '../data/dungeons.js';
 import {
   calcStats, gainExp, addItem, onKillForQuests, expToNext, countItem, INV_SIZE,
   questDropsFor, npcMarker, questStatus, npcPresent, questEvent, questProgress,
@@ -55,6 +57,9 @@ const SKILL_FX = {
   as_triple: '#c8f0a0', as_dash: '#c08aff', as_poison: '#8fe06a',
 };
 
+// Where a dungeon's keeper stands (players come back next to them)
+const npcX = (d) => (MAPS[d.from].npcs || []).find((n) => n.id === d.npc)?.x ?? MAPS[d.from].spawnX;
+
 // Drops worth saving immediately: outfits, Rare+ equipment, grade 2+ gems, orbs and protection charms
 function isRareDrop(e) {
   const it = ITEMS[e.id];
@@ -79,7 +84,9 @@ export class GameWorld {
     this.net = null;
     this.pet = null;
     this.recalc();
-    this.loadMap(ch.map in MAPS ? ch.map : 'village', ch.x);
+    // a dungeon floor is only reachable through its keeper: a save made inside one starts in the village
+    if (ch.map in MAPS && !MAPS[ch.map].dungeon) this.loadMap(ch.map, ch.x);
+    else this.loadMap('village', MAPS.village.spawnX);
     if (ch.pet && ch.pet.on) this.pet = new Pet(this);
   }
 
@@ -94,6 +101,9 @@ export class GameWorld {
     const map = MAPS[id];
     this.mapId = id; this.map = map;
     this.ch.map = id;
+    if (!map.dungeon) this.dg = null; // left the dungeon (see enterDungeon / dungeonGo)
+    this.platforms = map.platforms; // plus the crumbling slabs that hold right now (dungeon floors, see update)
+    this.nearExit = false;
     this.remotes.clear();
     this.pendingPicks.clear(); // answers still arrive; a picked item comes in as an item change
     this.net?.entered(); // ask the server for this map's players (also when re-entering the same map)
@@ -315,6 +325,7 @@ export class GameWorld {
     this.timers = this.timers.filter((t) => t.t > 0);
     due.forEach((t) => t.fn());
 
+    if (this.map.traps) this.platforms = [...this.map.platforms, ...solidCrumbles(this.map.traps, this.trapTime())];
     this.updatePlayer(dt, input);
     this.sim.update(dt, this.player.dead ? [] : [this.player], this.projs);
     this.updateRemoteMobs(dt);
@@ -353,7 +364,7 @@ export class GameWorld {
     p.buffs = p.buffs.filter((b) => b.t > 0);
     if (p.buffs.length !== before) { this.recalc(); this.hooks.changed(); }
 
-    if (p.dead) { p.vx = 0; stepBody(p, dt, this.map.platforms, this.map.width); return; }
+    if (p.dead) { p.vx = 0; stepBody(p, dt, this.platforms, this.map.width); return; }
 
     // Dash (Ảnh Sát)
     if (p.dashT > 0) {
@@ -417,8 +428,10 @@ export class GameWorld {
       }
     }
     if (input.isDown('down') && !input.isDown('ctrl') && p.onGround && !move && p.atkT <= 0) p.sitting = true;
-    stepBody(p, dt, this.map.platforms, this.map.width);
+    stepBody(p, dt, this.platforms, this.map.width);
     p.updateAnim(dt);
+    // dungeon traps (each client hurts its own player, like monster contact)
+    if (this.map.traps) { const tr = trapHit(this.map.traps, this.trapTime(), p); if (tr) this.trapHurt(tr); }
 
     // Skills
     if (input.isDown('attack')) this.castSkill(0);
@@ -431,8 +444,11 @@ export class GameWorld {
     // Portals + NPCs
     this.nearPortal = this.portals.find((pt) => Math.abs(pt.x - p.cx) < 30 && p.standY === GROUND_Y);
     this.nearNpc = this.npcs.find((n) => Math.abs(n.cx - p.cx) < 36 && Math.abs(n.y - p.y) < 20);
+    const ex = this.map.exit;
+    this.nearExit = !!ex && p.onGround && Math.abs(ex.x - p.cx) < 30 && Math.abs(p.standY - ex.y) < 4;
     if (input.wasPressed('up') || input.wasPressed('interact')) {
       if (this.nearPortal && this.portalCd <= 0) { this.usePortal(this.nearPortal); return; }
+      if (this.nearExit && this.portalCd <= 0) { this.dungeonNext(); return; }
       if (this.nearNpc) { this.hooks.openNpc(this.nearNpc.id); input.clear(); }
     }
 
@@ -452,7 +468,7 @@ export class GameWorld {
     // Collision with monsters
     if (p.invuln <= 0) {
       for (const m of this.monsters) {
-        if (m.dead || m.alpha < 0.8) continue;
+        if (m.dead || m.alpha < 0.8 || m.def.harmless) continue; // doors, eggs, pillars do not hurt on touch
         if (overlap(this.hitboxOf(m), p)) { this.hurtPlayer(m.def.atk * (m.enraged ? 1.5 : 1) * (m.charging > 0 ? 1.3 : 1), m.cx < p.cx ? 1 : -1, m.def.el, m); break; }
       }
     }
@@ -480,6 +496,96 @@ export class GameWorld {
   goHome() {
     this.loadMap('village', MAPS.village.spawnX);
     this.hooks.save();
+  }
+
+  // ================= SERVER EVENTS (data/dungeons.js) =================
+  // Online the server runs the event for everyone (server/src/dungeon.js): it opens it on schedule, lets players in,
+  // checks each exit, sends each floor's clock start, ranks damage and hands out rewards. Offline the keeper offers a
+  // practice run of the same floors (no rewards).
+  // this.dg = { id (run), dungeon, floors, t0 (ms when this floor opened, server clock online), skew (server - local ms) }
+
+  // Seconds on the floor's shared clock: every trap cycle runs on it
+  trapTime() {
+    return this.dg ? (Date.now() + (this.dg.skew || 0) - this.dg.t0) / 1000 : this.time;
+  }
+
+  // A trap touched our player. A pit always sends us back to the floor's start, even right after another hit.
+  trapHurt(tr) {
+    const p = this.player, ch = this.ch, D = GAME.dungeon;
+    const pit = tr.kind === 'pit';
+    if (p.dead || (p.invuln > 0 && !pit)) return;
+    if (p.invuln <= 0) {
+      const dmg = Math.max(1, Math.round(this.stats.maxHp * trapDamage(tr)));
+      ch.hp -= dmg;
+      this.floatText(p.cx, p.y - 4, dmg, '#ff6a4a', false, false, true);
+      this.shakeT = 0.2;
+    }
+    p.invuln = 1.1; p.hurtT = 0.3;
+    if (tr.slow) p.slowT = D.gasSlowSec;
+    if (pit) {
+      this.burst(p.cx, p.y + p.h, '#6a5a3a', 14, 70, { glow: false });
+      p.x = this.map.spawnX; p.y = GROUND_Y - p.h - 40; p.vx = 0; p.vy = 0;
+      this.hooks.toast('Bị đất lún nuốt, quay lại đầu tầng', 'warn');
+    } else if (tr.kind !== 'gas') p.vy = -D.trapKnock;
+    if (ch.hp <= 0) this.playerDie();
+    this.hooks.changed('bars');
+  }
+
+  // Is this floor's exit open? (online the server checks again)
+  dungeonOpen() {
+    const g = this.map.goal;
+    return g === 'reach' || this.sim.cleared(g === 'break' ? this.map.targets : null);
+  }
+  lastFloor() {
+    return !!this.dg?.floors && this.dg.floors[this.dg.floors.length - 1] === this.mapId;
+  }
+
+  // Talked to the keeper and chose to enter. Online: the event (only while it is open). Offline: a practice run.
+  enterDungeon(id) {
+    const d = DUNGEONS[id];
+    if (!d) return;
+    if (this.ch.level < d.lv) { this.hooks.toast(`${d.name}: cần đạt cấp ${d.lv}`, 'warn'); return; }
+    if (this.net) {
+      if (!this.net.connected) { this.hooks.toast('Sự kiện cần kết nối máy chủ', 'warn'); return; }
+      this.net.dungeon('enter', { d: id });
+      return;
+    }
+    const floors = rollFloors(d);
+    this.dungeonGo({ inst: 'local', d: id, floors, map: floors[0], t0: Date.now(), now: Date.now() });
+  }
+
+  // Up at a floor's exit gate
+  dungeonNext() {
+    this.portalCd = 1;
+    if (!this.dungeonOpen()) { this.hooks.toast(this.map.goal === 'break' ? 'Cổng còn phong ấn: phá mục tiêu trên tầng để mở' : 'Cổng còn phong ấn: diệt hết quái trên tầng để mở', 'warn'); return; }
+    if (this.net) { this.net.dungeon('next'); return; }
+    const d = DUNGEONS[this.dg.dungeon], floors = this.dg.floors, i = floors.indexOf(this.mapId);
+    if (i >= floors.length - 1) { this.dungeonGo({ map: d.from, x: npcX(d), done: true }); return; }
+    this.dungeonGo({ ...this.dg, inst: this.dg.id, d: this.dg.dungeon, map: floors[i + 1], t0: Date.now(), now: Date.now() });
+  }
+
+  // Move to a floor (or out of the event). Online this is the server's dg_go:
+  // { inst, d, floors, map, t0, now } on a floor, { map, x, done | lost | closed } back to the keeper
+  dungeonGo(m) {
+    const map = MAPS[m.map];
+    if (!map) return;
+    const was = this.dg && DUNGEONS[this.dg.dungeon];
+    if (map.dungeon) {
+      this.dg = { id: m.inst, dungeon: m.d, floors: m.floors || this.dg?.floors || [], t0: m.t0, skew: (m.now || Date.now()) - Date.now() };
+      this.loadMap(m.map, map.spawnX);
+    } else {
+      this.loadMap(m.map, m.x ?? map.spawnX);
+      if (m.done && was && !this.net) this.hooks.banner?.(`<small>Luyện tập xong</small>${was.name}`);
+      else if (m.lost) this.hooks.toast('Sự kiện đã đóng, bạn được đưa về làng', 'warn');
+    }
+    this.hooks.save();
+  }
+  dungeonErr(why) {
+    const msg = {
+      far: 'Đứng gần Thủ Ải hơn', level: 'Chưa đủ cấp để vào', closed: 'Sự kiện chưa mở. Lịch: thứ Bảy và Chủ nhật',
+      not_clear: 'Cổng còn phong ấn: hoàn thành tầng để mở', exit: 'Đứng ngay tại cổng rồi nhấn ↑', none: 'Bạn không ở trong sự kiện',
+    }[why];
+    this.hooks.toast(msg || 'Không vào được sự kiện', 'warn');
   }
 
   // ================= SKILLS =================
@@ -717,7 +823,8 @@ export class GameWorld {
   playerDie() {
     const p = this.player, ch = this.ch;
     ch.hp = 0; p.dead = true; p.poisonT = 0; p.slowT = 0;
-    const lose = Math.floor(expToNext(ch.level) * GAME.player.deathExpLoss);
+    // in an event you get back up on the same floor and lose nothing (see respawn)
+    const lose = this.map.dungeon ? 0 : Math.floor(expToNext(ch.level) * GAME.player.deathExpLoss);
     ch.exp = Math.max(0, ch.exp - lose);
     this.hooks.death(lose);
   }
@@ -888,7 +995,16 @@ export class GameWorld {
   }
 
   respawn() {
-    const p = this.player;
+    const p = this.player, D = GAME.dungeon;
+    if (this.map.dungeon) { // back on your feet where you fell (a few seconds untouchable): the run goes on
+      p.dead = false; p.invuln = D.reviveInvuln;
+      this.ch.hp = Math.floor(this.stats.maxHp * D.reviveHp);
+      this.ch.mp = Math.floor(this.stats.maxMp * D.reviveHp);
+      p.vx = 0; p.vy = 0;
+      this.addFx('levelup', p.cx, p.y + p.h, 1, {});
+      this.hooks.changed();
+      return;
+    }
     p.dead = false; p.invuln = 2;
     this.ch.hp = Math.floor(this.stats.maxHp * GAME.player.respawnHpMp);
     this.ch.mp = Math.floor(this.stats.maxMp * GAME.player.respawnHpMp);
@@ -975,7 +1091,7 @@ export class GameWorld {
     const p = this.player;
     for (const d of this.drops) {
       d.t += dt;
-      if (!d.onGround) { stepBody(d, dt, this.map.platforms, this.map.width); if (d.onGround) d.vx = 0; }
+      if (!d.onGround) { stepBody(d, dt, this.platforms, this.map.width); if (d.onGround) d.vx = 0; }
       if (d.t > 0.45 && !p.dead && !d.taken && overlap({ x: p.x - 6, y: p.y, w: p.w + 12, h: p.h }, d)) this.pickupDrop(d, p.cx, p.y);
     }
     if (this.pet) this.pet.update(dt);
@@ -1140,6 +1256,7 @@ export class GameWorld {
       drawPortal(ctx, pt.x - cam, GROUND_Y, t, locked ? '#8a6a6a' : pt.color);
       if (locked) this.drawSeal(ctx, pt.x - cam, GROUND_Y - 22);
     }
+    if (this.map.dungeon) this.drawDungeon(ctx, cam, t);
 
     // poison areas
     for (const z of this.zones) {
@@ -1256,6 +1373,10 @@ export class GameWorld {
       const lk = this.nearPortal.lock && questStatus(this.ch, this.nearPortal.lock) !== 'done';
       this.hint(ctx, lk ? `🔒 ${this.nearPortal.label} · Phong ấn` : `↑  ${this.nearPortal.label}`, this.nearPortal.x - cam, GROUND_Y - 66);
     }
+    else if (this.nearExit && !p.dead) {
+      const ex = this.map.exit;
+      this.hint(ctx, !this.dungeonOpen() ? (this.map.goal === 'break' ? '🔒 Phá mục tiêu để mở cổng' : '🔒 Diệt hết quái để mở cổng') : this.lastFloor() ? '↑  Rời ải' : '↑  Tầng tiếp theo', ex.x - cam, ex.y - 66);
+    }
     else if (this.nearNpc && !p.dead) this.hint(ctx, 'E / ↑  Nói chuyện', this.nearNpc.cx - cam, this.nearNpc.y - 38);
     // damage numbers
     for (const tx of this.texts) {
@@ -1370,6 +1491,225 @@ export class GameWorld {
         ctx.fillStyle = rbg(k ? rb.c1 : rb.c2, 0.85); ctx.fill(path);
         ctx.strokeStyle = rbg('#d8a0b8', 0.4); ctx.lineWidth = 0.5; ctx.stroke(path);
       }
+    }
+    ctx.restore();
+  }
+
+  // Event floor: traps on the floor's shared clock, then the exit gate (gold when open, sealed otherwise)
+  drawDungeon(ctx, cam, t) {
+    const tt = this.trapTime();
+    for (const tr of this.map.traps || []) {
+      const x = tr.x - cam;
+      if (x + tr.w < -20 || x > VIEW_W + 20) continue;
+      const st = trapState(tr, tt);
+      switch (tr.kind) {
+        case 'pit': this.drawPit(ctx, x, tr.w, t); break;
+        case 'crumble': this.drawCrumble(ctx, x, tr, st, t); break;
+        case 'spikes': this.drawSpikes(ctx, x, tr, st); break;
+        case 'teeth': this.drawTeeth(ctx, x, tr, st); break;
+        case 'laser': this.drawLaser(ctx, x, tr, st, t); break;
+        case 'gas': this.drawGas(ctx, x, tr, st, t); break;
+        case 'wheel': this.drawWheel(ctx, x, tr, st, t); break;
+        case 'drop': this.drawRock(ctx, cam, tr, st, tt); break;
+        case 'fireball': this.drawFireball(ctx, cam, tr, tt, t); break;
+        default: this.drawFlame(ctx, x, tr, st, t);
+      }
+    }
+    const ex = this.map.exit;
+    if (ex) {
+      const open = this.dungeonOpen();
+      drawPortal(ctx, ex.x - cam, ex.y, t, open ? '#ffd36a' : '#8a6a6a');
+      if (!open) this.drawSeal(ctx, ex.x - cam, ex.y - 22);
+    }
+  }
+
+  // Teeth snapping shut from above: gums at the top while open, a glint before they bite, a full jaw while shut
+  drawTeeth(ctx, x, tr, st) {
+    const top = tr.y - tr.h, n = Math.max(3, Math.round(tr.w / 9)), sw = tr.w / n;
+    const reach = st === 'on' ? tr.h - 4 : st === 'warn' ? 14 : 8; // how far the upper teeth come down
+    ctx.save();
+    ctx.fillStyle = '#5a1420'; ctx.fillRect(x, top - 6, tr.w, 8); // gum
+    const g = ctx.createLinearGradient(0, top, 0, top + reach);
+    g.addColorStop(0, '#f4ecdc'); g.addColorStop(1, '#b8a890');
+    ctx.fillStyle = g; ctx.strokeStyle = '#3a1a14'; ctx.lineWidth = 0.6; ctx.beginPath();
+    for (let i = 0; i < n; i++) { const sx = x + i * sw; ctx.moveTo(sx + 1, top); ctx.lineTo(sx + sw / 2, top + reach); ctx.lineTo(sx + sw - 1, top); ctx.closePath(); }
+    ctx.fill(); ctx.stroke();
+    if (st === 'on') { // the lower jaw meets them
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) { const sx = x + i * sw + sw / 2; ctx.moveTo(sx - sw / 2 + 1, tr.y); ctx.lineTo(sx, tr.y - 14); ctx.lineTo(sx + sw / 2 - 1, tr.y); ctx.closePath(); }
+      ctx.fill(); ctx.stroke();
+    }
+    if (st === 'warn') { ctx.fillStyle = `rgba(255,60,60,${0.4 + Math.sin(this.time * 30) * 0.25})`; ctx.fillRect(x, top + 2, tr.w, 2); }
+    if ((tr.dmg ?? 0) >= 0.8) { ctx.fillStyle = 'rgba(255,40,40,0.18)'; ctx.fillRect(x, top, tr.w, tr.h); } // the deadly ones look it
+    ctx.restore();
+  }
+
+  // Laser along a ledge: a round start-up icon blinks at its end before the beam fires
+  drawLaser(ctx, x, tr, st, t) {
+    const y = tr.y - GAME.dungeon.trap.laserH / 2;
+    ctx.save();
+    if (st === 'warn') {
+      const a = 0.5 + Math.sin(t * 28) * 0.4;
+      ctx.strokeStyle = `rgba(255,80,80,${a})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x - 6, y, 6, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x - 6, y, 2.5, 0, 7); ctx.fillStyle = `rgba(255,200,200,${a})`; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,80,80,0.25)'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + tr.w, y); ctx.stroke();
+    } else if (st === 'on') {
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createLinearGradient(0, y - 6, 0, y + 6);
+      g.addColorStop(0, 'rgba(255,40,40,0)'); g.addColorStop(0.5, 'rgba(255,220,220,0.95)'); g.addColorStop(1, 'rgba(255,40,40,0)');
+      ctx.fillStyle = g; ctx.fillRect(x, y - 6, tr.w, 12);
+      ctx.fillStyle = 'rgba(255,90,60,0.5)'; ctx.fillRect(x, y - 1, tr.w, 2);
+    } else { ctx.fillStyle = '#4a1a1a'; ctx.beginPath(); ctx.arc(x - 6, y, 3, 0, 7); ctx.fill(); }
+    ctx.restore();
+  }
+
+  // Gas: wisps at the vents before it spills, then a heaving cloud (green slows you, purple only burns)
+  drawGas(ctx, x, tr, st, t) {
+    if (st === 'off') return;
+    const c = tr.slow ? [120, 220, 90] : [170, 80, 220], top = tr.y - tr.h;
+    ctx.save();
+    const a = st === 'on' ? 0.32 : 0.12, n = st === 'on' ? 7 : 3;
+    for (let i = 0; i < n; i++) {
+      const cx = x + ((i + 0.5) * tr.w) / n + Math.sin(t * 1.6 + i) * 6;
+      const cy = st === 'on' ? top + tr.h * 0.55 + Math.cos(t * 1.3 + i * 2) * tr.h * 0.25 : tr.y - 6;
+      ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+      ctx.beginPath(); ctx.arc(cx, cy, st === 'on' ? tr.w / 3.2 : 6, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Fire wheel: spins while it is there, a faint flickering ring before it appears
+  drawWheel(ctx, x, tr, st, t) {
+    const r = tr.w / 2, cx = x + r, cy = tr.y - r;
+    ctx.save();
+    if (st === 'off') { ctx.globalAlpha = 0.15; ctx.strokeStyle = '#ff9a3a'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke(); ctx.restore(); return; }
+    if (st === 'warn') ctx.globalAlpha = 0.35 + Math.sin(t * 30) * 0.25;
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, r + 6);
+    g.addColorStop(0, 'rgba(255,240,180,0.9)'); g.addColorStop(0.6, 'rgba(255,120,40,0.7)'); g.addColorStop(1, 'rgba(255,40,20,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r + 6, 0, 7); ctx.fill();
+    ctx.translate(cx, cy); ctx.rotate(t * 9);
+    ctx.strokeStyle = '#fff0a0'; ctx.lineWidth = 2.2;
+    for (let k = 0; k < 6; k++) { ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(r * 0.6, -r * 0.3, r, 0); ctx.stroke(); }
+    ctx.strokeStyle = '#ff7a2a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Falling rock: a shadow on the ground grows while it falls; a dusty crack in the ceiling shortly before
+  drawRock(ctx, cam, tr, st, tt) {
+    const r = GAME.dungeon.trap.rock, cx = tr.x + tr.w / 2 - cam;
+    ctx.save();
+    if (st === 'warn') { ctx.fillStyle = 'rgba(160,140,110,0.6)'; ctx.fillRect(cx - 8, 0, 16, 4); ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(cx, GROUND_Y, r * 0.4, 2, 0, 0, 7); ctx.fill(); }
+    if (st === 'on') {
+      const b = trapBox(tr, tt), k = Math.max(0, (b.y + r) / GROUND_Y);
+      ctx.fillStyle = `rgba(0,0,0,${0.15 + k * 0.3})`; ctx.beginPath(); ctx.ellipse(cx, GROUND_Y, r * (0.4 + k * 0.5), 2.5, 0, 0, 7); ctx.fill();
+      const g = ctx.createRadialGradient(b.x - cam + r * 0.35, b.y + r * 0.3, 1, b.x - cam + r / 2, b.y + r / 2, r * 0.7);
+      g.addColorStop(0, '#ffb060'); g.addColorStop(0.4, '#6a4a3a'); g.addColorStop(1, '#2a1a14');
+      ctx.fillStyle = g; ctx.strokeStyle = '#140a06'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(b.x - cam + r / 2, b.y + r / 2, r / 2, 0, 7); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Rolling fireball with a short glowing trail
+  drawFireball(ctx, cam, tr, tt, t) {
+    const b = trapBox(tr, tt), cx = b.x + b.w / 2 - cam, cy = b.y + b.h / 2;
+    if (cx < -30 || cx > VIEW_W + 30) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 3; i >= 0; i--) {
+      const g = ctx.createRadialGradient(cx - i * 6, cy, 1, cx - i * 6, cy, b.w * (0.9 - i * 0.15));
+      g.addColorStop(0, i ? 'rgba(255,160,60,0.4)' : 'rgba(255,250,210,1)'); g.addColorStop(1, 'rgba(255,60,20,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx - i * 6, cy, b.w * (0.9 - i * 0.15), 0, 7); ctx.fill();
+    }
+    if (Math.random() < 0.3) this.spark(b.x + b.w / 2, cy, { vy: rand(-40, -10), vx: rand(-20, 0), color: pick(['#ffb040', '#ffe27a']), size: rand(1, 2), life: 0.4 });
+    ctx.restore();
+  }
+
+  // Sinking mud: a dark, slowly heaving surface with bubbles
+  drawPit(ctx, x, w, t) {
+    const y = GROUND_Y - 3;
+    ctx.save();
+    const g = ctx.createLinearGradient(0, y, 0, VIEW_H);
+    g.addColorStop(0, '#4a3a22'); g.addColorStop(0.25, '#2a2014'); g.addColorStop(1, '#120c06');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(x, VIEW_H); ctx.lineTo(x, y);
+    for (let i = 0; i <= w; i += 10) ctx.lineTo(x + i, y + Math.sin(t * 2 + i * 0.15) * 1.2);
+    ctx.lineTo(x + w, VIEW_H); ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 0.8;
+    for (let i = 0; i < w / 45; i++) {
+      const bx = x + ((i * 97) % w), k = (t * 0.6 + i * 0.37) % 1;
+      ctx.strokeStyle = `rgba(170,150,100,${0.55 * (1 - k)})`;
+      ctx.beginPath(); ctx.arc(bx, y + 7 - k * 5, 1 + k * 3, Math.PI, 0); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Crumbling stone slab: shakes and cracks before it falls away, a faint outline while it is gone
+  drawCrumble(ctx, x, tr, st, t) {
+    const y = tr.y, h = 9;
+    ctx.save();
+    if (st === 'off') {
+      ctx.globalAlpha = 0.22; ctx.strokeStyle = '#c8b89a'; ctx.setLineDash([3, 3]); ctx.strokeRect(x, y, tr.w, h);
+      ctx.restore(); return;
+    }
+    if (st === 'warn') {
+      ctx.translate(Math.sin(t * 70) * 1.2, 0);
+      if (Math.random() < 0.25) this.spark(tr.x + rand(0, tr.w), y + h, { vy: rand(20, 60), vx: rand(-10, 10), color: '#a89878', size: rand(1, 2), life: 0.5, glow: false, grav: 300 });
+    }
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, '#9a8a74'); g.addColorStop(1, '#4a3e34');
+    ctx.fillStyle = g; ctx.fillRect(x, y, tr.w, h);
+    ctx.fillStyle = '#c0b098'; ctx.fillRect(x, y, tr.w, 2);
+    ctx.strokeStyle = '#2a2018'; ctx.lineWidth = 0.8; ctx.strokeRect(x, y, tr.w, h);
+    ctx.strokeStyle = st === 'warn' ? '#1a1008' : 'rgba(40,30,20,0.6)'; ctx.beginPath();
+    const n = st === 'warn' ? 4 : 2;
+    for (let i = 1; i <= n; i++) { const cx = x + (tr.w * i) / (n + 1); ctx.moveTo(cx, y + 1); ctx.lineTo(cx + 3, y + 4); ctx.lineTo(cx - 1, y + h); }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Spikes: slots in the floor, a red glint before they strike, a row of steel spikes while up
+  drawSpikes(ctx, x, tr, st) {
+    const y = tr.y, H = GAME.dungeon.trap.spikeH, h = st === 'on' ? H : st === 'warn' ? 3 : 0;
+    ctx.save();
+    ctx.fillStyle = 'rgba(20,12,16,0.75)'; ctx.fillRect(x, y - 1, tr.w, 3);
+    if (h > 0) {
+      const n = Math.max(2, Math.round(tr.w / 8)), sw = tr.w / n;
+      const g = ctx.createLinearGradient(0, y - h, 0, y);
+      g.addColorStop(0, '#f4f0f8'); g.addColorStop(1, '#5a5a6a');
+      ctx.fillStyle = g; ctx.strokeStyle = '#22141c'; ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) { const sx = x + i * sw; ctx.moveTo(sx + 1, y); ctx.lineTo(sx + sw / 2, y - h); ctx.lineTo(sx + sw - 1, y); ctx.closePath(); }
+      ctx.fill(); ctx.stroke();
+    }
+    if (st === 'warn') { ctx.fillStyle = `rgba(255,70,50,${0.4 + Math.sin(this.time * 30) * 0.25})`; ctx.fillRect(x, y - 2, tr.w, 2); }
+    ctx.restore();
+  }
+
+  // Fire column: embers at the vent before it erupts, then a flickering pillar of flame
+  drawFlame(ctx, x, tr, st, t) {
+    const y = tr.y, cx = x + tr.w / 2;
+    ctx.save();
+    ctx.fillStyle = '#2a1a14'; ctx.fillRect(x + 4, y - 3, tr.w - 8, 3);
+    if (st === 'warn') {
+      const g = ctx.createRadialGradient(cx, y - 2, 1, cx, y - 2, 14);
+      g.addColorStop(0, `rgba(255,150,60,${0.6 + Math.sin(this.time * 25) * 0.25})`); g.addColorStop(1, 'rgba(255,80,20,0)');
+      ctx.fillStyle = g; ctx.fillRect(cx - 14, y - 16, 28, 18);
+    } else if (st === 'on') {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 3; i++) {
+        const wob = Math.sin(t * 18 + i * 2) * 3, w = tr.w * (0.95 - i * 0.25), h = tr.h * (1 - i * 0.2);
+        const g = ctx.createLinearGradient(0, y - h, 0, y);
+        g.addColorStop(0, 'rgba(255,90,30,0)'); g.addColorStop(0.45, i ? 'rgba(255,200,90,0.8)' : 'rgba(255,110,40,0.75)'); g.addColorStop(1, i === 2 ? 'rgba(255,250,210,0.95)' : 'rgba(255,160,60,0.9)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.moveTo(cx - w / 2, y);
+        ctx.quadraticCurveTo(cx - w / 2 + wob, y - h * 0.6, cx + wob, y - h);
+        ctx.quadraticCurveTo(cx + w / 2 + wob, y - h * 0.6, cx + w / 2, y);
+        ctx.closePath(); ctx.fill();
+      }
+      if (Math.random() < 0.4) this.spark(tr.x + tr.w / 2 + rand(-6, 6), y - rand(10, tr.h), { vy: rand(-60, -20), vx: rand(-15, 15), color: pick(['#ffb040', '#ffe27a', '#ff6a2a']), size: rand(1, 2.2), life: rand(0.3, 0.6) });
     }
     ctx.restore();
   }

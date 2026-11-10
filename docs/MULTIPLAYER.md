@@ -131,6 +131,19 @@ Like Võ Lâm Truyền Kỳ: both players put items into a shared window, lock, 
 
 Items in your offer cannot be used, equipped, sold, dropped or forged while the trade is open. Closing the window, Esc, changing map or disconnecting cancels it; nothing moves. Offers are checked against the **saved** bag, so the client saves when the window opens; a mismatch answers `trade_err {why: 'sync'}`, the client saves and offers again.
 
+### Server event: Xâm Lăng Dương Ác ("vượt ải")
+
+In the style of Ghost Online's *Invasion of Yangak*. At set times (`GAME.dungeon.schedule`: **Saturday and Sunday 15:00, Vietnam time (UTC+7), 30 minutes**) the event opens for the **whole server**: one run, and every player who joins at the keeper in the village (Thủ Ải, level 12+) is in it, floor after floor, up to the final boss (`server/src/dungeon.js`, data in `data/dungeons.js`).
+
+- **Schedule.** `eventWindow` computes the open or next window in UTC+7. The server warns everyone in world chat 5 and 1 minutes before (`GAME.dungeon.announceMin`), opens the run at the start and closes it at the end. One run per window: once it is over (win or time out) the keeper says closed until the next window. Clients learn the state on connect and whenever it changes (`ev_state`). For local play and tests, `EVENT_ALWAYS_OPEN=true` keeps it open (a run starts when the first player enters) and `EVENT_RUN_SEC` shortens each run.
+- **Floors.** A run is 9 floors picked from phases (`rollFloors`): 3 of phase 1 (falling rocks first, then two of white spearmen / iron door / fireball maze), the Armored Gate, 3 of phase 2 (teeth room / hatchery / flame core / demon pillars / fire wheels), the stone giants and the Silver Guard. Goals: `reach` (get to the exit), `clear` (every monster dead, no respawn), `break` (only the floor's `targets` must die, e.g. the door or the pillars that keep calling dust), `boss`. The exit opens when the goal is met; the server checks it (`dg_next`) with the player standing at the gate. Players go up one by one; latecomers start at the highest floor reached.
+- **Rooms.** The server groups players by *room*, not by map: a normal map is its own room, an event floor is `<map>#<run>`. Presence, chat, movement and the shared monsters (one `MobSim` per room, `mobs.js`) follow the room. Messages still carry the plain map id. Trades and party invites need the same room.
+- **No skipping.** A position on an event floor is ignored unless the run has reached it; the client is sent home (`dg_go {lost}`). A reconnecting character goes back into its run.
+- **Traps** (`game/traps.js`: spikes, flames, snapping teeth, ledge lasers, gas that slows, fire wheels, crumbling slabs, falling rocks, rolling fireballs, sinking mud) run on a fixed cycle of the floor's clock. The server sends each floor's start time (`t0`, set when the first player arrives) and its own clock (`now`), so everyone's traps are in step with no further messages. Damage is a share of max HP (`GAME.dungeon.trapDmg`, or the trap's `dmg`); like monster contact, each client applies it to its own player. Dying inside costs no EXP; you get up where you fell with half HP and a few seconds of invulnerability.
+- **Damage ranking.** `mobs.hit` reports every hit's damage (computed by the server) to the event (`onDamage`); only players in the run count. Every `GAME.dungeon.rankEverySec` each player inside gets the live top 10 and their own place (`ev_rank`).
+- **The end.** The Silver Guard (`final: true`) dying ends the run as a win; the window running out ends it as a loss. **Everyone who took part** is rewarded, online or not (`rewards.all`, plus `rewards.win` on a win, plus the tier of their damage rank for the top 10: `rewards.top`). Items go through `db.grantItems` (ledger rows, `item_rev`, request ids `ev:<run>:<char>:<i>` so a retry never doubles them) and reach online players as `chg`; the EXP (a share of the player's next level) is in `ev_end`, which also carries the top 10, the player's rank, damage and items. Players still inside are sent back to the keeper (`dg_go {closed}`) and the server announces the result in world chat.
+- **Offline** the keeper offers a practice run of the same floors (no ranking, no rewards).
+
 ## 5. Protocol
 
 JSON text frames, `t` is the message type.
@@ -147,6 +160,7 @@ JSON text frames, `t` is the message type.
 | C → S | `party_invite {to}` · `party_answer {from, yes}` · `party_leave` | Party. |
 | C → S | `pick {id}` | Pick up one of our server drops. |
 | C → S | `trade_ask {to}` · `trade_answer {from, yes}` · `trade_offer {items: [{uid, qty}], gold}` · `trade_lock {on}` · `trade_confirm` · `trade_cancel` | Trade. |
+| C → S | `dg_enter {d}` · `dg_next {}` | Server event: join at the keeper; go on at a floor's exit. At most one every `GAME.dungeon.minMsgMs`. |
 | S → C | `welcome {id, online}` · `online {n}` | Connected; player count. |
 | S → C | `snap {map, players}` · `join {p}` · `leave {id}` | Who is on our map. |
 | S → C | `st {s: [[id, x, y, vx, f, a], …]}` | Batched movement, one message per map per tick (10 Hz). |
@@ -163,6 +177,8 @@ JSON text frames, `t` is the message type.
 | S → C | `pick {id, ok, why?}` | Pickup result, after the commit; `why`: `gone`, `far`, `full`, `busy` (rate limit or queue full: try again). The item itself arrives in `chg`. |
 | S → C | `chg {list: [{rev, kind, uid, id, qty, entry}], rev}` | Item/gold changes to apply, oldest first. `kind`: `gain` (add `entry`), `loss` (remove `uid`), `gold` (add `qty`). |
 | S → C | `trade_ask {from, name}` · `trade_open {id, with}` · `trade_state {id, me, them}` · `trade_end {id, why, by?}` · `trade_err {why}` | Trade. |
+| S → C | `dg_go {inst, d, floors, map, floor, t0, now}` · `dg_go {map, x, closed \| lost}` · `dg_err {why}` | Go to an event floor (`floors` = the run's floors, `t0` = the floor clock start, `now` = server time, for the traps), or back to the keeper when the run is over (`closed`) or from a floor the player may not be on (`lost`). `why`: `far`, `level`, `closed`, `not_clear`, `exit`, `none`, `unknown`. |
+| S → C | `ev_state {d, open, start, end, now}` · `ev_rank {d, top, rank, dmg, end, now}` · `ev_end {d, win, top, rank, dmg, items, exp}` | Server event: open or not and its window (on connect and on change); the live top 10 by damage and our place (every `rankEverySec`, players inside only); the result and our reward (items arrive as `chg`, EXP is added by the client). Announcements come as `chat {ch: 'world', id: 'sys'}`. |
 
 REST additions: `PUT /api/characters/:id` answers `{ok, itemRev, stale, items?}`; `GET /api/characters/:id/changes?since=rev` returns `{list, rev}`.
 

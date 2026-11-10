@@ -1,4 +1,5 @@
-// Shared monsters (online): one simulation per map that has players on it (client/src/game/mobsim.js, the same
+// Shared monsters (online): one simulation per room that has players on it (a map, or one party's copy of a dungeon
+// floor, see dungeon.js), running client/src/game/mobsim.js (the same
 // AI the offline game uses). Players see the same monsters; their hits are applied here; when a monster dies the
 // server splits the reward:
 //   - EXP: by damage share between "groups" (a party, or a player on their own). A party's share is split evenly
@@ -50,17 +51,21 @@ function publicEvent(e) {
   return { type, ...rest };
 }
 
-export function createMobs({ players, send, loot, parties }) {
-  const maps = new Map(); // map id -> { sim, empty (ms since nobody is there, or 0), snapT, last: Map uid -> snapshot key }
-  const inMap = (map) => [...players.values()].filter((s) => s.map === map);
-  const toMap = (map, msg) => { const data = JSON.stringify(msg); for (const s of inMap(map)) if (s.ws.readyState === 1) s.ws.send(data); };
+// onDamage(s, dealt): a player hit a monster (server events rank damage) · onDie(room, m): a monster died
+export function createMobs({ players, send, loot, parties, onDamage, onDie }) {
+  // One simulation per room: a map, or one party's copy of a dungeon floor (see dungeon.js). Messages carry the
+  // map id (clients compare it with the map they are on); the room only decides who receives them.
+  const rooms = new Map(); // room -> { map, sim, empty (ms since nobody is there, or 0), snapT, last: Map uid -> snapshot key }
+  const roomOf = (s) => s.room || s.map;
+  const inRoom = (room) => [...players.values()].filter((s) => roomOf(s) === room);
+  const toRoom = (room, msg) => { const data = JSON.stringify(msg); for (const s of inRoom(room)) if (s.ws.readyState === 1) s.ws.send(data); };
 
-  function ensure(map) {
-    let e = maps.get(map);
+  function ensure(room, map) {
+    let e = rooms.get(room);
     if (!e) {
-      e = { sim: new MobSim(map, { namedT: {} }), empty: 0, snapT: 0, last: new Map() };
-      e.sim.drain(); // initial spawns are sent with the map's monster list
-      maps.set(map, e);
+      e = { map, sim: new MobSim(map, { namedT: {} }), empty: 0, snapT: 0, last: new Map() };
+      e.sim.drain(); // initial spawns are sent with the room's monster list
+      rooms.set(room, e);
     }
     return e;
   }
@@ -69,8 +74,8 @@ export function createMobs({ players, send, loot, parties }) {
   const asTarget = (s) => ({ id: s.id, x: s.x, y: s.y, w: 14, h: 32, cx: s.x + 7, cy: s.y + 16, vx: s.vx, facing: s.f, standY: s.sy || s.y + 32, onGround: !!s.g, dead: !!s.dead });
 
   // ===== Rewards =====
-  function reward(map, m) {
-    const here = inMap(map);
+  function reward(room, map, m) {
+    const here = inRoom(room);
     const byId = new Map(here.map((s) => [s.id, s]));
     // damage per group: a party (members on this map) or a solo player
     const groups = new Map();
@@ -101,38 +106,39 @@ export function createMobs({ players, send, loot, parties }) {
     }
   }
 
-  function handleEvents(map, e) {
-    const out = [];
+  function handleEvents(room, e) {
+    const out = [], map = e.map;
     for (const ev of e.sim.drain()) {
-      if (ev.type === 'spawn') { toMap(map, { t: 'mspawn', map, m: ev.m.spawnInfo() }); continue; }
+      if (ev.type === 'spawn') { toRoom(room, { t: 'mspawn', map, m: ev.m.spawnInfo() }); continue; }
       if (ev.type === 'die') {
         const m = ev.m;
         let topName = null, topDmg = 0;
         for (const [id, dmg] of m.dmgBy) if (dmg > topDmg && players.get(id)) { topDmg = dmg; topName = players.get(id).name; }
-        toMap(map, { t: 'mdie', map, uid: m.uid, by: topName });
-        reward(map, m);
+        toRoom(room, { t: 'mdie', map, uid: m.uid, by: topName });
+        reward(room, map, m);
+        onDie?.(room, m);
         continue;
       }
       out.push(publicEvent(ev));
     }
-    if (out.length) toMap(map, { t: 'mev', map, list: out });
+    if (out.length) toRoom(room, { t: 'mev', map, list: out });
   }
 
   // ===== Loop =====
   let last = Date.now();
   const timer = setInterval(() => {
     const now = Date.now(), dt = Math.min(0.25, (now - last) / 1000); last = now;
-    for (const [map, e] of maps) {
-      const here = inMap(map);
+    for (const [room, e] of rooms) {
+      const here = inRoom(room);
       if (!here.length) {
         e.empty = e.empty || now;
-        if (now - e.empty > MB.idleSec * 1000) maps.delete(map);
+        if (now - e.empty > MB.idleSec * 1000) rooms.delete(room);
         continue;
       }
       e.empty = 0;
       const targets = here.map(asTarget);
       for (let i = 0; i < MB.substeps; i++) e.sim.update(dt / MB.substeps, targets);
-      handleEvents(map, e);
+      handleEvents(room, e);
       e.snapT -= dt;
       if (e.snapT <= 0) {
         e.snapT = 1 / MB.snapHz;
@@ -144,22 +150,26 @@ export function createMobs({ players, send, loot, parties }) {
           e.last.set(m.uid, key); list.push(snap);
         }
         if (e.last.size > e.sim.monsters.length * 2) for (const uid of e.last.keys()) if (!e.sim.monsters.some((m) => m.uid === uid)) e.last.delete(uid);
-        if (list.length) toMap(map, { t: 'ms', map, s: list });
+        if (list.length) toRoom(room, { t: 'ms', map: e.map, s: list });
       }
     }
   }, 1000 / MB.tickHz);
 
   return {
-    // A player arrived on a map: send all its monsters
+    // A player arrived on a map (in their room): send all its monsters
     enter(s, map) {
-      const e = ensure(map);
+      const e = ensure(roomOf(s), map);
       send(s, { t: 'mobs', map, list: e.sim.monsters.filter((m) => !m.dead).map((m) => m.spawnInfo()) });
     },
+
+    // Are all the monsters of this room dead (dungeon exits open)? A room nobody started is not cleared.
+    // With targets (monster ids) only those count (event floors where something must be broken)
+    cleared: (room, targets = null) => !!rooms.get(room)?.sim.cleared(targets),
 
     // { t:'hit', uid, sid }: the player's own hit detection says skill `sid` hit monster `uid`.
     // The server computes the damage itself (game/combat.js) from the saved character, buffs and the skill's level.
     hit(s, m) {
-      const e = maps.get(s.map);
+      const e = rooms.get(roomOf(s));
       const mob = e && e.sim.monsters.find((x) => x.uid === +m.uid && !x.dead);
       const sid = String(m.sid || '');
       if (!mob || !s.ch || !knowsSkill(s.ch, sid)) return;
@@ -176,10 +186,11 @@ export function createMobs({ players, send, loot, parties }) {
       const { dmg, crit, em } = hitDamage(st, mult, mob.def, el, low);
       const by = { id: s.id, player: true, cx: s.x + 7 };
       const r = e.sim.damage(mob, dmg, by);
+      onDamage?.(s, r.dealt);
       // a poison cloud also poisons: 2 s of ticks at 30% of the skill
       if (sk.type === 'cloud' && !mob.dead) e.sim.poisonFor(mob, 2, hitDamage(st, mult * 0.3, mob.def, 'poison', low).dmg, by);
-      toMap(s.map, { t: 'mhit', map: s.map, uid: mob.uid, by: s.id, dmg: r.dealt, ab: r.absorbed, crit, em, el });
-      handleEvents(s.map, e);
+      toRoom(roomOf(s), { t: 'mhit', map: s.map, uid: mob.uid, by: s.id, dmg: r.dealt, ab: r.absorbed, crit, em, el });
+      handleEvents(roomOf(s), e);
     },
 
     // { t:'cast', sid }: a buff skill (it changes the damage formula while it lasts)
@@ -196,7 +207,7 @@ export function createMobs({ players, send, loot, parties }) {
     },
 
     // test helpers
-    sim: (map) => maps.get(map)?.sim || null,
+    sim: (room) => rooms.get(room)?.sim || null,
     close() { clearInterval(timer); },
   };
 }

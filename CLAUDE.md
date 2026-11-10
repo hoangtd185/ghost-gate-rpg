@@ -40,6 +40,7 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 | Damage formulas (player hits, skill multipliers, reach) | `client/src/game/combat.js` (runs offline and on the server) |
 | Loot tables and rules (drops, what clients may create) | `client/src/data/*` for tables, `client/src/game/loot.js` for rules, `server/src/loot.js` for kill checks |
 | New realtime message | `server/src/realtime.js` + `client/src/net/realtime.js`; document it in the protocol table in `docs/MULTIPLAYER.md` |
+| New server event or event floor | `client/src/data/dungeons.js` (phases, rewards; schedule in `GAME.dungeon`) + floor maps (with `dungeon`, `goal`, `exit`, `traps`, `targets` for `break`) at the end of `client/src/data/maps.js`; trap kinds in `client/src/game/traps.js`; runs, ranking and rewards in `server/src/dungeon.js` |
 
 `config.js` and `data/*` are imported by the server too, so keep them plain data (no DOM, no browser-only or Node-only imports).
 
