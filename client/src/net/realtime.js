@@ -138,13 +138,14 @@ export class Realtime {
         if (r && m.ch !== 'world') r.say = { text: m.text, t: 4 };
         break;
       }
-      // shared monsters
+      // shared monsters: monster uids are per map, so anything about another map's monsters (still in flight
+      // after we changed maps) is dropped
       case 'mobs': if (m.map === w.mapId) w.serverMobs(m.list); break;
-      case 'mspawn': w.mobSpawn(m.m); break;
-      case 'ms': w.mobSnap(m.s); break;
-      case 'mev': for (const e of m.list) w.mobEvent(e); break;
-      case 'mhit': w.mobHit(m); break;
-      case 'mdie': w.mobDie(m); break;
+      case 'mspawn': if (m.map === w.mapId) w.mobSpawn(m.m); break;
+      case 'ms': if (m.map === w.mapId) w.mobSnap(m.s); break;
+      case 'mev': if (m.map === w.mapId) for (const e of m.list) w.mobEvent(e); break;
+      case 'mhit': if (m.map === w.mapId) w.mobHit(m); break;
+      case 'mdie': if (m.map === w.mapId) w.mobDie(m); break;
       case 'mkill': w.onServerKill(m); break;
       case 'party_ask': case 'party_state': case 'party_err':
         if (this.hooks.party) this.hooks.party(m);

@@ -173,9 +173,12 @@ export class GameWorld {
       ch.hp = Math.min(this.stats.maxHp, ch.hp + this.stats.maxHp * f); ch.mp = Math.min(this.stats.maxMp, ch.mp + this.stats.maxMp * f);
     }
     if (k.exp) this.giveExp(k.exp);
-    if (k.gold) this.drops.push(new Drop(k.x - 6, k.y, 'gold', k.gold));
-    if (k.drops) this.serverDrops(k.drops, name);
-    for (const id of questDropsFor(ch, k.mob)) this.drops.push(new Drop(k.x - 6 + rand(-8, 8), k.y, 'item', { id, qty: 1, r: 0, b: {} }));
+    // things that land at the monster's spot only make sense on its map: after a map change the gold goes straight
+    // to the purse, and the server keeps our drops on that map (they come back with 'drops' when we return)
+    const here = !k.map || k.map === this.mapId;
+    if (k.gold) { if (here) this.drops.push(new Drop(k.x - 6, k.y, 'gold', k.gold)); else ch.gold += k.gold; }
+    if (k.drops && here) this.serverDrops(k.drops, name);
+    if (here) for (const id of questDropsFor(ch, k.mob)) this.drops.push(new Drop(k.x - 6 + rand(-8, 8), k.y, 'item', { id, qty: 1, r: 0, b: {} }));
     const changed = onKillForQuests(ch, k.mob);
     if (k.named) changed.push(...onKillForQuests(ch, k.named));
     for (const qid of changed) this.hooks.questProgress(qid);

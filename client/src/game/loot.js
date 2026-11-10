@@ -120,11 +120,14 @@ export function questGrants(before, after, cls) {
 const resolveId = (id, cls) => (/^W\d$/.test(id) ? `w_${cls}${id[1]}` : id);
 
 // Items a save may add because it used up crafting materials. used: Map item id -> quantity consumed
+// Materials count once: recipes take from what is left, in RECIPES order, so one lot cannot pay for two recipes.
 export function craftGrants(used, cls) {
-  const m = new Map();
+  const m = new Map(), left = new Map(used);
   for (const r of RECIPES) {
-    const n = Math.min(...r.need.map(([id, q]) => Math.floor((used.get(id) || 0) / q)));
-    if (n > 0) for (const x of expandId(resolveId(r.out[0], cls))) addTo(m, x, n * r.out[1]);
+    const n = Math.min(...r.need.map(([id, q]) => Math.floor((left.get(id) || 0) / q)));
+    if (n <= 0) continue;
+    for (const [id, q] of r.need) left.set(id, left.get(id) - q * n);
+    for (const x of expandId(resolveId(r.out[0], cls))) addTo(m, x, n * r.out[1]);
   }
   return m;
 }

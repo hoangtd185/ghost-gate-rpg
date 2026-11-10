@@ -103,6 +103,19 @@ export function rollEquip(id, luck = 0, minRarity = 0) {
   return { r, bonus };
 }
 
+// The most bonus stats rollEquip can give an item of this rarity: { stat: max total }. Rarity 0 gets none.
+// Used by the server to refuse invented bonus stats on items a save adds.
+export function bonusLimits(id, r) {
+  const it = ITEMS[id];
+  if (!it || it.type !== 'equip' || !(r > 0)) return {};
+  const scale = Math.max(1, Math.ceil((it.lv || 1) / 3));
+  const per = { str: 2 * scale, dex: 2 * scale, int: 2 * scale, vit: 2 * scale, hp: 12 * scale, def: 2 * scale, crit: 2 };
+  const out = {};
+  for (const [k, v] of Object.entries(per)) out[k] = v * r; // r rolls, possibly all on the same stat
+  if (it.slot === 'weapon') out.atk = Math.ceil((it.stats.atk || 0) * 0.08 * r);
+  return out;
+}
+
 // Stats of one item: base stats × enhancement + random bonus stats
 export function entryStats(e) {
   const it = ITEMS[e.id];

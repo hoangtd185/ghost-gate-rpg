@@ -106,9 +106,11 @@ The client still uploads the whole character (EXP, position, quests, shop purcha
 3. **Ownership.** An item that now belongs to another character (traded away) is dropped from the upload.
 4. **What the client may add:**
    - *free items*: anything sold in a shop, gems (fusing, unsocketing), quest-only items (`freeItems()` in `client/src/game/loot.js`);
-   - *earned items*: quest gifts and rewards for quests accepted or completed **in that save**, crafting results whose **materials were used up in that save**, the starter kit of a new character (`questGrants`, `craftGrants`, `starterKit`);
+   - *earned items*: quest gifts and rewards for quests accepted or completed **in that save**, crafting results whose **materials were used up in that save** (each material counts for one recipe only), the starter kit of a new character (`questGrants`, `craftGrants`, `starterKit`);
    - nothing else: monster materials, outfits and rolled equipment only come from the server.
-5. **Quantities.** For items that are not free, the total may not grow beyond what the save earned. Stacks may be merged or used up.
+5. **Quantities.** For items that are not free, the total may not grow beyond what the save earned. Stacks may be merged or used up. Items stored under an id from before a rename (`data/legacy.js`) count as the new id.
+6. **Bonus stats** of an item the save adds: none at rarity 0; above that only stats `rollEquip` can roll, each within what the rarity can reach (`bonusLimits` in `game/character.js`). Anything else is dropped and logged (`bonus`).
+7. **Quests.** A quest the server has as done stays done: a save cannot remove or downgrade it, except a daily quest taken again on a later day. A daily completion is stored with the server's date, not the client's.
 
 Refused items are written to the ledger as `rejected` (with the reason), and the answer includes `items` so the client replaces its bag with what the server kept.
 
@@ -123,7 +125,7 @@ How the client keeps up:
 Like Võ Lâm Truyền Kỳ: both players put items into a shared window, lock, confirm, and only then does anything move (`server/src/trade.js`).
 
 1. Stand close to someone and press **T** (the hint "T · Giao dịch" appears above the nearest player). They get a request with *Đồng ý / Từ chối* (20 s).
-2. Click items in your bag to put them in (whole stacks; quest items and equipped items cannot be traded); type an amount of gold and press *Đặt*. The other side sees your items with full details.
+2. Click items in your bag to put them in (whole stacks; quest items and equipped items cannot be traded, the server checks it too); type an amount of gold and press *Đặt*. The other side sees your items with full details.
 3. **Any change unlocks both sides** (anti-scam). Each side locks; when both are locked, each presses *Giao dịch* to confirm.
 4. Both confirmed: `commitTrade` checks every item still belongs to its side with the quantity shown, the gold is there and both bags have room, then moves items and gold and writes ledger rows for both players **in one transaction**. Both clients get `chg` and `trade_end {why: 'done'}`.
 
@@ -167,11 +169,11 @@ JSON text frames, `t` is the message type.
 | S → C | `st {s: [[id, x, y, vx, f, a], …]}` | Batched movement, one message per map per tick (10 Hz). |
 | S → C | `look {id, cls, lv, title, look}` | Someone's appearance changed. |
 | S → C | `chat {ch, id, from, text}` · `kicked {reason}` · `error {msg}` | |
-| S → C | `mobs {map, list}` · `mspawn {m}` | The map's shared monsters (spawn info: id, level, elite/chief/named, affixes, position, HP). |
-| S → C | `ms {s: [[uid, x, y, facing, hp, shield, state], …]}` | Monster positions and state, 10×/s, only changed ones. `state` bits: 1 attacking, 2 hurt, 4 charging, 8 poisoned. |
-| S → C | `mev {list}` | Monster events: `text`, `fx`, `chat`, `announce`, `shoot` (a projectile: each client checks it against its own player), `slam`, `explode`. |
-| S → C | `mhit {uid, by, dmg, ab, crit, em, el}` | A hit on a shared monster, computed by the server: damage dealt, shield absorbed, crit, element multiplier. |
-| S → C | `mdie {uid, by}` · `mkill {uid, mob, named, x, y, exp, gold?, drops?}` | A monster died (everyone on the map); our reward (only those who earned one). |
+| S → C | `mobs {map, list}` · `mspawn {map, m}` | The map's shared monsters (spawn info: id, level, elite/chief/named, affixes, position, HP). Every monster message carries `map`: monster uids are per map, so a client drops messages about a map it already left. |
+| S → C | `ms {map, s: [[uid, x, y, facing, hp, shield, state], …]}` | Monster positions and state, 10×/s, only changed ones. `state` bits: 1 attacking, 2 hurt, 4 charging, 8 poisoned. |
+| S → C | `mev {map, list}` | Monster events: `text`, `fx`, `chat`, `announce`, `shoot` (a projectile: each client checks it against its own player), `slam`, `explode`. |
+| S → C | `mhit {map, uid, by, dmg, ab, crit, em, el}` | A hit on a shared monster, computed by the server: damage dealt, shield absorbed, crit, element multiplier. |
+| S → C | `mdie {map, uid, by}` · `mkill {map, uid, mob, named, x, y, exp, gold?, drops?}` | A monster died (everyone on the map); our reward (only those who earned one). EXP always counts; gold, drops and quest items only land on the ground if we are still on `map` (otherwise the gold goes to the purse and the server keeps the drops on that map). |
 | S → C | `party_ask {from, name}` · `party_state {party}` · `party_err {why}` | Party. |
 | S → C | `loot {k, map, drops: [{id, it, rare, x, y}], why?}` | Drops for story-boss kill `k` (empty with `why` if refused). |
 | S → C | `drops {map, drops}` | Our unpicked drops on this map (after a reconnect or coming back). |
