@@ -1,7 +1,7 @@
 // Character logic: stats, experience, inventory, equipment, quests.
 // The whole character state is a plain JSON object that is saved straight to the database.
 import { CLASSES, SKILLS, SKILL_MAX_LV, PASSIVES, PASSIVE_MAX_LV, passivesOf } from '../data/classes.js';
-import { ITEMS, RARITY, ENHANCE_MAX, ENHANCE_RATE, ENHANCE_SAFE, ENHANCE_BONUS, enhanceCost, GEM_KINDS, GEM_SLOTS, GEM_FUSE, gemId, socketCount, socketCost, unsocketCost } from '../data/items.js';
+import { ITEMS, RARITY, ENHANCE_MAX, ENHANCE_RATE, ENHANCE_SAFE, ENHANCE_BONUS, enhanceCost, GEM_KINDS, GEM_SLOTS, GEM_FUSE, gemId, socketCount, socketCost, unsocketCost, isLookSlot } from '../data/items.js';
 import { ELEMENT_IDS, MAX_RES } from '../data/elements.js';
 import { QUESTS, NPCS, RETIRED_QUESTS } from '../data/npcs.js';
 import { MAIN_ORDER } from '../data/story.js';
@@ -24,7 +24,7 @@ export function newCharacter(name, cls) {
     hp: 1, mp: 1,
     stats: { ...c.base }, statPoints: 0, skillPoints: 0,
     skills: { [c.skills[0]]: 1 },
-    inventory: [], equip: { weapon: null, hat: null, armor: null, acc: null, outfit: null },
+    inventory: [], equip: { weapon: null, hat: null, armor: null, acc: null, outfit: null, cape: null },
     quests: {}, flags: {}, map: 'village', x: 380,
     createdAt: Date.now(), playTime: 0,
   };
@@ -45,7 +45,7 @@ export function normalizeCharacter(ch) {
   ch.stats = { ...c.base, ...(ch.stats || {}) };
   ch.skills = ch.skills || { [c.skills[0]]: 1 };
   ch.inventory = (ch.inventory || []).filter((e) => e && ITEMS[e.id]);
-  ch.equip = { weapon: null, hat: null, armor: null, acc: null, outfit: null, ...(ch.equip || {}) };
+  ch.equip = { weapon: null, hat: null, armor: null, acc: null, outfit: null, cape: null, ...(ch.equip || {}) };
   for (const k of Object.keys(ch.equip)) if (ch.equip[k] && !ITEMS[ch.equip[k].id]) ch.equip[k] = null;
   ch.quests = ch.quests || {};
   ch.flags = ch.flags && typeof ch.flags === 'object' ? ch.flags : {};
@@ -285,7 +285,7 @@ export function craft(ch, r, n = 1) {
   for (let k = 0; k < n; k++) {
     const oid = resolveItemId(oid0, ch.cls);
     const it = ITEMS[oid];
-    const ok = it.type === 'equip' ? addItem(ch, oid, 1, it.slot === 'outfit' ? 3 : 1, {}) : addItem(ch, oid, qty);
+    const ok = it.type === 'equip' ? addItem(ch, oid, 1, isLookSlot(it.slot) ? 3 : 1, {}) : addItem(ch, oid, qty);
     if (!ok) return { ok: false, msg: 'Túi đồ đầy', out };
     for (const [id, q] of r.need) removeItem(ch, id, q);
     ch.gold -= r.gold;

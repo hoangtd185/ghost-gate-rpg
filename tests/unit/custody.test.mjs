@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { openDb } from '../../server/src/db.js';
 import { newCharacter } from '../../client/src/game/character.js';
+import { craftGrants } from '../../client/src/game/loot.js';
 import { GAME } from '../../client/src/config.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qmq-custody-'));
@@ -201,6 +202,38 @@ describe('group commit', () => {
   });
 });
 
+describe('capes', () => {
+  it('a crafted cape is kept, equipped in the cape slot, once its materials are used up', () => {
+    db.grantItem(B, { id: 'mat_tail', qty: 10, r: 0, b: {} }, { reqId: 'cape:t' });
+    db.grantItem(B, { id: 'mat_straw', qty: 5, r: 0, b: {} }, { reqId: 'cape:s' });
+    const ch = load(B);
+    ch.inventory = ch.inventory.filter((e) => e.id !== 'mat_tail' && e.id !== 'mat_straw');
+    ch.equip.cape = { uid: 'cape1', id: 'cape_traveler', qty: 1, r: 3, b: {} };
+    assert.equal(db.saveCharacter(uid, ch).items, undefined, 'nothing refused');
+    assert.equal(load(B).equip.cape?.id, 'cape_traveler');
+  });
+
+  it('an item saved in a slot that is not its own goes back to the bag', () => {
+    const ch = load(B);
+    ch.equip.cape = ch.equip.armor; ch.equip.armor = null; // body armor claimed to be a cape
+    const res = db.saveCharacter(uid, ch);
+    const after = load(B);
+    assert.equal(after.equip.cape, null);
+    assert.ok(after.inventory.some((e) => e.id === 'arm_cloth'));
+    assert.ok(res.items?.inventory.some((e) => e.id === 'arm_cloth'), 'the client is told where the item really is');
+    assert.equal(res.items.equip.cape, null);
+  });
+
+  it('crafting materials pay for one recipe only', () => {
+    const grants = (used) => craftGrants(new Map(Object.entries(used)), 'swordsman');
+    assert.equal(grants({ mat_tail: 10, mat_straw: 5 }).get('cape_traveler'), 1, 'enough for one craft');
+    const shared = grants({ mat_tail: 60, mat_peach: 15, mat_dew: 1, mat_straw: 5 }); // tails for the fox robe only
+    assert.equal(shared.get('out_fox'), 1);
+    assert.equal(shared.get('cape_traveler'), undefined, 'the same tails cannot also make a cape');
+    const both = grants({ mat_tail: 70, mat_peach: 15, mat_dew: 1, mat_straw: 5 });
+    assert.deepEqual([both.get('out_fox'), both.get('cape_traveler')], [1, 1], 'enough for both');
+  });
+});
 describe('review fixes: bonus stats, renamed items, quests', () => {
   it('bonus stats on an item a save adds: none at rarity 0, only rollable stats within range above', () => {
     const ch = load(A);

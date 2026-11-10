@@ -28,7 +28,7 @@ const num = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
 // What other players need to draw someone: class, level, title and the ids of visible gear (from the saved character)
 function appearanceOf(ch) {
   const look = {};
-  for (const slot of ['weapon', 'hat', 'armor', 'outfit']) {
+  for (const slot of ['weapon', 'hat', 'armor', 'outfit', 'cape']) {
     const id = ch.equip?.[slot]?.id;
     if (id && ITEMS[id]) look[slot] = id;
   }

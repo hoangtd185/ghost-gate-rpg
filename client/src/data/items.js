@@ -130,7 +130,7 @@ export const GEM_KINDS = {
 export const GEM_GRADES = ['Sơ', 'Trung', 'Thượng'];
 // Gem kinds each equipment slot accepts
 export const GEM_SLOTS = {
-  weapon: ['atk', 'crit', 'mp'], hat: ['hp', 'def', 'mp'], armor: ['hp', 'def', 'mp'], acc: ['atk', 'crit', 'hp', 'def', 'mp'], outfit: [],
+  weapon: ['atk', 'crit', 'mp'], hat: ['hp', 'def', 'mp'], armor: ['hp', 'def', 'mp'], acc: ['atk', 'crit', 'hp', 'def', 'mp'], outfit: [], cape: [],
 };
 export const GEM_FUSE = GAME.forge.gemFuse; // tuned in config.js
 export const gemId = (kind, g) => `gem_${kind}${g}`;
@@ -145,7 +145,7 @@ for (const [kind, k] of Object.entries(GEM_KINDS)) {
 }
 // Socket count: 1 + (Rare or better) + (enhanced to +7 or more)
 export function socketCount(e) {
-  if (ITEMS[e.id].slot === 'outfit') return 0; // outfits have no sockets
+  if (isLookSlot(ITEMS[e.id].slot)) return 0; // outfits and capes have no sockets
   return 1 + ((e.r || 0) >= 2 ? 1 : 0) + ((e.e || 0) >= 7 ? 1 : 0);
 }
 export function socketCost(it, g) { return 60 * g * g + (it.lv || 1) * 12; }
@@ -187,7 +187,23 @@ Object.assign(ITEMS, {
     look: { robe: '#3a0a14', trim: '#d8243a', inner: '#14060a', pants: '#140a0e', shoulder: '#5a1420', cape: { c: '#1a060a', t: '#d8243a' }, pattern: { kind: 'moon', c: '#ff3a4a' }, halfmask: true, aura: '#ff2a4a' } },
 });
 
-export const SLOT_NAMES = { weapon: 'Vũ khí', hat: 'Mũ', armor: 'Áo', acc: 'Phụ kiện', outfit: 'Ngoại trang' };
+// ===== Capes: their own equipment slot (worn together with an outfit), flowing cloth drawn live (gfx/cape.js) =====
+// cape: { c, c2, t, len, w, hem, motif, mc, alpha, lining, fx } — see the top of gfx/cape.js.
+// A cape replaces an outfit's own cape (Hắc Long Bào, Phượng Vũ Y, Huyết Nguyệt Chiến Giáp); everything else of the
+// outfit stays (hood, tail, ribbons, aura).
+Object.assign(ITEMS, {
+  cape_traveler: { name: 'Áo Choàng Lữ Khách', type: 'equip', slot: 'cape', lv: 1, color: '#8a6a48', price: 0,
+    stats: { hp: 20, def: 2 }, src: 'Thêu ở Tú Nương (Làng Trúc Lâm)',
+    cape: { c: '#8a6a48', c2: '#5a4430', t: '#c8a878', len: 22, w: 13, hem: 'plain', lining: '#c8a878' } },
+  cape_moon: { name: 'Nguyệt Ảnh Phi Phong', type: 'equip', slot: 'cape', lv: 12, color: '#2a3460', price: 0,
+    stats: { hp: 60, mp: 40, crit: 2 }, src: 'Thêu ở Tú Nương (Làng Trúc Lâm)',
+    cape: { c: '#2a3460', c2: '#141a34', t: '#d8e0f8', len: 26, w: 15, hem: 'scallop', motif: 'moon', mc: '#eef2ff', lining: '#6a78b8', fx: { c: '#dce6ff', shape: 'star' } } },
+});
+
+// Cosmetic slots: outfits and capes (no sockets, always Legendary, change how the character looks)
+export const isLookSlot = (slot) => slot === 'outfit' || slot === 'cape';
+
+export const SLOT_NAMES = { weapon: 'Vũ khí', hat: 'Mũ', armor: 'Áo', acc: 'Phụ kiện', outfit: 'Ngoại trang', cape: 'Áo choàng' };
 export const STAT_NAMES = {
   atk: 'Công', def: 'Thủ', hp: 'Máu', mp: 'Nội lực', str: 'Sức', dex: 'Nhanh', int: 'Trí', vit: 'Thể', crit: 'Chí mạng %',
   res_fire: 'Kháng Hỏa %', res_ice: 'Kháng Băng %', res_thunder: 'Kháng Lôi %', res_poison: 'Kháng Độc %',

@@ -15,7 +15,7 @@ export const GAME = {
   // ----- Character -----
   player: {
     classes: ['swordsman', 'taoist', 'assassin'], // ids in data/classes.js
-    equipSlots: ['weapon', 'hat', 'armor', 'acc', 'outfit'],
+    equipSlots: ['weapon', 'hat', 'armor', 'acc', 'outfit', 'cape'],
     maxLevel: 50,
     invSize: 36,
     statPointsPerLevel: 5,
@@ -94,6 +94,23 @@ export const GAME = {
 
   // ----- Pet -----
   pet: { pickRange: 330, flySpeed: 240 },
+
+  // ----- Capes: cloth simulation (gfx/cape.js) -----
+  cape: {
+    segments: 7, // points along the cape, the first one pinned to the shoulders
+    gravity: 520,
+    step: 1 / 120, // fixed simulation step (s), independent of the frame rate
+    airDrag: 9, // share of the cloth's own speed lost per second: the air holds it back, so it trails while running
+    backPull: 170, // drift backward (away from the facing direction) so the cape drapes over the back, even standing still
+    flutter: 0.6, // wave strength while moving (× speed)
+    flutterFreq: 9,
+    idleSway: 9, // gentle breeze while standing still
+    iterations: 3, // length constraint passes per step
+    maxRise: 0.35, // a point may rise at most this share of a segment above the one before (no cape flipping over the head)
+    maxDt: 1 / 15, // longer frames (tab in the background) are not caught up
+    resetDist: 90, // the anchor jumped this far (teleport, map change): restart the cloth
+    botChance: 0.3, // share of bots wearing a cape
+  },
 
   // ----- Saving -----
   save: {

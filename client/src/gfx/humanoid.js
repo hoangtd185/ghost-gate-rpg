@@ -33,6 +33,18 @@ const POSES = [
 ];
 export const HUM_FRAMES = { idle: [0, 1, 0, 1, 0, 2], walk: [3, 4, 5, 6, 7, 8], jump: [9], atk: [10, 11], hurt: [12], sit: [13], run: [14, 15, 16, 17, 18, 19] };
 
+// Back of the neck in sheet pixels for frame f (where a flowing cape is pinned, see gfx/cape.js)
+export function capeAnchor(f) {
+  const P = POSES[f] || POSES[0];
+  const bodyX = 24.5 + P.lean * 0.6, bodyY = 27.5 + P.bob, hipY = 41 + P.bob;
+  let x = bodyX - 2.6, y = bodyY - 0.8;
+  if (P.tilt) { // the run cycle pitches the upper body forward around the hips
+    const dx = x - bodyX, dy = y - hipY, c = Math.cos(P.tilt), s = Math.sin(P.tilt);
+    x = bodyX + dx * c - dy * s; y = hipY + dx * s + dy * c;
+  }
+  return [x + SIDE, y + TOP];
+}
+
 // ---------------- body parts ----------------
 function drawLeg(ctx, hx, hy, ang, pants, boot, fold) {
   ctx.save();

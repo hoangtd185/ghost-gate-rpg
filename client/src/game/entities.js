@@ -3,9 +3,10 @@ import { GROUND_Y } from '../data/maps.js';
 import { MONSTERS } from '../data/monsters.js';
 import { CLASSES } from '../data/classes.js';
 import { ITEMS } from '../data/items.js';
-import { humanoidSheet, HUM_W, HUM_FEET } from '../gfx/humanoid.js';
+import { humanoidSheet, capeAnchor, HUM_W, HUM_FEET } from '../gfx/humanoid.js';
+import { CapeCloth } from '../gfx/cape.js';
 import { monsterSheet } from '../gfx/monsters.js';
-import { drawFrame } from '../gfx/draw.js';
+import { drawFrame, shade } from '../gfx/draw.js';
 import { clamp, rand, randInt } from '../engine/util.js';
 import { GAME } from '../config.js';
 import { MobState } from './mobsim.js';
@@ -23,7 +24,13 @@ export class Humanoid {
     this.atkT = 0; this.hurtT = 0;
     this.setLook(look);
   }
-  setLook(look) { this.look = look; this.sheet = humanoidSheet(look); }
+  // the flowing cape is drawn live (gfx/cape.js), so it is left out of the cached sprite sheet
+  setLook(look) {
+    this.look = look;
+    const { liveCape, ...sheetLook } = look;
+    this.sheet = humanoidSheet(sheetLook);
+    if (liveCape && !this.cloth) this.cloth = new CapeCloth();
+  }
   get cx() { return this.x + this.w / 2; }
   get cy() { return this.y + this.h / 2; }
   updateAnim(dt) {
@@ -47,12 +54,28 @@ export class Humanoid {
     const f = this.frameIndex();
     const dx = this.x + this.w / 2 - HUM_W / 2 - camX;
     const dy = this.y + this.h - HUM_FEET;
+    const cape = this.look.liveCape;
     ctx.save();
     if (alpha < 1) ctx.globalAlpha = alpha;
+    if (cape) this.drawCape(ctx, camX, f, cape);
     drawFrame(ctx, this.sheet, f, dx, dy, this.facing < 0);
+    if (cape) this.cloth.drawClasp(ctx, camX, cape, this.facing < 0 ? -1 : 1);
     ctx.restore();
   }
+  // Moves the cloth with the body (time since the last frame drawn), then draws it behind the sprite
+  drawCape(ctx, camX, f, cape) {
+    const now = performance.now(), dt = this.capeAt ? (now - this.capeAt) / 1000 : 0;
+    this.capeAt = now;
+    const [ax, ay] = capeAnchor(f), face = this.facing < 0 ? -1 : 1;
+    const left = this.x + this.w / 2 - HUM_W / 2;
+    const wx = face > 0 ? left + ax : left + HUM_W - ax, wy = this.y + this.h - HUM_FEET + ay;
+    this.cloth.update(wx, wy, face, this.vx || 0, dt, cape.len, this.y + this.h + 1);
+    this.cloth.draw(ctx, camX, cape, face);
+  }
 }
+
+// An outfit's built-in cape (look.cape: { c, t, feather }) as a flowing cape
+const outfitCape = (c) => ({ c: c.c, c2: shade(c.c, -0.35), t: c.t, len: 24, w: 15, hem: c.feather ? 'feather' : 'plain' });
 
 export function lookFor(ch) {
   const c = CLASSES[ch.cls];
@@ -69,6 +92,11 @@ export function lookFor(ch) {
     Object.assign(look, out.look);
     if (out.look.hood || out.look.crown) delete look.hat;
   }
+  // capes flow (gfx/cape.js): a cape in the cape slot replaces an outfit's own cape, which flows too otherwise
+  const cape = ch.equip.cape && ITEMS[ch.equip.cape.id];
+  if (cape && cape.cape) look.liveCape = cape.cape;
+  else if (look.cape) look.liveCape = outfitCape(look.cape);
+  delete look.cape;
   return look;
 }
 

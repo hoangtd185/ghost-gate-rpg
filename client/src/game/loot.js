@@ -1,7 +1,7 @@
 // Loot rules shared by the client (offline / artifact builds) and the server (online play).
 // Plain logic over data modules: no DOM, no Node-only imports.
 import { MONSTERS } from '../data/monsters.js';
-import { ITEMS, GEM_KINDS, gemId } from '../data/items.js';
+import { ITEMS, GEM_KINDS, gemId, isLookSlot } from '../data/items.js';
 import { NAMED, CHIEF } from '../data/affixes.js';
 import { NPCS, QUESTS } from '../data/npcs.js';
 import { RECIPES } from '../data/recipes.js';
@@ -39,7 +39,7 @@ export function rollDrops(kill, cls, table = null) {
     const it = ITEMS[id];
     if (!it) continue;
     const data = { id, qty: 1, r: 0, b: {} };
-    if (it.slot === 'outfit') { data.r = 3; data.rare = true; }
+    if (isLookSlot(it.slot)) { data.r = 3; data.rare = true; }
     else if (it.type === 'equip') {
       const strong = boss || named || elite;
       const luck = chief ? CHIEF.luck : strong ? GAME.monsters.elite.luck : 0;
@@ -120,11 +120,14 @@ export function questGrants(before, after, cls) {
 const resolveId = (id, cls) => (/^W\d$/.test(id) ? `w_${cls}${id[1]}` : id);
 
 // Items a save may add because it used up crafting materials. used: Map item id -> quantity consumed
+// Materials count once: recipes take from what is left, in RECIPES order, so one lot cannot pay for two recipes.
 export function craftGrants(used, cls) {
-  const m = new Map();
+  const m = new Map(), left = new Map(used);
   for (const r of RECIPES) {
-    const n = Math.min(...r.need.map(([id, q]) => Math.floor((used.get(id) || 0) / q)));
-    if (n > 0) for (const x of expandId(resolveId(r.out[0], cls))) addTo(m, x, n * r.out[1]);
+    const n = Math.min(...r.need.map(([id, q]) => Math.floor((left.get(id) || 0) / q)));
+    if (n <= 0) continue;
+    for (const [id, q] of r.need) left.set(id, left.get(id) - q * n);
+    for (const x of expandId(resolveId(r.out[0], cls))) addTo(m, x, n * r.out[1]);
   }
   return m;
 }

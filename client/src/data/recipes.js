@@ -9,6 +9,11 @@ export const RECIPES = [
     need: [['mat_icesilk', 40], ['mat_fur', 20], ['mat_ice', 15], ['mat_dew', 2]] },
   { id: 'r_fox', cat: 'outfit', out: ['out_fox', 1], gold: 10000,
     need: [['mat_tail', 60], ['mat_peach', 15], ['mat_dew', 1]] },
+  // ----- Capes -----
+  { id: 'r_cape_traveler', cat: 'cape', out: ['cape_traveler', 1], gold: 500,
+    need: [['mat_tail', 10], ['mat_straw', 5]] },
+  { id: 'r_cape_moon', cat: 'cape', out: ['cape_moon', 1], gold: 8000,
+    need: [['mat_icesilk', 20], ['mat_wisp', 30], ['mat_ice', 8]] },
   // ----- Consumables -----
   { id: 'r_hp', cat: 'use', out: ['hp_l', 5], gold: 80, need: [['mat_tail', 4], ['mat_wisp', 4]] },
   { id: 'r_mp', cat: 'use', out: ['mp_l', 5], gold: 100, need: [['mat_wisp', 6], ['mat_slime', 2]] },

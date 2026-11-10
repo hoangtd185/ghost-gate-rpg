@@ -2,7 +2,7 @@
 import { MAPS, GROUND_Y } from '../data/maps.js';
 import { MONSTERS } from '../data/monsters.js';
 import { CLASSES, SKILLS } from '../data/classes.js';
-import { ITEMS } from '../data/items.js';
+import { ITEMS, isLookSlot } from '../data/items.js';
 import { NPCS, QUESTS } from '../data/npcs.js';
 import { AFFIXES, NAMED } from '../data/affixes.js';
 import { ELEMENTS } from '../data/elements.js';
@@ -59,7 +59,7 @@ const SKILL_FX = {
 function isRareDrop(e) {
   const it = ITEMS[e.id];
   if (!it) return false;
-  if (it.slot === 'outfit') return true;
+  if (isLookSlot(it.slot)) return true;
   if (it.type === 'equip') return (e.r || 0) >= 2;
   if (it.type === 'gem') return it.gem.g >= 2;
   return e.id.startsWith('orb_') || e.id === 'protect';
@@ -1035,6 +1035,16 @@ export class GameWorld {
     this.particles.push({ x, y, vx: 0, vy: 0, t: 0, life: 0.6, size: 2, color: '#fff', grav: 0, drag: 0.9, shape: 'dot', glow: true, spin: rand(-6, 6), ...o });
   }
 
+  capeFx(h, dt) {
+    const fx = h.look && h.look.liveCape && h.look.liveCape.fx, tip = fx && h.cloth && h.cloth.tip();
+    if (!tip || h.dead || Math.random() > dt * (Math.abs(h.vx) > 5 ? 14 : 3)) return;
+    const o = { x: tip.x + rand(-4, 4), y: tip.y + rand(-3, 2), c: fx.c };
+    if (fx.shape === 'ember') this.spark(o.x, o.y, { vx: rand(-10, 10), vy: rand(-40, -15), color: o.c, size: rand(1, 2), life: rand(0.4, 0.8), drag: 0.97 });
+    else if (fx.shape === 'snow') this.spark(o.x, o.y, { vx: rand(-8, 8), vy: rand(6, 20), color: o.c, size: rand(1, 1.8), life: rand(0.8, 1.3), drag: 0.99, glow: false });
+    else if (fx.shape === 'wisp') this.spark(o.x, o.y, { vx: rand(-6, 6), vy: rand(-25, -8), color: o.c, size: rand(1.5, 2.6), life: rand(0.6, 1.1), drag: 0.97, shape: 'bubble' });
+    else this.spark(o.x, o.y, { vx: rand(-12, 12), vy: rand(-10, 14), color: o.c, size: rand(1.2, 2.4), life: rand(0.6, 1.1), drag: 0.97, shape: fx.shape === 'petal' ? 'petal' : 'star', glow: fx.shape !== 'petal' });
+  }
+
   burst(x, y, color, n = 8, speed = 70, o = {}) {
     for (let i = 0; i < n; i++) {
       const a = rand(0, Math.PI * 2), s = rand(speed * 0.4, speed);
@@ -1087,6 +1097,8 @@ export class GameWorld {
     if (aura && !p.dead && Math.random() < dt * 10) {
       this.spark(p.cx + rand(-12, 12), p.y + p.h - rand(0, 4), { vy: rand(-45, -20), vx: rand(-6, 6), color: aura, size: rand(1, 2.2), life: rand(0.7, 1.2), drag: 0.98, shape: ['#9fffd8', '#ffc0d8', '#fff0f6'].includes(aura) ? 'petal' : 'star' });
     }
+    // capes with an effect shed particles from their hem while the wearer moves (us and other players)
+    for (const h of [p, ...this.remotes.values()]) this.capeFx(h, dt);
     for (const b of p.buffs) {
       if (Math.random() < dt * 9) {
         const col = '#ffe27a';
