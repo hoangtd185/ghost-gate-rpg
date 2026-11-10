@@ -131,6 +131,22 @@ Like Võ Lâm Truyền Kỳ: both players put items into a shared window, lock, 
 
 Items in your offer cannot be used, equipped, sold, dropped or forged while the trade is open. Closing the window, Esc, changing map or disconnecting cancels it; nothing moves. Offers are checked against the **saved** bag, so the client saves when the window opens; a mismatch answers `trade_err {why: 'sync'}`, the client saves and offers again.
 
+## 4b. Premium shop and Nguyên Bảo
+
+Nguyên Bảo (ingots) is the premium shop's currency (Vạn Bảo Các, merchant in the village or **B**). It is never bought with money; it is earned in game:
+
+| Source | Amount (`GAME.premium`) | Who decides online |
+|---|---|---|
+| Daily check-in (the day starts at midnight Vietnam time), +bonus every 7th day in a row | 10, +40 | Server (`checkin` column, one per day) |
+| A chieftain / a field boss: every member of the group that did the most damage | 2 / 5 | Server (`mobs.js` → `premium.kill`) |
+| Quests with `reward.ingots` (chapter finales, world quests), once each | per quest | Server, once the quest is **done in the saved character** (`claim`, ledger request id `quest:<char>:<quest>`) |
+
+Online the balance is a column the server owns: an uploaded save never changes `ingots` or `checkin`. Every change is a ledger row (`kind: 'ingots'`) at a new `item_rev`, so it reaches the client through the same change replay as pickups. A purchase is one transaction: bag room checked, items granted (cosmetics Legendary), ingots taken; `req` makes a repeated click harmless. Offline the save holds the balance and `game/premium.js` applies the same rules locally.
+
+The balance never goes below zero: `addIngotsTx` only applies a change that leaves it at 0 or more and throws otherwise (the transaction is undone, no ledger row, no revision bump). Kill rewards use the request id `kill:<map>:<time>:<uid>:<char>` (monster uids restart on each map). If an answer to `buy` or `checkin` is lost (the connection drops), the client's button waits `GAME.premium.replyTimeoutSec`, then works again; a retry of the same purchase reuses its `req`, so the server applies it once.
+
+Quest Nguyên Bảo online: the client queues the completion, sends `claim` after the next successful save, keeps it on `not_done` (the save was stale), and claims every finished ingot quest again on each (re)connect; the ledger gives each one once.
+
 ## 5. Protocol
 
 JSON text frames, `t` is the message type.
@@ -147,6 +163,7 @@ JSON text frames, `t` is the message type.
 | C → S | `party_invite {to}` · `party_answer {from, yes}` · `party_leave` | Party. |
 | C → S | `pick {id}` | Pick up one of our server drops. |
 | C → S | `trade_ask {to}` · `trade_answer {from, yes}` · `trade_offer {items: [{uid, qty}], gold}` · `trade_lock {on}` · `trade_confirm` · `trade_cancel` | Trade. |
+| C → S | `prem {op: 'buy', offer, req}` · `prem {op: 'checkin'}` · `prem {op: 'claim', quest}` | Premium shop: buy an offer (`req`: our request id, a repeat is applied once), the daily check-in, Nguyên Bảo for a completed quest. 30 per minute. See §4b. |
 | S → C | `welcome {id, online}` · `online {n}` | Connected; player count. |
 | S → C | `snap {map, players}` · `join {p}` · `leave {id}` | Who is on our map. |
 | S → C | `st {s: [[id, x, y, vx, f, a], …]}` | Batched movement, one message per map per tick (10 Hz). |
@@ -161,7 +178,8 @@ JSON text frames, `t` is the message type.
 | S → C | `loot {k, map, drops: [{id, it, rare, x, y}], why?}` | Drops for story-boss kill `k` (empty with `why` if refused). |
 | S → C | `drops {map, drops}` | Our unpicked drops on this map (after a reconnect or coming back). |
 | S → C | `pick {id, ok, why?}` | Pickup result, after the commit; `why`: `gone`, `far`, `full`, `busy` (rate limit or queue full: try again). The item itself arrives in `chg`. |
-| S → C | `chg {list: [{rev, kind, uid, id, qty, entry}], rev}` | Item/gold changes to apply, oldest first. `kind`: `gain` (add `entry`), `loss` (remove `uid`), `gold` (add `qty`). |
+| S → C | `chg {list: [{rev, kind, uid, id, qty, entry}], rev}` | Item/gold changes to apply, oldest first. `kind`: `gain` (add `entry`), `loss` (remove `uid`), `gold` (add `qty`), `ingots` (add `qty` Nguyên Bảo). |
+| S → C | `prem {op, ok, why?, req?, offer?, got?, streak?, quest?}` | Premium answer (`why`: `ingots`, `full`, `offer`, `done`, `dup`, `not_done`, `none`, `rate`); `op: 'kill'` tells us a chieftain / field boss paid Nguyên Bảo. Balance and items arrive in `chg`. |
 | S → C | `trade_ask {from, name}` · `trade_open {id, with}` · `trade_state {id, me, them}` · `trade_end {id, why, by?}` · `trade_err {why}` | Trade. |
 
 REST additions: `PUT /api/characters/:id` answers `{ok, itemRev, stale, items?}`; `GET /api/characters/:id/changes?since=rev` returns `{list, rev}`.

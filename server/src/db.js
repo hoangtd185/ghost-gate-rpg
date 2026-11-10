@@ -9,6 +9,7 @@ import { legacyItem } from '../../client/src/data/legacy.js';
 import { QUESTS } from '../../client/src/data/npcs.js';
 import { bonusLimits, todayKey } from '../../client/src/game/character.js';
 import { isFreeItem, freeItems, questGrants, craftGrants, starterKit } from '../../client/src/game/loot.js';
+import { offerById, offerItems, cellsNeeded, checkinReward, premiumDay, questIngots } from '../../client/src/game/premium.js';
 const isFreeItemId = (id) => freeItems().has(id);
 
 const SCHEMA = `
@@ -79,12 +80,12 @@ CREATE TABLE IF NOT EXISTS item_ledger (
   at           INTEGER NOT NULL,
   character_id TEXT NOT NULL,
   rev          INTEGER NOT NULL,
-  kind         TEXT NOT NULL,                -- gain | loss | gold | rejected
+  kind         TEXT NOT NULL,                -- gain | loss | gold | ingots | rejected
   item_uid     TEXT,
   item_id      TEXT,
-  qty          INTEGER NOT NULL DEFAULT 0,   -- items: quantity; gold: signed amount
+  qty          INTEGER NOT NULL DEFAULT 0,   -- items: quantity; gold, ingots: signed amount
   entry        TEXT,                         -- JSON item for gains (what the client adds)
-  reason       TEXT NOT NULL,                -- drop | trade | save
+  reason       TEXT NOT NULL,                -- drop | trade | save | premium | checkin | kill | quest
   ref          TEXT,                         -- drop id, trade id, partner, why a save was refused
   req_id       TEXT UNIQUE                   -- idempotency key: the same request never applies twice
 );
@@ -109,6 +110,9 @@ function migrate(db) {
   if (!cols.includes('flags')) db.exec("ALTER TABLE characters ADD COLUMN flags TEXT NOT NULL DEFAULT '{}'");
   // item_rev: bumped on every server-side item/gold change; saves made from an older rev do not touch items or gold
   if (!cols.includes('item_rev')) db.exec('ALTER TABLE characters ADD COLUMN item_rev INTEGER NOT NULL DEFAULT 0');
+  // Nguyên Bảo (premium currency) and the last daily check-in ({ day, streak } JSON): only the server changes them
+  if (!cols.includes('ingots')) db.exec('ALTER TABLE characters ADD COLUMN ingots INTEGER NOT NULL DEFAULT 0');
+  if (!cols.includes('checkin')) db.exec('ALTER TABLE characters ADD COLUMN checkin TEXT');
   const icols = db.prepare('PRAGMA table_info(items)').all().map((c) => c.name);
   if (!icols.includes('enhance')) db.exec('ALTER TABLE items ADD COLUMN enhance INTEGER NOT NULL DEFAULT 0');
   if (!icols.includes('el')) db.exec('ALTER TABLE items ADD COLUMN el TEXT');
@@ -178,6 +182,10 @@ class GameDb {
         stat_str=?, stat_dex=?, stat_int=?, stat_vit=?, stat_points=?, skill_points=?, skills=?, pet=?, title=?, flags=?, play_time=?, updated_at=?
         WHERE id = ? AND user_id = ?`),
       setGold: db.prepare('UPDATE characters SET gold = ? WHERE id = ?'),
+      addIngots: db.prepare('UPDATE characters SET ingots = ingots + ? WHERE id = ? AND ingots + ? >= 0 RETURNING ingots'),
+      setCheckin: db.prepare('UPDATE characters SET checkin = ? WHERE id = ?'),
+      questState: db.prepare('SELECT state FROM quests WHERE character_id = ? AND quest_id = ?'),
+      bagOf: db.prepare('SELECT item_id FROM items WHERE character_id = ? AND equip_slot IS NULL'),
       bumpRev: db.prepare('UPDATE characters SET item_rev = item_rev + 1 WHERE id = ? RETURNING item_rev'),
       itemByUid: db.prepare('SELECT * FROM items WHERE uid = ?'),
       invCount: db.prepare('SELECT COUNT(*) AS n FROM items WHERE character_id = ? AND equip_slot IS NULL'),
@@ -186,7 +194,7 @@ class GameDb {
       moveItem: db.prepare('UPDATE items SET character_id = ?, equip_slot = NULL, position = ? WHERE uid = ?'),
       ledgerAdd: db.prepare('INSERT INTO item_ledger (at, character_id, rev, kind, item_uid, item_id, qty, entry, reason, ref, req_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
       ledgerByReq: db.prepare('SELECT * FROM item_ledger WHERE req_id = ?'),
-      ledgerSince: db.prepare("SELECT rev, kind, item_uid, item_id, qty, entry FROM item_ledger WHERE character_id = ? AND rev > ? AND kind IN ('gain', 'loss', 'gold') ORDER BY rev, id"),
+      ledgerSince: db.prepare("SELECT rev, kind, item_uid, item_id, qty, entry FROM item_ledger WHERE character_id = ? AND rev > ? AND kind IN ('gain', 'loss', 'gold', 'ingots') ORDER BY rev, id"),
       ledgerOf: db.prepare('SELECT * FROM item_ledger WHERE character_id = ? ORDER BY id'),
       deleteChar: db.prepare('DELETE FROM characters WHERE id = ? AND user_id = ?'),
       itemsOf: db.prepare('SELECT * FROM items WHERE character_id = ? ORDER BY position'),
@@ -226,6 +234,7 @@ class GameDb {
       flags: JSON.parse(row.flags || '{}'),
       inventory: [], equip: { weapon: null, hat: null, armor: null, acc: null, outfit: null, cape: null }, quests: {},
       createdAt: row.created_at, itemRev: row.item_rev || 0,
+      ingots: row.ingots || 0, checkin: row.checkin ? JSON.parse(row.checkin) : null,
     };
     for (const it of this.q.itemsOf.all(row.id)) {
       const e = rowToEntry(it);
@@ -444,6 +453,72 @@ class GameDb {
         this.q.ledgerAdd.run(now, sd.charId, revs[sd.charId], 'gold', null, null, delta, null, 'trade', String(tradeId), `trade:${tradeId}:gold:${sd.charId}`);
       }
       return { ok: true, revs };
+    });
+  }
+
+  // ===== Nguyên Bảo (premium currency) =====
+  // The balance changes only here, each change with a ledger row (kind 'ingots') at a new item revision, so the
+  // client gets it through the same change replay as pickups. Uploaded saves never touch it.
+  // Run inside a transaction. A change that would take the balance below zero (or an unknown character) throws, so
+  // the whole transaction is undone: no ledger row, no revision bump.
+  addIngotsTx(charId, n, reason, ref, reqId) {
+    if (reqId && this.q.ledgerByReq.get(reqId)) return { dup: true };
+    const delta = int(n);
+    const now = this.q.addIngots.get(delta, charId, delta);
+    if (!now) throw new Error(`ingots: cannot apply ${delta} to ${charId}`);
+    const rev = this.q.bumpRev.get(charId).item_rev;
+    this.q.ledgerAdd.run(Date.now(), charId, rev, 'ingots', null, null, delta, null, reason, ref, reqId);
+    return { rev, ingots: now.ingots };
+  }
+
+  // Ingots won outside the shop (field bosses, chieftains). Returns { rev, ingots } | { dup: true } | null
+  grantIngots(charId, n, reason, ref, reqId) {
+    return this.transaction(() => (this.q.charById.get(charId) ? this.addIngotsTx(charId, n, reason, ref, reqId) : null));
+  }
+
+  // Buy a premium offer: items into the bag and ingots taken, together or not at all. reqId: the client's request id.
+  // Returns { ok: true, rev, ingots } | { ok: false, why: 'offer' | 'ingots' | 'full' | 'dup' | 'gone' }
+  premiumBuy(charId, offerId, reqId) {
+    return this.transaction(() => {
+      const row = this.q.charById.get(charId), o = offerById(offerId);
+      if (!row) return { ok: false, why: 'gone' };
+      if (!o) return { ok: false, why: 'offer' };
+      if (this.q.ledgerByReq.get(reqId)) return { ok: false, why: 'dup' };
+      if (row.ingots < o.price) return { ok: false, why: 'ingots' };
+      const bag = this.q.bagOf.all(charId).map((r) => ({ id: r.item_id }));
+      if (bag.length + cellsNeeded(bag, o) > INV_SIZE) return { ok: false, why: 'full' };
+      offerItems(o).forEach((item, i) => {
+        const g = this.grantItemTx(charId, item, { reason: 'premium', ref: o.id, reqId: `${reqId}:${i}` });
+        if (!g || !g.entry) throw new Error('premium grant failed');
+      });
+      const r = this.addIngotsTx(charId, -o.price, 'premium', o.id, reqId);
+      return { ok: true, rev: r.rev, ingots: r.ingots };
+    });
+  }
+
+  // The daily check-in. Returns { ok: true, rev, ingots, got, streak } | { ok: false, why: 'done' | 'gone' }
+  checkin(charId, now = Date.now()) {
+    return this.transaction(() => {
+      const row = this.q.charById.get(charId);
+      if (!row) return { ok: false, why: 'gone' };
+      const r = checkinReward(row.checkin ? JSON.parse(row.checkin) : null, premiumDay(now));
+      if (!r) return { ok: false, why: 'done' };
+      this.q.setCheckin.run(JSON.stringify({ day: r.day, streak: r.streak }), charId);
+      const g = this.addIngotsTx(charId, r.ingots, 'checkin', r.day, `checkin:${charId}:${r.day}`);
+      return { ok: true, rev: g.rev, ingots: g.ingots, got: r.ingots, streak: r.streak };
+    });
+  }
+
+  // Ingots for a completed quest, once. The quest must be done in the saved character.
+  // Returns { ok: true, rev, ingots, got } | { ok: false, why: 'none' | 'not_done' | 'dup' | 'gone' }
+  claimQuest(charId, qid) {
+    return this.transaction(() => {
+      if (!this.q.charById.get(charId)) return { ok: false, why: 'gone' };
+      const n = questIngots(qid);
+      if (!n) return { ok: false, why: 'none' };
+      if (this.q.questState.get(charId, str(qid, 30))?.state !== 'done') return { ok: false, why: 'not_done' };
+      const g = this.addIngotsTx(charId, n, 'quest', qid, `quest:${charId}:${qid}`);
+      return g.dup ? { ok: false, why: 'dup' } : { ok: true, rev: g.rev, ingots: g.ingots, got: n };
     });
   }
 

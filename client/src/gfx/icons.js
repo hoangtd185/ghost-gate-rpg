@@ -187,6 +187,15 @@ export function itemIcon(icon, color, slotLook) {
       paint(ctx, rrect(4.3, 8.5, 7.5, 1.6, 0.6), '#e2b85c', OUTLINE, 0.5);
       break;
     }
+    case 'ingot': { // Nguyên Bảo: a gold boat-shaped ingot with a raised dome
+      const b = new Path2D();
+      b.moveTo(1.5, 7.5); b.quadraticCurveTo(3, 6.5, 4.5, 8); b.lineTo(11.5, 8); b.quadraticCurveTo(13, 6.5, 14.5, 7.5);
+      b.quadraticCurveTo(14, 13.5, 8, 13.8); b.quadraticCurveTo(2, 13.5, 1.5, 7.5); b.closePath();
+      paint(ctx, b, linear(ctx, 0, 7, 0, 14, [[0, l], [0.5, color], [1, d]]), OUTLINE, lw);
+      paint(ctx, ellipse(8, 7.6, 3.6, 2.8), radial(ctx, 7, 6.5, 0.4, 4, [[0, '#fff6c8'], [1, color]]), OUTLINE, lw);
+      paint(ctx, ellipse(6.8, 6.8, 1, 0.6), rgba('#ffffff', 0.8), null);
+      break;
+    }
     case 'cape': { // a cape billowing to one side, gold clasp at the collar
       const c = new Path2D();
       c.moveTo(5, 2.5); c.quadraticCurveTo(2.5, 7, 1.5, 14.5); c.quadraticCurveTo(5, 13, 8, 14.8); c.quadraticCurveTo(11.5, 13.2, 14.8, 13.8);

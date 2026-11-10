@@ -95,6 +95,18 @@ export const GAME = {
   // ----- Pet -----
   pet: { pickRange: 330, flySpeed: 240 },
 
+  // ----- Premium shop (Vạn Bảo Các) and its currency, Nguyên Bảo (ingots) -----
+  // Ingots are never bought with money: they come from the daily check-in, field bosses, chieftains and some quests.
+  // Online the server owns the balance (see server/src/premium.js); offline it lives in the save.
+  premium: {
+    utcOffsetH: 7, // the check-in day starts at midnight Vietnam time, wherever the server runs
+    checkin: { ingots: 10, streakDays: 7, streakBonus: 40 }, // +40 more on every 7th day in a row
+    kill: { chief: 2, fieldBoss: 5 }, // for the group that did the most damage (each party member)
+    chapterIngots: 30, // for each chapter finale (st7, st12, st18)
+    opsPerMin: 30, // premium requests per player per minute (online)
+    replyTimeoutSec: 8, // online: how long a buy / check-in button stays disabled while waiting for the server's answer
+  },
+
   // ----- Capes: cloth simulation (gfx/cape.js) -----
   cape: {
     segments: 7, // points along the cape, the first one pinned to the shoulders

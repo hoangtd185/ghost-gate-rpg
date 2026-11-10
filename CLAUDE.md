@@ -37,6 +37,7 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 | New monster sprite | Draw in `client/src/gfx/monsters.js`, register it in `MAKERS` |
 | New outfit part | Draw helper in `client/src/gfx/humanoid.js` |
 | New cape | An item with `slot: 'cape'` and a `cape` look in `client/src/data/items.js` (options at the top of `client/src/gfx/cape.js`); cloth feel in `GAME.cape` |
+| Premium shop offers, Nguyên Bảo amounts | `client/src/data/premium.js` (offers), `GAME.premium` (check-in, kills, chapter rewards), `reward.ingots` on quests |
 | Monster behaviour (AI, affixes, bosses, spawns) | `client/src/game/mobsim.js` (runs offline and on the server) |
 | Damage formulas (player hits, skill multipliers, reach) | `client/src/game/combat.js` (runs offline and on the server) |
 | Loot tables and rules (drops, what clients may create) | `client/src/data/*` for tables, `client/src/game/loot.js` for rules, `server/src/loot.js` for kill checks |
@@ -62,6 +63,7 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 - Monster AI lives in `game/mobsim.js`, shared by the browser and the server: no DOM, no drawing, no direct damage to a player. Anything visible leaves as an event (`world.mobEvent` on the client, `server/src/mobs.js` on the server). `world.monsters` / `world.spawnGroups` are views of `world.sim`.
 - Damage to shared monsters is computed by the server: the client sends `net.hit({ uid, sid })`, never a number. Every player hit must carry the skill id (`opts.sid` in `damageMonster`, `sid` on projectiles and zones).
 - Hot paths on the server (positions, hits, kills, loot rolls) never read the database: use the session cache `s.ch` (refreshed on `saved`).
+- Nguyên Bảo online belongs to the server (`characters.ingots`, ledger kind `ingots`): never trust or save the client's `ch.ingots`. New sources go through `server/src/premium.js` / `db.grantIngots` (and `game/premium.js` for the offline rule).
 - `rollEquip(id, luck, minRarity)`: pass the minimum rarity in. Raising `r` afterwards leaves items without bonus stats.
 
 ## Git and PRs
