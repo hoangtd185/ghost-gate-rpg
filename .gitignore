@@ -27,3 +27,9 @@ Thumbs.db
 .idea/
 tests/e2e/out/
 .claude/
+
+# Terraform: local state and variables (keep infra/terraform/.terraform.lock.hcl and terraform.tfvars.example)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars

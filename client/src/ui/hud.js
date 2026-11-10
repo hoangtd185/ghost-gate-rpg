@@ -160,7 +160,13 @@ export class GameUI {
   }
   // Real player count from the multiplayer server (replaces the bot count while connected)
   setOnline(n) { const el = $('#hOnline', this.root); if (el) el.textContent = `${n} người chơi online`; }
-  detach() { this.world = null; this.close(); this.party = null; this.renderParty(); }
+  // Leaving the game (character switch, logout): nothing of this session may carry over, including a trade, its
+  // pending offer retry (it checks this.trade) and any invitation popup still waiting for an answer
+  detach() {
+    this.world = null; this.close(); this.party = null; this.renderParty();
+    this.trade = null;
+    this.root.querySelectorAll('#tradeAsk, #partyAsk').forEach((el) => el.remove());
+  }
 
   // ================= HUD =================
   buildSkillbar() {
@@ -966,6 +972,7 @@ export class GameUI {
   useEntry(uid) {
     const ch = this.ch, e = ch.inventory.find((x) => x.uid === uid);
     if (!e) return;
+    if (this.inTrade(uid)) { this.toast('Vật phẩm đang trong giao dịch', 'warn'); return; } // also the potion keys
     const it = ITEMS[e.id];
     if (it.type !== 'use') return;
     if (it.orb) {
@@ -1118,6 +1125,7 @@ export class GameUI {
       case 'trade_state':
         if (!this.trade || this.trade.id !== m.id) break;
         this.trade.me = m.me; this.trade.them = m.them;
+        this.trade.retried = false; // the server accepted an offer: a later 'sync' may retry once again
         if (this.open === 'trade') this.renderWin();
         break;
       case 'trade_end': {
@@ -1131,9 +1139,17 @@ export class GameUI {
       }
       case 'trade_err': {
         if (m.why === 'sync' && this.trade && !this.trade.retried) {
-          // our bag on the server is behind (unsaved changes): save, then offer again
+          // our bag on the server is behind (unsaved changes): save, then offer again, once (until a trade_state)
+          const id = this.trade.id;
           this.trade.retried = true; this.cb.save();
-          setTimeout(() => { if (this.trade) { this.sendOffer(); this.trade.retried = false; } }, 1500);
+          setTimeout(() => {
+            const t = this.trade;
+            if (!t || t.id !== id || !this.world) return; // that trade is over, or we left the game
+            // quantities may have changed since the offer was made (potions used, stacks merged): take them from the bag
+            t.offer = t.offer.map((o) => this.ch.inventory.find((e) => e.uid === o.uid)).filter(Boolean).map((e) => ({ uid: e.uid, qty: e.qty }));
+            t.gold = Math.min(t.gold, this.ch.gold);
+            this.sendOffer();
+          }, 1500);
           break;
         }
         const msg = { far: 'Đứng gần hơn để giao dịch', busy: 'Người đó đang bận giao dịch', nobody: 'Không tìm thấy người chơi', expired: 'Lời mời đã hết hạn',
@@ -1164,6 +1180,7 @@ export class GameUI {
         const e = this.ch.inventory.find((x) => x.uid === d.uid);
         if (!e) return true;
         if (t.me?.locked) { this.toast('Mở khóa trước khi đổi đồ', 'warn'); return true; }
+        if (ITEMS[e.id].type === 'quest' && !t.offer.some((o) => o.uid === e.uid)) { this.toast('Không giao dịch được vật phẩm nhiệm vụ', 'warn'); return true; }
         if (ITEMS[e.id].type === 'quest') { this.toast('Không giao dịch được vật phẩm nhiệm vụ', 'warn'); return true; }
         const i = t.offer.findIndex((o) => o.uid === e.uid);
         if (i >= 0) t.offer.splice(i, 1);

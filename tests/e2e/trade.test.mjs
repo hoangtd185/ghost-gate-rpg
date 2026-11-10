@@ -59,6 +59,9 @@ describe('trade (online)', { timeout: 180_000 }, () => {
     // the same action as clicking "Dùng" in the bag
     await A.page.evaluate((uid) => __ui().act('use', { uid }), hp.uid);
     assert.equal(await A.page.evaluate("__game().ch.inventory.find((e) => e.id === 'hp_s').qty"), before);
+    // nor with the potion key (1), which uses the item directly
+    await A.page.evaluate(() => { __game().ch.hp = 1; __ui().useItemById('hp_s'); });
+    assert.equal(await A.page.evaluate("__game().ch.inventory.find((e) => e.id === 'hp_s').qty"), before, 'the potion key is blocked too');
   });
 
   it('changing an offer unlocks both sides', async () => {
