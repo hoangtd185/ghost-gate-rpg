@@ -16,6 +16,8 @@ const DB_FILE = path.join(config.dataDir, 'game.db');
 const distDir = path.join(ROOT, 'client', 'dist');
 const STATIC_DIR = !DEV && fs.existsSync(path.join(distDir, 'index.html')) ? distDir : path.join(ROOT, 'client');
 
+const SHARED_DIR = path.join(ROOT, 'shared');
+
 const db = openDb(DB_FILE);
 const SECRET = loadSecret(config.dataDir, config.tokenSecret);
 const VALID_CLS = new Set(GAME.player.classes);
@@ -204,15 +206,18 @@ route('GET', '/api/leaderboard', () => [200, { top: db.leaderboard() }]);
 // ---------- Static files ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 
+// Serve a static file (the build, or the dev sources); anything outside the served folder is a 404
 function serveStatic(req, res, urlPath) {
   let p;
   try { p = decodeURIComponent(urlPath.split('?')[0]); } catch { res.writeHead(400, baseHeaders(req)); return res.end(); }
   if (p.endsWith('/')) p += 'index.html';
   // dev mode loads real ES modules, and the client imports the code it shares with the server from /shared/
-  const base = DEV && p.startsWith('/shared/') ? ROOT : STATIC_DIR;
-  const file = path.normalize(path.join(base, p));
-  // block escaping the served folder (../), hidden files (.env, .git) and null bytes
-  if (!file.startsWith(base + path.sep) || p.includes('\0') || p.split('/').some((seg) => seg.startsWith('.'))) {
+  // (resolved under ROOT/shared only, so nothing outside that folder can be reached)
+  const isShared = DEV && p.startsWith('/shared/');
+  const base = isShared ? SHARED_DIR : STATIC_DIR;
+  const file = path.resolve(base, '.' + (isShared ? p.slice('/shared'.length) : p));
+  // block escaping the served folder (../ or encoded backslashes), hidden files (.env, .git) and null bytes
+  if (!file.startsWith(base + path.sep) || p.includes('\0') || p.includes('\\') || p.split('/').some((seg) => seg.startsWith('.'))) {
     res.writeHead(404, baseHeaders(req)); return res.end();
   }
   fs.stat(file, (err, st) => {
