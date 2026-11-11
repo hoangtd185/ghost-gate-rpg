@@ -1,0 +1,72 @@
+#!/bin/bash
+# First boot only: prepares swap, the data disk, Docker and the login token key.
+# The game itself is started by infra/server-deploy.sh. Output: /var/log/cloud-init-output.log
+set -euxo pipefail
+
+DATA_ROOT=/srv/quymonquan
+
+# Swap: 1 GB of RAM is tight while docker build runs next to the game
+if [ ! -f /swapfile ]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=1024
+  chmod 600 /swapfile
+  mkswap /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+swapon --all
+
+# Wait for the data disk, attached by Terraform after the instance exists.
+# Nitro instances (t3, t4g) expose it by volume id, Xen instances (t2) as xvdf.
+DEVICE=""
+for _ in $(seq 1 120); do
+  for candidate in "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${volume_serial}" /dev/xvdf; do
+    if [ -b "$candidate" ]; then DEVICE="$candidate"; break 2; fi
+  done
+  sleep 5
+done
+[ -n "$DEVICE" ] || { echo "data disk did not appear"; exit 1; }
+udevadm settle
+
+# Format only a disk that is really blank (blkid exit code 2). Any other failure stops the
+# script, so a read error can never wipe an existing game.db.
+rc=0
+blkid -p "$DEVICE" || rc=$?
+if [ "$rc" -eq 2 ]; then
+  mkfs.ext4 -L quymonquan-data "$DEVICE"
+elif [ "$rc" -ne 0 ]; then
+  echo "blkid failed with exit code $rc"
+  exit 1
+fi
+
+mkdir -p "$DATA_ROOT"
+UUID=$(blkid -s UUID -o value "$DEVICE")
+if ! grep -q "$UUID" /etc/fstab; then
+  echo "UUID=$UUID $DATA_ROOT ext4 defaults,nofail 0 2" >> /etc/fstab
+fi
+systemctl daemon-reload
+mount "$DATA_ROOT"
+
+# uid 1000 is the "node" user inside the game image
+mkdir -p "$DATA_ROOT/game"
+chown -R 1000:1000 "$DATA_ROOT/game"
+
+# Created here rather than in Terraform so the key never lands in terraform.tfstate or EC2 user data.
+# Kept on the data disk: replacing the instance does not log every player out.
+if [ ! -f "$DATA_ROOT/app.env" ]; then
+  ( umask 077
+    cat > "$DATA_ROOT/app.env" <<ENV
+TOKEN_SECRET=$(openssl rand -hex 32)
+TRUST_PROXY=true
+ENV
+  )
+fi
+
+dnf install -y docker awscli-2
+
+# Never start containers before the data disk is mounted: the game would create an empty database on the root disk.
+mkdir -p /etc/systemd/system/docker.service.d
+cat > /etc/systemd/system/docker.service.d/data-disk.conf <<UNIT
+[Unit]
+RequiresMountsFor=$DATA_ROOT
+UNIT
+systemctl daemon-reload
+systemctl enable --now docker

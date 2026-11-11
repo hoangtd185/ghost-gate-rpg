@@ -9,6 +9,7 @@ import { killIngots } from '../../client/src/game/premium.js';
 
 const PG = GAME.premium;
 
+// The premium shop's message handler and the kill reward hook, wired in realtime.js and mobs.js
 export function createPremium({ db, send, pushChanges }) {
   // per-player request budget: PG.opsPerMin, refilled continuously
   const allow = (s) => {
@@ -18,12 +19,14 @@ export function createPremium({ db, send, pushChanges }) {
     if (s.premTokens < 1) return false;
     s.premTokens -= 1; return true;
   };
+  // Answer a request from the database result; on success also push the item changes (balance, items)
   const reply = (s, op, res, extra = {}) => {
     if (res.ok) pushChanges(s);
     send(s, { t: 'prem', op, ok: !!res.ok, ...(res.ok ? {} : { why: res.why }), ...extra, ...(res.got ? { got: res.got } : {}), ...(res.streak ? { streak: res.streak } : {}) });
   };
 
   return {
+    // One { t: 'prem' } message from a player (rate limited per player)
     handle(s, m) {
       const op = String(m.op || '');
       if (!allow(s)) return send(s, { t: 'prem', op, ok: false, why: 'rate', req: m.req });
@@ -39,11 +42,12 @@ export function createPremium({ db, send, pushChanges }) {
       }
     },
 
-    // A shared monster died; group: the players of the top damage group (each party member gets them)
-    kill(players, m) {
+    // A shared monster died on `map`; players: the top damage group (each party member gets them)
+    kill(players, m, map) {
       const n = killIngots(m);
       if (!n) return;
-      const key = `kill:${Date.now().toString(36)}:${m.uid}`; // monster uids restart with each map simulation
+      // monster uids restart with each map's simulation, so the map is part of the key
+      const key = `kill:${map}:${Date.now().toString(36)}:${m.uid}`;
       for (const s of players) {
         const r = db.grantIngots(s.id, n, 'kill', m.id, `${key}:${s.id}`);
         if (r && !r.dup) { pushChanges(s); send(s, { t: 'prem', op: 'kill', ok: true, got: n, mob: m.id, named: m.named || null, chief: !!m.chief }); }

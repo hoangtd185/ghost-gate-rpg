@@ -6,6 +6,8 @@ import crypto from 'node:crypto';
 import { GAME } from '../../client/src/config.js'; // game rules shared with the client
 import { ITEMS } from '../../client/src/data/items.js';
 import { legacyItem } from '../../client/src/data/legacy.js';
+import { QUESTS } from '../../client/src/data/npcs.js';
+import { bonusLimits, todayKey } from '../../client/src/game/character.js';
 import { isFreeItem, freeItems, questGrants, craftGrants, starterKit } from '../../client/src/game/loot.js';
 import { offerById, offerItems, cellsNeeded, checkinReward, premiumDay, questIngots } from '../../client/src/game/premium.js';
 const isFreeItemId = (id) => freeItems().has(id);
@@ -151,6 +153,13 @@ function cleanEntry(e) {
     g: Array.isArray(e.g) ? e.g.slice(0, 3).map((x) => str(x, 20)) : [],
   };
 }
+// Bonus stats a save may give an item it adds: none at rarity 0, otherwise only stats rollEquip can roll, each
+// within what that rarity can reach. Anything else is dropped.
+function cleanBonus(id, r, b) {
+  const lim = bonusLimits(id, r), out = {};
+  for (const [k, v] of Object.entries(b || {})) if (lim[k] && Number.isInteger(v) && v > 0 && v <= lim[k]) out[k] = v;
+  return out;
+}
 // Story flags: only keep short string key/value pairs
 function cleanFlags(f) {
   const out = {};
@@ -173,7 +182,7 @@ class GameDb {
         stat_str=?, stat_dex=?, stat_int=?, stat_vit=?, stat_points=?, skill_points=?, skills=?, pet=?, title=?, flags=?, play_time=?, updated_at=?
         WHERE id = ? AND user_id = ?`),
       setGold: db.prepare('UPDATE characters SET gold = ? WHERE id = ?'),
-      addIngots: db.prepare('UPDATE characters SET ingots = ingots + ? WHERE id = ? RETURNING ingots'),
+      addIngots: db.prepare('UPDATE characters SET ingots = ingots + ? WHERE id = ? AND ingots + ? >= 0 RETURNING ingots'),
       setCheckin: db.prepare('UPDATE characters SET checkin = ? WHERE id = ?'),
       questState: db.prepare('SELECT state FROM quests WHERE character_id = ? AND quest_id = ?'),
       bagOf: db.prepare('SELECT item_id FROM items WHERE character_id = ? AND equip_slot IS NULL'),
@@ -276,16 +285,31 @@ class GameDb {
     if (int(ch.itemRev) < rev) return { itemRev: rev, stale: true };
     this.q.setGold.run(Math.max(0, int(ch.gold)), id);
     const fixed = this.reconcileItems(id, rev, ch, row.cls, create);
-    this.q.clearQuests.run(id);
-    for (const [qid, q] of Object.entries(ch.quests || {})) {
-      if (q && (q.s === 'active' || q.s === 'done')) this.q.insertQuest.run(id, str(qid, 30), q.s, int(q.p), q.day ? str(q.day, 10) : null);
-    }
+    this.writeQuests(id, ch.quests);
     const out = { itemRev: rev, stale: false };
     if (fixed) {
       const now = this.getCharacter(id);
       out.items = { inventory: now.inventory, equip: now.equip };
     }
     return out;
+  }
+
+  // Quests from a save. A quest the database has as done stays done (a save cannot remove or downgrade it), except a
+  // daily quest taken again on a later day. The day of a daily completion is the server's date, not the client's.
+  writeQuests(id, uploaded) {
+    const today = todayKey(), db = {};
+    for (const q of this.q.questsOf.all(id)) db[q.quest_id] = q;
+    const out = new Map();
+    for (const [qid0, q] of Object.entries(uploaded || {})) {
+      const qid = str(qid0, 30), old = db[qid], daily = !!QUESTS[qid]?.daily;
+      if (!q || (q.s !== 'active' && q.s !== 'done')) continue;
+      if (old?.state === 'done' && !(daily && q.s === 'active' && old.day !== today)) { out.set(qid, [old.state, old.progress, old.day]); continue; }
+      const day = q.s === 'done' && daily ? (old?.state === 'done' ? old.day : today) : null;
+      out.set(qid, [q.s, int(q.p), day]);
+    }
+    for (const [qid, old] of Object.entries(db)) if (old.state === 'done' && !out.has(qid)) out.set(qid, [old.state, old.progress, old.day]);
+    this.q.clearQuests.run(id);
+    for (const [qid, [s, p, day]] of out) this.q.insertQuest.run(id, qid, s, p, day);
   }
 
   // Replace a character's items with the uploaded ones, under the server's rules:
@@ -320,11 +344,15 @@ class GameDb {
       else if (this.q.itemByUid.get(e.uid)) why = 'owned_elsewhere';
       else if (isFreeItemId(e.id) && !isFreeItem(e.id, e.r)) why = 'rarity';
       else if (!isFreeItemId(e.id) && e.r > (ITEMS[e.id].type === 'equip' ? 3 : 0)) why = 'rarity';
-      if (why) { fixed = true; log(e.uid, e.id, e.qty, why); } else keep.push({ ...e, slot });
+      if (why) { fixed = true; log(e.uid, e.id, e.qty, why); continue; }
+      const b = cleanBonus(e.id, e.r, e.b);
+      if (JSON.stringify(b) !== JSON.stringify(e.b)) { fixed = true; log(e.uid, e.id, e.qty, 'bonus'); }
+      keep.push({ ...e, b, slot });
     }
     // Quantities of items that are not free: never more than before plus what this save earned
     const total = (rows, idOf, qtyOf) => rows.reduce((m, x) => m.set(idOf(x), (m.get(idOf(x)) || 0) + qtyOf(x)), new Map());
-    const before = total([...have.values()], (r) => r.item_id, (r) => r.qty);
+    // stored ids from before a rename (data/legacy.js) count as the new id, like the kept entries do
+    const before = total([...have.values()], (r) => legacyItem(r.item_id), (r) => r.qty);
     const after = total(keep, (e) => e.id, (e) => e.qty);
     const used = new Map();
     for (const [itemId, n] of before) if ((after.get(itemId) || 0) < n) used.set(itemId, n - (after.get(itemId) || 0));
@@ -339,13 +367,14 @@ class GameDb {
       fixed = true;
       log(null, itemId, grew, 'not_earned');
       final = final.filter((e) => e.id !== itemId);
-      for (const r of have.values()) if (r.item_id === itemId) final.push({ ...cleanEntry(rowToEntry(r)), slot: r.equip_slot });
+      for (const r of have.values()) if (legacyItem(r.item_id) === itemId) final.push({ ...cleanEntry(rowToEntry(r)), id: itemId, slot: r.equip_slot });
     }
     this.q.clearItems.run(id);
     let pos = 0;
     for (const e of final) {
       // equipped only in its own slot (an item claimed to be in another slot goes back to the bag)
       const slot = e.slot && EQUIP_SLOTS.has(e.slot) && ITEMS[e.id]?.slot === e.slot ? e.slot : null;
+      if (slot !== (e.slot || null)) fixed = true; // the client must learn where the item really is
       this.q.insertItem.run(e.uid, id, e.id, e.qty, e.r, JSON.stringify(e.b || {}), slot, pos++, e.e || 0, e.el || null, JSON.stringify(e.g || []));
     }
     return fixed;
@@ -430,12 +459,16 @@ class GameDb {
   // ===== Nguyên Bảo (premium currency) =====
   // The balance changes only here, each change with a ledger row (kind 'ingots') at a new item revision, so the
   // client gets it through the same change replay as pickups. Uploaded saves never touch it.
+  // Run inside a transaction. A change that would take the balance below zero (or an unknown character) throws, so
+  // the whole transaction is undone: no ledger row, no revision bump.
   addIngotsTx(charId, n, reason, ref, reqId) {
     if (reqId && this.q.ledgerByReq.get(reqId)) return { dup: true };
+    const delta = int(n);
+    const now = this.q.addIngots.get(delta, charId, delta);
+    if (!now) throw new Error(`ingots: cannot apply ${delta} to ${charId}`);
     const rev = this.q.bumpRev.get(charId).item_rev;
-    const ingots = this.q.addIngots.get(int(n), charId).ingots;
-    this.q.ledgerAdd.run(Date.now(), charId, rev, 'ingots', null, null, int(n), null, reason, ref, reqId);
-    return { rev, ingots };
+    this.q.ledgerAdd.run(Date.now(), charId, rev, 'ingots', null, null, delta, null, reason, ref, reqId);
+    return { rev, ingots: now.ingots };
   }
 
   // Ingots won outside the shop (field bosses, chieftains). Returns { rev, ingots } | { dup: true } | null

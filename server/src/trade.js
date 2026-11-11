@@ -6,6 +6,7 @@
 // Leaving the map, disconnecting or cancelling ends the trade; nothing moves until step 4 commits.
 import crypto from 'node:crypto';
 import { GAME } from '../../client/src/config.js';
+import { ITEMS } from '../../client/src/data/items.js';
 
 const T = GAME.net.trade;
 const int = (v) => (Number.isFinite(+v) ? Math.floor(+v) : 0);
@@ -74,6 +75,7 @@ export function createTrades({ db, players, send, pushChanges }) {
       seen.add(uid);
       const it = db.item(uid);
       if (!it || it.owner !== s.id || it.slot || it.entry.qty !== int(o.qty)) return send(s, { t: 'trade_err', why: 'sync' });
+      if (ITEMS[it.entry.id]?.type === 'quest') return send(s, { t: 'trade_err', why: 'sync' }); // quest items stay with their owner
       items.push({ uid, qty: it.entry.qty, entry: it.entry });
     }
     const gold = Math.max(0, int(m.gold));

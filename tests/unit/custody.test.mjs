@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { openDb } from '../../server/src/db.js';
 import { newCharacter } from '../../client/src/game/character.js';
+import { craftGrants } from '../../client/src/game/loot.js';
 import { GAME } from '../../client/src/config.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qmq-custody-'));
@@ -215,9 +216,75 @@ describe('capes', () => {
   it('an item saved in a slot that is not its own goes back to the bag', () => {
     const ch = load(B);
     ch.equip.cape = ch.equip.armor; ch.equip.armor = null; // body armor claimed to be a cape
-    db.saveCharacter(uid, ch);
+    const res = db.saveCharacter(uid, ch);
     const after = load(B);
     assert.equal(after.equip.cape, null);
     assert.ok(after.inventory.some((e) => e.id === 'arm_cloth'));
+    assert.ok(res.items?.inventory.some((e) => e.id === 'arm_cloth'), 'the client is told where the item really is');
+    assert.equal(res.items.equip.cape, null);
+  });
+
+  it('crafting materials pay for one recipe only', () => {
+    const grants = (used) => craftGrants(new Map(Object.entries(used)), 'swordsman');
+    assert.equal(grants({ mat_tail: 10, mat_straw: 5 }).get('cape_traveler'), 1, 'enough for one craft');
+    const shared = grants({ mat_tail: 60, mat_peach: 15, mat_dew: 1, mat_straw: 5 }); // tails for the fox robe only
+    assert.equal(shared.get('out_fox'), 1);
+    assert.equal(shared.get('cape_traveler'), undefined, 'the same tails cannot also make a cape');
+    const both = grants({ mat_tail: 70, mat_peach: 15, mat_dew: 1, mat_straw: 5 });
+    assert.deepEqual([both.get('out_fox'), both.get('cape_traveler')], [1, 1], 'enough for both');
+  });
+});
+describe('review fixes: bonus stats, renamed items, quests', () => {
+  it('bonus stats on an item a save adds: none at rarity 0, only rollable stats within range above', () => {
+    const ch = load(A);
+    ch.inventory.push({ uid: 'bon0', id: 'hat_cloth', qty: 1, r: 0, b: { atk: 999 } }); // a shop item
+    db.saveCharacter(uid, ch);
+    const hat = load(A).inventory.find((e) => e.uid === 'bon0');
+    assert.deepEqual(hat.b, {});
+    assert.ok(db.ledger(A).some((r) => r.item_uid === 'bon0' && r.ref === 'bonus'));
+  });
+
+  it('a stored item with a pre-rename id is neither refused nor written back with the old id', () => {
+    const rid = db.grantItem(A, { id: 'out_fox', qty: 1, r: 3, b: {} }, { reqId: 'legacy:1' }).entry.uid;
+    db.db.prepare("UPDATE items SET item_id = 'out_holy' WHERE uid = ?").run(rid); // as saved before the English rename
+    const ch = load(A);
+    const e = ch.inventory.find((x) => x.uid === rid);
+    assert.equal(e.id, 'out_holy');
+    e.id = 'out_fox'; // the client migrates it on load (data/legacy.js)
+    db.saveCharacter(uid, ch);
+    const after = load(A).inventory.find((x) => x.uid === rid);
+    assert.ok(after, 'kept');
+    assert.equal(after.id, 'out_fox');
+  });
+
+  it('a quest done on the server cannot be removed or downgraded by a save', () => {
+    let ch = load(A);
+    ch.quests.q_tail = { s: 'done', p: 6 };
+    db.saveCharacter(uid, ch);
+    ch = load(A);
+    ch.quests.q_tail = { s: 'active', p: 0 };
+    db.saveCharacter(uid, ch);
+    assert.equal(load(A).quests.q_tail.s, 'done');
+    ch = load(A);
+    delete ch.quests.q_tail;
+    db.saveCharacter(uid, ch);
+    assert.equal(load(A).quests.q_tail?.s, 'done');
+  });
+
+  it("a daily completion gets the server's date; it can be taken again on a later day", async () => {
+    const { todayKey } = await import('../../client/src/game/character.js');
+    let ch = load(A);
+    ch.quests.d_hunt1 = { s: 'done', p: 15, day: '2099-12-31' };
+    db.saveCharacter(uid, ch);
+    assert.equal(load(A).quests.d_hunt1.day, todayKey());
+    ch = load(A);
+    ch.quests.d_hunt1 = { s: 'active', p: 0 }; // same day: refused
+    db.saveCharacter(uid, ch);
+    assert.equal(load(A).quests.d_hunt1.s, 'done');
+    db.db.prepare("UPDATE quests SET day = '2000-01-01' WHERE character_id = ? AND quest_id = 'd_hunt1'").run(A);
+    ch = load(A);
+    ch.quests.d_hunt1 = { s: 'active', p: 0 }; // a later day: taken again
+    db.saveCharacter(uid, ch);
+    assert.equal(load(A).quests.d_hunt1.s, 'active');
   });
 });

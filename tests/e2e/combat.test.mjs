@@ -59,8 +59,16 @@ describe('combat systems', { timeout: 300_000 }, () => {
   });
 
   it('poison frogs poison the player', async () => {
-    await E("(() => { const w = __game(); w.loadMap('swamp', 900); w.player.invuln = 0; w.player.x = 900; w.player.y = 250; const f = w.monsters.find((m) => m.id === 'frog'); w.hurtPlayer(50, 1, 'poison', f); })()");
-    await page.waitForTimeout(700);
+    // A fresh frog (a spawned one may not exist yet: spawns are staggered). The player can also dodge (random),
+    // so hit up to a few times until a hit lands.
+    const poisoned = await E(`(() => { const w = __game(), p = w.player, M = window.__Monster;
+      w.loadMap('swamp', 900); p.x = 900; p.y = 250;
+      const f = new M('frog', p.x + 30, p.standY, [p.x + 28, p.x + 32], null, { elite: false, chief: false, lvBonus: 0 });
+      f.alpha = 1; w.monsters.push(f);
+      for (let i = 0; i < 8 && !(p.poisonT > 0); i++) { p.invuln = 0; w.hurtPlayer(50, 1, 'poison', f); }
+      return p.poisonT > 0; })()`);
+    assert.ok(poisoned, 'a frog hit poisons the player');
+    await page.waitForTimeout(300);
     assert.ok((await E('__game().player.poisonT')) > 0);
     await E('__game().player.invuln = 99999');
   });

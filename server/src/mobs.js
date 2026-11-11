@@ -91,7 +91,7 @@ export function createMobs({ players, send, loot, parties, premium }) {
     for (const g of groups.values()) {
       const share = (m.def.exp * g.dmg) / total / g.members.length;
       for (const s of g.members) {
-        const msg = { t: 'mkill', uid: m.uid, mob: m.id, named: m.named, x, y, exp: killExp(share, s.ch?.level || 1, m.def.lv) };
+        const msg = { t: 'mkill', map, uid: m.uid, mob: m.id, named: m.named, x, y, exp: killExp(share, s.ch?.level || 1, m.def.lv) };
         if (g === top) {
           msg.gold = randInt(m.def.gold[0], m.def.gold[1]);
           msg.drops = loot.give(s, kill, x, y, m.def.drops);
@@ -99,24 +99,24 @@ export function createMobs({ players, send, loot, parties, premium }) {
         send(s, msg);
       }
     }
-    premium?.kill(top.members, m); // chieftains and field bosses also give Nguyên Bảo to the top group
+    premium?.kill(top.members, m, map); // chieftains and field bosses also give Nguyên Bảo to the top group
   }
 
   function handleEvents(map, e) {
     const out = [];
     for (const ev of e.sim.drain()) {
-      if (ev.type === 'spawn') { toMap(map, { t: 'mspawn', m: ev.m.spawnInfo() }); continue; }
+      if (ev.type === 'spawn') { toMap(map, { t: 'mspawn', map, m: ev.m.spawnInfo() }); continue; }
       if (ev.type === 'die') {
         const m = ev.m;
         let topName = null, topDmg = 0;
         for (const [id, dmg] of m.dmgBy) if (dmg > topDmg && players.get(id)) { topDmg = dmg; topName = players.get(id).name; }
-        toMap(map, { t: 'mdie', uid: m.uid, by: topName });
+        toMap(map, { t: 'mdie', map, uid: m.uid, by: topName });
         reward(map, m);
         continue;
       }
       out.push(publicEvent(ev));
     }
-    if (out.length) toMap(map, { t: 'mev', list: out });
+    if (out.length) toMap(map, { t: 'mev', map, list: out });
   }
 
   // ===== Loop =====
@@ -145,7 +145,7 @@ export function createMobs({ players, send, loot, parties, premium }) {
           e.last.set(m.uid, key); list.push(snap);
         }
         if (e.last.size > e.sim.monsters.length * 2) for (const uid of e.last.keys()) if (!e.sim.monsters.some((m) => m.uid === uid)) e.last.delete(uid);
-        if (list.length) toMap(map, { t: 'ms', s: list });
+        if (list.length) toMap(map, { t: 'ms', map, s: list });
       }
     }
   }, 1000 / MB.tickHz);
@@ -179,7 +179,7 @@ export function createMobs({ players, send, loot, parties, premium }) {
       const r = e.sim.damage(mob, dmg, by);
       // a poison cloud also poisons: 2 s of ticks at 30% of the skill
       if (sk.type === 'cloud' && !mob.dead) e.sim.poisonFor(mob, 2, hitDamage(st, mult * 0.3, mob.def, 'poison', low).dmg, by);
-      toMap(s.map, { t: 'mhit', uid: mob.uid, by: s.id, dmg: r.dealt, ab: r.absorbed, crit, em, el });
+      toMap(s.map, { t: 'mhit', map: s.map, uid: mob.uid, by: s.id, dmg: r.dealt, ab: r.absorbed, crit, em, el });
       handleEvents(s.map, e);
     },
 

@@ -10,6 +10,7 @@ import { addItem } from './character.js';
 
 const PREM = GAME.premium;
 
+// The premium offer with this id, or null
 export const offerById = (id) => PREMIUM_SHOP.find((o) => o.id === id) || null;
 
 // The item entries an offer grants: cosmetics are always Legendary, like crafted ones
@@ -66,6 +67,7 @@ export function buyLocal(ch, offerId) {
   return { ok: true };
 }
 
+// Offline check-in: applies the reward to the save. Returns { ingots, streak }, or null if already done today.
 export function checkinLocal(ch, now = Date.now()) {
   const r = checkinReward(ch.checkin, premiumDay(now));
   if (!r) return null;

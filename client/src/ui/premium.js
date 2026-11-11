@@ -15,11 +15,29 @@ const reqId = () => Math.random().toString(36).slice(2, 10) + Date.now().toStrin
 const owns = (ch, id) => ch.inventory.some((e) => e.id === id) || Object.values(ch.equip).some((e) => e && e.id === id);
 
 export const PremiumUI = {
+  // Open the window (hotkey B, or the merchant NPC)
   openPremium() { this.open = 'premium'; this.premTab = this.premTab || 'cape'; this.premSel = null; this.renderWin(); },
 
+  // Are we connected to the game server (it owns the balance), or playing offline?
   online() { return !!(this.world && this.world.net); },
 
-  // The window's HTML: balance, check-in, tabs, offer cards and the selected offer's details
+  // A request is on its way: disable its button until the answer arrives. The answer can be lost (the connection
+  // drops), so the state also ends after GAME.premium.replyTimeoutSec; the server applies a request once, and a
+  // retry of the same purchase reuses its request id (see premiumAct), so a late answer never means a second buy.
+  premiumWait(what) {
+    this.premBusy = what;
+    clearTimeout(this.premBusyT);
+    this.premBusyT = setTimeout(() => {
+      if (this.premBusy !== what) return;
+      this.premBusy = null;
+      this.toast('Chưa nhận được phản hồi từ máy chủ, kiểm tra túi đồ rồi thử lại', 'warn');
+      if (this.open === 'premium') this.renderWin();
+    }, PREM_CFG.replyTimeoutSec * 1000);
+  },
+  // The answer came (or the window is gone): the buttons work again
+  premiumIdle() { clearTimeout(this.premBusyT); this.premBusy = null; },
+
+  // The window's HTML: Nguyên Bảo balance, check-in, tabs, offer cards and the selected offer's details
   winPremium() {
     const ch = this.ch, tab = this.premTab || 'cape';
     const list = PREMIUM_SHOP.filter((o) => o.tab === tab);
@@ -91,19 +109,6 @@ export const PremiumUI = {
     this.premRaf = requestAnimationFrame(frame);
   },
 
-  // A request is on its way: disable its button until the answer arrives. If no answer comes within
-  // GAME.premium.replyTimeoutSec the button is freed again.
-  premiumWait(what) {
-    this.premBusy = what;
-    clearTimeout(this.premBusyT);
-    this.premBusyT = setTimeout(() => {
-      if (this.premBusy !== what) return;
-      this.premBusy = null;
-      this.toast('Chưa nhận được phản hồi từ máy chủ, thử lại sau', 'warn');
-      if (this.open === 'premium') this.renderWin();
-    }, GAME.premium.replyTimeoutSec * 1000);
-  },
-
   // Window actions (tab, select, buy, check in). Returns true when the action was ours.
   premiumAct(a, d) {
     const ch = this.ch;
@@ -114,7 +119,9 @@ export const PremiumUI = {
         const o = offerById(d.o);
         if (!o) return true;
         if (this.online()) {
-          if (!this.world.net.premium('buy', { offer: o.id, req: reqId() })) { this.toast('Chưa kết nối máy chủ, thử lại sau', 'warn'); return true; }
+          // the same offer keeps its request id until answered: a retry after a lost answer cannot buy twice
+          if (this.premReq?.offer !== o.id) this.premReq = { offer: o.id, req: reqId() };
+          if (!this.world.net.premium('buy', { offer: o.id, req: this.premReq.req })) { this.toast('Chưa kết nối máy chủ, thử lại sau', 'warn'); return true; }
           this.premiumWait(o.id); this.renderWin();
         } else {
           const r = buyLocal(ch, o.id);
@@ -158,11 +165,12 @@ export const PremiumUI = {
   onPremium(m) {
     const ch = this.ch, why = { ingots: 'Không đủ Nguyên Bảo', full: 'Túi đồ đầy', offer: 'Món này không còn bán', rate: 'Thao tác quá nhanh, thử lại sau', done: 'Hôm nay đã điểm danh rồi' };
     if (m.op === 'buy') {
-      clearTimeout(this.premBusyT); this.premBusy = null;
-      if (m.ok) this.boughtPremium(offerById(m.offer));
+      this.premiumIdle(); this.premReq = null;
+      const offer = offerById(m.offer); // the server may sell something this client does not know
+      if (m.ok) { if (offer) this.boughtPremium(offer); else this.toast('Đã mua vật phẩm, xem túi đồ', 'quest'); }
       else if (m.why !== 'dup') this.toast(why[m.why] || 'Không mua được', 'warn');
     } else if (m.op === 'checkin') {
-      clearTimeout(this.premBusyT); this.premBusy = null;
+      this.premiumIdle();
       if (m.ok) { ch.checkin = { day: premiumDay(), streak: m.streak }; this.checkedIn(m.got, m.streak); }
       else if (m.why === 'done') { ch.checkin = { day: premiumDay(), streak: ch.checkin?.streak || 1 }; this.toast(why.done, 'warn'); }
     } else if (m.op === 'claim') {
