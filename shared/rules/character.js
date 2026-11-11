@@ -6,7 +6,7 @@ import { ELEMENT_IDS, MAX_RES } from '../data/elements.js';
 import { QUESTS, NPCS, RETIRED_QUESTS } from '../data/npcs.js';
 import { MAIN_ORDER } from '../data/story.js';
 import { migrateLegacy } from '../data/legacy.js';
-import { makeId, randInt, chance, pick } from '../engine/util.js';
+import { makeId, randInt, chance, pick } from '../util.js';
 import { GAME } from '../config.js';
 
 export const INV_SIZE = GAME.player.invSize;

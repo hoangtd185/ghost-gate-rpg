@@ -1,15 +1,15 @@
 // Game entities: player, monsters, bots, NPCs, drops, projectiles
-import { GROUND_Y } from '../data/maps.js';
-import { MONSTERS } from '../data/monsters.js';
-import { CLASSES } from '../data/classes.js';
-import { ITEMS } from '../data/items.js';
+import { GROUND_Y } from '../../../shared/data/maps.js';
+import { MONSTERS } from '../../../shared/data/monsters.js';
+import { CLASSES } from '../../../shared/data/classes.js';
+import { ITEMS } from '../../../shared/data/items.js';
 import { humanoidSheet, capeAnchor, HUM_W, HUM_FEET } from '../gfx/humanoid.js';
 import { CapeCloth } from '../gfx/cape.js';
 import { monsterSheet } from '../gfx/monsters.js';
 import { drawFrame, shade } from '../gfx/draw.js';
-import { clamp, rand, randInt } from '../engine/util.js';
-import { GAME } from '../config.js';
-import { MobState } from './mobsim.js';
+import { clamp, rand, randInt } from '../../../shared/util.js';
+import { GAME } from '../../../shared/config.js';
+import { MobState } from '../../../shared/rules/mobsim.js';
 
 export const JUMP_V = GAME.physics.botJumpV;
 export const MOVE_SPEED = GAME.physics.moveSpeed;

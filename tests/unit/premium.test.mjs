@@ -6,11 +6,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { GAME } from '../../client/src/config.js';
-import { ITEMS } from '../../client/src/data/items.js';
-import { PREMIUM_SHOP, PREMIUM_TABS } from '../../client/src/data/premium.js';
-import { newCharacter } from '../../client/src/game/character.js';
-import { checkinReward, premiumDay, killIngots, questIngots, cellsNeeded, offerById, buyLocal, checkinLocal } from '../../client/src/game/premium.js';
+import { GAME } from '../../shared/config.js';
+import { ITEMS } from '../../shared/data/items.js';
+import { PREMIUM_SHOP, PREMIUM_TABS } from '../../shared/data/premium.js';
+import { newCharacter } from '../../shared/rules/character.js';
+import { checkinReward, premiumDay, killIngots, questIngots, cellsNeeded, offerById, buyLocal, checkinLocal } from '../../shared/rules/premium.js';
 import { openDb } from '../../server/src/db.js';
 import { createPremium } from '../../server/src/premium.js';
 

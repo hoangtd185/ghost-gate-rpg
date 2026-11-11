@@ -21,7 +21,7 @@ Players on the same map see each other move, see each other's gear, and chat (`!
 | WebSocket server (`ws`) at `/ws`, on the same HTTP server | `server/src/realtime.js` |
 | Client connection, reconnect with backoff | `client/src/net/realtime.js` |
 | Other players: buffered snapshots, drawn 120 ms in the past (interpolation) | `RemotePlayer` in `client/src/game/entities.js` |
-| Tuning (send rate, limits, timeouts, loot and trade rules) | `GAME.net` in `client/src/config.js` |
+| Tuning (send rate, limits, timeouts, loot and trade rules) | `GAME.net` in `shared/config.js` |
 
 Safety rules:
 
@@ -38,7 +38,7 @@ Safety rules:
 
 ### Who runs the monsters
 
-`server/src/mobs.js` runs one simulation per map that has players on it, using `client/src/game/mobsim.js`: the **same AI code** the offline game runs in the browser (smartness tiers, affixes, bosses, summons, field-boss timers). It ticks at 20 Hz (3 sub-steps each) and sends positions at 10 Hz, only for monsters that changed. Clients draw the server's monsters and interpolate them. A map nobody is on stops after 30 s.
+`server/src/mobs.js` runs one simulation per map that has players on it, using `shared/rules/mobsim.js`: the **same AI code** the offline game runs in the browser (smartness tiers, affixes, bosses, summons, field-boss timers). It ticks at 20 Hz (3 sub-steps each) and sends positions at 10 Hz, only for monsters that changed. Clients draw the server's monsters and interpolate them. A map nobody is on stops after 30 s.
 
 | Who | Does what |
 |---|---|
@@ -47,7 +47,7 @@ Safety rules:
 
 ### Damage is computed by the server
 
-The formula lives in `client/src/game/combat.js` and is shared: the offline game and personal story bosses use it in the browser, the server uses it for shared monsters. The client never sends a number:
+The formula lives in `shared/rules/combat.js` and is shared: the offline game and personal story bosses use it in the browser, the server uses it for shared monsters. The client never sends a number:
 
 ```text
 client: "skill sw_combo hit monster 42"   ──▶  hit {uid: 42, sid: 'sw_combo'}
@@ -105,11 +105,11 @@ The client still uploads the whole character (EXP, position, quests, shop purcha
 2. **Identity.** An item the server already has keeps its id, rarity and bonus stats. The client may change quantity, enhancement, element, gems and where it sits (bag or equipment).
 3. **Ownership.** An item that now belongs to another character (traded away) is dropped from the upload.
 4. **What the client may add:**
-   - *free items*: anything sold in a shop, gems (fusing, unsocketing), quest-only items (`freeItems()` in `client/src/game/loot.js`);
+   - *free items*: anything sold in a shop, gems (fusing, unsocketing), quest-only items (`freeItems()` in `shared/rules/loot.js`);
    - *earned items*: quest gifts and rewards for quests accepted or completed **in that save**, crafting results whose **materials were used up in that save** (each material counts for one recipe only), the starter kit of a new character (`questGrants`, `craftGrants`, `starterKit`);
    - nothing else: monster materials, outfits and rolled equipment only come from the server.
-5. **Quantities.** For items that are not free, the total may not grow beyond what the save earned. Stacks may be merged or used up. Items stored under an id from before a rename (`data/legacy.js`) count as the new id.
-6. **Bonus stats** of an item the save adds: none at rarity 0; above that only stats `rollEquip` can roll, each within what the rarity can reach (`bonusLimits` in `game/character.js`). Anything else is dropped and logged (`bonus`).
+5. **Quantities.** For items that are not free, the total may not grow beyond what the save earned. Stacks may be merged or used up. Items stored under an id from before a rename (`shared/data/legacy.js`) count as the new id.
+6. **Bonus stats** of an item the save adds: none at rarity 0; above that only stats `rollEquip` can roll, each within what the rarity can reach (`bonusLimits` in `shared/rules/character.js`). Anything else is dropped and logged (`bonus`).
 7. **Quests.** A quest the server has as done stays done: a save cannot remove or downgrade it, except a daily quest taken again on a later day. A daily completion is stored with the server's date, not the client's.
 
 Refused items are written to the ledger as `rejected` (with the reason), and the answer includes `items` so the client replaces its bag with what the server kept.
@@ -141,7 +141,7 @@ Nguyên Bảo (ingots) is the premium shop's currency (Vạn Bảo Các, merchan
 | A chieftain / a field boss: every member of the group that did the most damage | 2 / 5 | Server (`mobs.js` → `premium.kill`) |
 | Quests with `reward.ingots` (chapter finales, world quests), once each | per quest | Server, once the quest is **done in the saved character** (`claim`, ledger request id `quest:<char>:<quest>`) |
 
-Online the balance is a column the server owns: an uploaded save never changes `ingots` or `checkin`. Every change is a ledger row (`kind: 'ingots'`) at a new `item_rev`, so it reaches the client through the same change replay as pickups. A purchase is one transaction: bag room checked, items granted (cosmetics Legendary), ingots taken; `req` makes a repeated click harmless. Offline the save holds the balance and `game/premium.js` applies the same rules locally.
+Online the balance is a column the server owns: an uploaded save never changes `ingots` or `checkin`. Every change is a ledger row (`kind: 'ingots'`) at a new `item_rev`, so it reaches the client through the same change replay as pickups. A purchase is one transaction: bag room checked, items granted (cosmetics Legendary), ingots taken; `req` makes a repeated click harmless. Offline the save holds the balance and `shared/rules/premium.js` applies the same rules locally.
 
 The balance never goes below zero: `addIngotsTx` only applies a change that leaves it at 0 or more and throws otherwise (the transaction is undone, no ledger row, no revision bump). Kill rewards use the request id `kill:<map>:<time>:<uid>:<char>` (monster uids restart on each map). If an answer to `buy` or `checkin` is lost (the connection drops), the client's button waits `GAME.premium.replyTimeoutSec`, then works again; a retry of the same purchase reuses its `req`, so the server applies it once.
 

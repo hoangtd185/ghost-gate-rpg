@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { openDb } from '../../server/src/db.js';
 import { createTrades } from '../../server/src/trade.js';
-import { newCharacter } from '../../client/src/game/character.js';
+import { newCharacter } from '../../shared/rules/character.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qmq-trade-'));
 const sent = [];

@@ -5,7 +5,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { launch, newPage, openGame, startServer, register, createCharacter, uniqueName, until, shot, talk } from './helpers.mjs';
-import { GAME } from '../../client/src/config.js';
+import { GAME } from '../../shared/config.js';
 import { openDb } from '../../server/src/db.js';
 
 const PG = GAME.premium;

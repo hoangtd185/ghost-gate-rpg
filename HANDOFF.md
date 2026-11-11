@@ -12,7 +12,7 @@ Last updated: 2026-11-01.
 - The UI and all game text are **Vietnamese**. Code, ids and comments are **English**.
 - **One runtime dependency, `ws`** (WebSocket), plus `playwright-core` for tests. Plain Node (>= 22.13, for `node:sqlite`) and the browser canvas otherwise. Run `npm install` before `npm run dev` / `npm start`. **External libraries are allowed** (decision 6 in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)); see the dependency policy there before adding one.
 - **Why it is built this way** (stack, saving queue vs. RabbitMQ/Kafka/Redis, decisions log, multiplayer plan): [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Everything online (protocol, shared monsters, reward rules, server-side damage, parties, personal loot, item custody, trades, database load, what is still client-side): [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
-- Online and offline run the **same game code**: monster AI (`game/mobsim.js`), damage (`game/combat.js`), loot (`game/loot.js`) and physics (`game/physics.js`) are shared modules that the server imports. Offline (file:// or the Claude artifact) the browser runs them; online the server does.
+- Online and offline run the **same game code**: monster AI (`shared/rules/mobsim.js`), damage (`shared/rules/combat.js`), loot (`shared/rules/loot.js`) and physics (`shared/rules/physics.js`) are shared modules that the server imports. Offline (file:// or the Claude artifact) the browser runs them; online the server does.
 - All graphics are drawn in code (canvas curves, cached as sprite sheets). There are no image files.
 - Repo: `https://github.com/hoangtd185/ghost-gate-rpg`. Local copy on the owner's PC: `H:\Projects\quy-mon-quan`.
 - Playable web build: a Claude artifact (the `client/dist/artifact.html` build, saved through the artifact database).
@@ -76,20 +76,23 @@ Run a single file with `node --test tests/e2e/orbs.test.mjs`. Screenshots go to 
 ## 3. Architecture
 
 ```
-client/src/
-  main.js            boot, fixed-step loop (1/60 s), autosave, save results, debug globals
+shared/              used by the browser AND the server (no DOM, no Node-only imports)
   config.js          GAME: all tuning numbers (physics, player, monsters, loot, forge, story EXP, pet, saving,
                      net: realtime limits, server loot, shared monsters, parties, trades)
+  util.js            clamp, rand, pick, fmtNum, escapeHtml...
   data/              ALL CONTENT (pure data, no logic): classes, items, monsters, maps, npcs, story,
-                     chatter, affixes, recipes, elements, bots, legacy (old id migration)
-  engine/            input (keyboard, touch, double-tap sprint), util
-  game/character.js  the character model: stats (calcStats), EXP, inventory, equip, gems, crafting, passives,
+                     chatter, affixes, recipes, elements, bots, premium, world, legacy (old id migration)
+  rules/character.js the character model: stats (calcStats), EXP, inventory, equip, gems, crafting, passives,
                      quest state, normalizeCharacter (runs on every load)
-  game/mobsim.js     SHARED: MobState (monster stats) + MobSim (AI, bosses, spawns, field bosses, damage,
+  rules/mobsim.js    MobState (monster stats) + MobSim (AI, bosses, spawns, field bosses, damage,
                      deaths); emits events, never draws
-  game/combat.js     SHARED: damage formula (hitDamage), skill multipliers, reach, learned-skill check
-  game/loot.js       SHARED: drop tables (rollDrops), killExp, what a client save may add (free / earned items)
-  game/physics.js    SHARED: gravity and one-way platforms
+  rules/combat.js    damage formula (hitDamage), skill multipliers, reach, learned-skill check
+  rules/loot.js      drop tables (rollDrops), killExp, what a client save may add (free / earned items)
+  rules/physics.js   gravity and one-way platforms
+  rules/premium.js   premium shop rules (offers, check-in streak, where Nguyên Bảo comes from)
+client/src/
+  main.js            boot, fixed-step loop (1/60 s), autosave, save results, debug globals
+  engine/            input (keyboard, touch, double-tap sprint)
   game/world.js      GameWorld: map loading, player, skills, hit detection, drops, effects, rendering;
                      turns monster events into effects and damage to our player; online glue (remote monsters,
                      server drops, item changes)
@@ -100,7 +103,6 @@ client/src/
   gfx/               canvas drawing: humanoid.js (chibi characters + outfit parts), cape.js (flowing capes), monsters.js,
                      backgrounds.js, icons.js, pet.js, draw.js (toolkit)
   ui/premium.js      Vạn Bảo Các window (premium shop, check-in, try-on preview), mixed into GameUI
-  game/premium.js    SHARED: premium shop rules (offers, check-in streak, where Nguyên Bảo comes from)
   ui/hud.js          GameUI: HUD, all windows (inventory, skills, quests, shop, forge, craft, dialogue,
                      scenes, trade), party panel, quest tracker
   ui/screens.js      login / character select / create
@@ -149,7 +151,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 
 ## 4. Content inventory (current)
 
-- **Classes** (`data/classes.js`): `swordsman` (str, melee), `taoist` (int, talismans, chain lightning, fire dragon, homing thunder orbs `ta_orbs` that focus one target; the old heal `ta_heal` is migrated to it in `legacy.js`), `assassin` (dex, darts, dash, poison).
+- **Classes** (`shared/data/classes.js`): `swordsman` (str, melee), `taoist` (int, talismans, chain lightning, fire dragon, homing thunder orbs `ta_orbs` that focus one target; the old heal `ta_heal` is migrated to it in `legacy.js`), `assassin` (dex, darts, dash, poison).
   - Skills are `sw_*`, `ta_*` and `as_*`: 4 active skills plus 4 passives (`*_p1`..`p4`) per class.
   - The passives form a tree, with a max level of 5, and share skill points with the active skills.
 - **Elements**: `fire`, `ice`, `thunder`, `poison`.
@@ -193,10 +195,10 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 - **Monsters (18):**
   - Field monsters: wisp, fox, scarecrow, jiangshi, lantern, frog, water_ghost, snowfox, yeti, icebat, golem, fire_spirit, lava, blood_jiangshi, maskghost.
   - Bosses: `boss` (Black Ghost King, ghost_gate), `qilin` (qilin_altar), `blood_demon` (Huyết Ma Huyền Cơ, sanctum, final boss).
-- **Named monsters** (`data/affixes.js` → `NAMED`):
+- **Named monsters** (`shared/data/affixes.js` → `NAMED`):
   - Story bosses (only spawn while their quest is active): `nb_scarecrow` (st4), `nb_lantern` (st6d), `nb_icebat` (st10c), `nb_blood_jiangshi` (st16b).
   - Field bosses on timers: `fb_fox`, `fb_jiangshi`, `fb_yeti`, `fb_lava`, `fb_mask`.
-- **Chieftains (mini bosses, `CHIEF` in `data/affixes.js`):**
+- **Chieftains (mini bosses, `CHIEF` in `shared/data/affixes.js`):**
   - Each regular spawn has a 1.5% chance to become "Đầu Lĩnh <name>", at most one per map at a time. Bosses never roll it, and a chieftain is never also an elite.
   - Stats: ×7 HP, ×1.35 attack, ×1.25 defense, ×6 EXP and gold, 1.45× size, orange glow, ♛ name tag, boss HP bar when aggroed.
   - Drops: the species' normal drops plus stones, a gem, potions, a chance at protection charms and `mat_dew`. Equipment rolls with extra luck and is at least Common+1.
@@ -243,7 +245,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
   - Drawn live, not in the sprite sheet: `CapeCloth` (`gfx/cape.js`) is a chain of points pinned at the back of the neck (`capeAnchor(frame)` in `humanoid.js`), stepped at a fixed 1/120 s (Verlet) with gravity, air drag (so it flies out while running), a backward pull (so it drapes over the back standing still), a travelling wave while moving, and constraints (fixed segment length, never in front of the body, never rising over the shoulders). Tuning: `GAME.cape`.
   - `lookFor` sets `look.liveCape`: the cape slot wins over an outfit's own `look.cape`; without a cape item, the outfit's cape is turned into a flowing one (`outfitCape`). `Humanoid.setLook` keeps `liveCape` out of the cached sheet. Players, other players and 30% of bots (`GAME.cape.botChance`) draw it. `world.capeFx` sheds the cape's particles.
   - Server: `cape` is in `GAME.player.equipSlots` (saved like any slot) and in the realtime appearance; `reconcileItems` only keeps an equipped item in its own slot.
-- **World quests (`data/world.js`, `cat: 'world'`)**, Genshin style: 4 chains, each with a mood and an ending chosen by the player.
+- **World quests (`shared/data/world.js`, `cat: 'world'`)**, Genshin style: 4 chains, each with a mood and an ending chosen by the player.
 
 | Chain | Mood | Where | Steps | Choice → branch |
 |---|---|---|---|---|
@@ -256,21 +258,21 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
   - New NPCs: `kid_bin` (village), `gravekeeper` + `ghost_girl` (graveyard), `golden_carp` (swamp, after `wq_carp2`), `snow_bride` (snow peak, until `wq_bride4a`). `ghost: true` NPCs are drawn translucent and shimmer. Map NPC entries also take `from` (present once that quest is accepted) and `gone` (absent once it is done).
   - Discovery: the first time a map holds the giver of a chain's first available step, a banner and a toast announce it (flag `wq_<chain>`). The quest log has a "Nhiệm vụ thế giới" section per chain (mood, progress, where the next step starts); world quest givers show a violet `!` in a diamond.
 - **Premium shop (Vạn Bảo Các) and Nguyên Bảo (ingots)**: NPC `merchant` (Vạn Bảo Lão, village x 1085) or **B** / the "Vạn Bảo" menu button.
-  - Offers in `data/premium.js` (tabs cape / outfit / util): 5 premium capes (`cape_sakura`, `cape_frost`, `cape_phoenix`, `cape_shadow`, `cape_dragon`, any level), 2 outfits, utility bundles. Cosmetics are granted Legendary.
+  - Offers in `shared/data/premium.js` (tabs cape / outfit / util): 5 premium capes (`cape_sakura`, `cape_frost`, `cape_phoenix`, `cape_shadow`, `cape_dragon`, any level), 2 outfits, utility bundles. Cosmetics are granted Legendary.
   - Earned only in game (`GAME.premium`): daily check-in (10, +40 on every 7th day in a row; the day starts at midnight Vietnam time), chieftains (+2) and field bosses (+5) for the top damage group, quests with `reward.ingots` (chapter finales st7/st12/st18: 30).
-  - Rules shared by both sides in `game/premium.js` (`checkinReward`, `killIngots`, `questIngots`, offers; `buyLocal` / `checkinLocal` offline). Window and try-on preview in `ui/premium.js` (mixed into `GameUI`).
+  - Rules shared by both sides in `shared/rules/premium.js` (`checkinReward`, `killIngots`, `questIngots`, offers; `buyLocal` / `checkinLocal` offline). Window and try-on preview in `ui/premium.js` (mixed into `GameUI`).
   - Online the server owns the balance: `characters.ingots` and `checkin` columns, never taken from saves; every change is an `ingots` ledger row replayed through `chg`. `server/src/premium.js` handles `prem` messages (buy / checkin / claim) and kill rewards. See docs/MULTIPLAYER.md §4b.
 - **Pet**: `imp` (Tiểu Quỷ), from side quest `q_pet`. It picks up drops.
 
 ## 5. Conventions and rules
 
-- **Tuning numbers go in `client/src/config.js` (`GAME`), never as magic numbers in logic.** Content goes in `client/src/data/`, deployment settings in `.env`. The server imports `client/src/config.js` for shared rules (classes, equip slots, level cap, points per level, enhance max), so keep that file plain data with no DOM or browser APIs. Old exported names (`INV_SIZE`, `ENHANCE_RATE`, `MAX_RES`, `CHIEF`, …) are kept as aliases that read from `GAME`.
+- **Tuning numbers go in `shared/config.js` (`GAME`), never as magic numbers in logic.** Content goes in `shared/data/`, deployment settings in `.env`. The server imports `shared/config.js` for shared rules (classes, equip slots, level cap, points per level, enhance max), so keep that file plain data with no DOM or browser APIs. Old exported names (`INV_SIZE`, `ENHANCE_RATE`, `MAX_RES`, `CHIEF`, …) are kept as aliases that read from `GAME`.
 - **English for code, ids and comments; Vietnamese only for player-facing text** (dialogue, names, UI, error messages shown to players).
   - Ids are lowercase snake_case.
   - Dev-facing logs (server, build, check-secrets) are English.
-- **Renaming a stored id?** Add the old → new mapping to `client/src/data/legacy.js`. `migrateLegacy` runs first inside `normalizeCharacter` and on the character list screen. It covers class, map, pet, skills, items (including `w_*`, `orb_*`, outfits), item element, `r_*` → `res_*` bonus keys and quest ids.
+- **Renaming a stored id?** Add the old → new mapping to `shared/data/legacy.js`. `migrateLegacy` runs first inside `normalizeCharacter` and on the character list screen. It covers class, map, pet, skills, items (including `w_*`, `orb_*`, outfits), item element, `r_*` → `res_*` bonus keys and quest ids.
   - The server also rewrites old class ids in `db.js` → `migrate()`, because `cls` is never re-saved.
-- **Content changes are data edits** in `client/src/data/`.
+- **Content changes are data edits** in `shared/data/`.
   - A new monster also needs a draw function registered in `MAKERS` (`gfx/monsters.js`).
   - A new outfit part needs a draw helper in `gfx/humanoid.js`.
 - **Story lines** are `[speaker, text, cond?]`:
@@ -286,7 +288,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
    - Two modules cannot declare the same top-level name; the build prints "Duplicate top-level name" and fails.
    - Keep helper names unique, or make them non-exported locals inside functions.
 2. **Dev mode uses real ES modules**, so a duplicate `import` of the same name in one file is a SyntaxError in dev even though the bundle works. Test with `npm run dev` too.
-3. **`.gitignore` must use `/data/`** (with the leading slash). A plain `data/` also hides `client/src/data/`, which happened once and left the GitHub repo without its game data. The same applies to `.dockerignore`.
+3. **`.gitignore` must use `/data/`** (with the leading slash). A plain `data/` also hides `shared/data/`, which happened once and left the GitHub repo without its game data. The same applies to `.dockerignore`.
 4. `storage.js` calls `this.col.doc(...)`, a Firestore-like artifact API. Do not "rename" `doc` there; `doc` was the old poison element id.
 5. Monster ids `boss` and `lava` double as behavior/theme words. Map ids and theme ids are separate namespaces: the `temple` map uses the `temple` theme, and `ghost_gate` uses `hell`.
 6. **Dialogue tests**: hidden dialogs stay in the DOM, so select `#win:not([hidden]) .dlg`. The character select play button is `[data-play]`. Enter must not auto-pick a scene choice (guarded by `c.big`).
@@ -298,7 +300,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 10. **Shared modules** (`mobsim.js`, `combat.js`, `loot.js`, `physics.js`, `character.js`, `config.js`, `data/*`) are imported by the server: no DOM, no canvas, no `window`. `Monster` in `entities.js` adds the sprite on top of `MobState`; the server only ever uses `MobState`.
 11. `world.monsters` and `world.spawnGroups` are getters/setters over `world.sim` (tests assign them). Online, shared monsters are in the same list with `m.remote = true`; the local simulation skips them.
 12. Every player hit must carry its skill id (`opts.sid` in `damageMonster`, `sid` on projectiles and zones), or it never reaches the server. Never send a damage number.
-13. A new way for the client to create an item (shop, quest reward, recipe) must be allowed in `freeItems` / `questGrants` / `craftGrants` (`game/loot.js`), or online saves will refuse the item. Any server-side item change bumps `item_rev` and writes a ledger row in the same transaction.
+13. A new way for the client to create an item (shop, quest reward, recipe) must be allowed in `freeItems` / `questGrants` / `craftGrants` (`shared/rules/loot.js`), or online saves will refuse the item. Any server-side item change bumps `item_rev` and writes a ledger row in the same transaction.
 14. Server hot paths (positions, hits, kills, loot rolls) never read the database: use the session cache `s.ch` / `statsOf(s)` (refreshed on `saved` and when buffs change).
 
 ## 7. History: what was built, in order
@@ -338,7 +340,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
    - Durable save queue with a local outbox, keepalive uploads and immediate saves on rare drops.
    - Double-tap sprint (with a forward-leaning run animation) and Ctrl + ↓ drop.
    - Chieftain mini bosses.
-   - Central tuning config `client/src/config.js`, shared with the server.
+   - Central tuning config `shared/config.js`, shared with the server.
    - Tests moved from Python to Node: `node --test` unit tests plus `playwright-core` e2e scenarios, both in CI.
 9. **Online play (2026-10-23 → 2026-10-28):**
    1. *Stage 1*: WebSocket (`ws`) presence, movement sync, map/world chat (`!` prefix), real player count; SQLite `synchronous = FULL`. CI installs runtime deps (`npm ci --omit=dev`).
@@ -346,10 +348,10 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
    3. *Personal loot*: drops rolled by the server, only their owner sees them; pickups committed (item + ledger row) before the answer; `item_ledger`, `item_rev`, change replay (`chg`, `GET /changes`).
    4. *Item custody*: uploaded saves keep the server's item identity; free / earned / server-only rules; stale saves skip items, gold and quests.
    5. *Trades* (T), Võ Lâm style: shared window, any change unlocks both, lock + confirm, one transaction.
-   6. *Shared monsters*: monster AI extracted from `world.js` into `game/mobsim.js`, run by the server per occupied map; clients render and interpolate them.
+   6. *Shared monsters*: monster AI extracted from `world.js` into `shared/rules/mobsim.js`, run by the server per occupied map; clients render and interpolate them.
    7. *Parties* (G) and reward rules: EXP by damage share between groups, a party splits evenly, loot to the top group (each party member gets their own roll).
    8. *Database load*: pickup commit queue (group commit ≤ 25 ms / 200 pickups), admission control (`busy`), per-player rate limits, session cache (no DB reads on hot paths).
-   9. *Server-side damage*: `game/combat.js` shared formulas; clients send `hit {uid, sid}`, buffs via `cast {sid}`; results broadcast as `mhit`.
+   9. *Server-side damage*: `shared/rules/combat.js` shared formulas; clients send `hit {uid, sid}`, buffs via `cast {sid}`; results broadcast as `mhit`.
 
 10. **Capes (2026-11-01, branch `feature/capes`)**: a 6th equipment slot worn with an outfit, simulated cloth drawn live behind every humanoid, two craftable capes, outfit capes now flowing.
 
@@ -383,6 +385,6 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 
 ## 9. Recovering if the source is lost
 
-- The GitHub repo is the source of truth (once `client/src/data/` has been pushed).
+- The GitHub repo is the source of truth (once `shared/data/` has been pushed).
 - The playable artifact contains the full bundled client (all data and logic in one file), but not the server.
-- To rebuild from nothing, this file plus `README.md` describe every system, id and decision. The data files in `client/src/data/` are the most valuable part, since they hold the story, dialogue, balance numbers and content.
+- To rebuild from nothing, this file plus `README.md` describe every system, id and decision. The data files in `shared/data/` are the most valuable part, since they hold the story, dialogue, balance numbers and content.

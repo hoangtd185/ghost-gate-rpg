@@ -3,13 +3,13 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { GAME } from '../../client/src/config.js'; // game rules shared with the client
-import { ITEMS } from '../../client/src/data/items.js';
-import { legacyItem } from '../../client/src/data/legacy.js';
-import { QUESTS } from '../../client/src/data/npcs.js';
-import { bonusLimits, todayKey } from '../../client/src/game/character.js';
-import { isFreeItem, freeItems, questGrants, craftGrants, starterKit } from '../../client/src/game/loot.js';
-import { offerById, offerItems, cellsNeeded, checkinReward, premiumDay, questIngots } from '../../client/src/game/premium.js';
+import { GAME } from '../../shared/config.js'; // game rules shared with the client
+import { ITEMS } from '../../shared/data/items.js';
+import { legacyItem } from '../../shared/data/legacy.js';
+import { QUESTS } from '../../shared/data/npcs.js';
+import { bonusLimits, todayKey } from '../../shared/rules/character.js';
+import { isFreeItem, freeItems, questGrants, craftGrants, starterKit } from '../../shared/rules/loot.js';
+import { offerById, offerItems, cellsNeeded, checkinReward, premiumDay, questIngots } from '../../shared/rules/premium.js';
 const isFreeItemId = (id) => freeItems().has(id);
 
 const SCHEMA = `

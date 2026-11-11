@@ -4,8 +4,8 @@
 //   { t:'prem', op:'claim', quest }      ingots for a completed quest (it must be done in the saved character)
 // Answer: { t:'prem', op, ok, why?, req?, got?, streak?, quest? }. The balance and the items themselves arrive as
 // item changes (chg), like pickups. Kill rewards (chieftains, field bosses) come from mobs.js through `kill`.
-import { GAME } from '../../client/src/config.js';
-import { killIngots } from '../../client/src/game/premium.js';
+import { GAME } from '../../shared/config.js';
+import { killIngots } from '../../shared/rules/premium.js';
 
 const PG = GAME.premium;
 

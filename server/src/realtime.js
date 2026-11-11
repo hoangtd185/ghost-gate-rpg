@@ -14,9 +14,9 @@
 //                     prem {op, ok, why?, req?, got?, streak?, quest?}
 import { WebSocketServer } from 'ws';
 import { verifyToken } from './auth.js';
-import { MAPS } from '../../client/src/data/maps.js';
-import { ITEMS } from '../../client/src/data/items.js';
-import { GAME } from '../../client/src/config.js';
+import { MAPS } from '../../shared/data/maps.js';
+import { ITEMS } from '../../shared/data/items.js';
+import { GAME } from '../../shared/config.js';
 import { createLoot } from './loot.js';
 import { createTrades } from './trade.js';
 import { createMobs } from './mobs.js';

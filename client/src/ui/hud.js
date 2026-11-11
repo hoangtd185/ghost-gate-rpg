@@ -1,29 +1,29 @@
 // In-game UI (HUD + windows) as HTML laid over the canvas
-import { CLASSES, SKILLS, SKILL_MAX_LV, SKILL_KEYS, PASSIVES, PASSIVE_MAX_LV, PASSIVE_NAMES, passivesOf } from '../data/classes.js';
-import { ITEMS, RARITY, SLOT_NAMES, STAT_NAMES, ENHANCE_MAX, ENHANCE_RATE, ENHANCE_SAFE, enhanceCost, GEM_KINDS, GEM_GRADES, GEM_SLOTS, GEM_FUSE, gemId, socketCount, socketCost, unsocketCost, isLookSlot } from '../data/items.js';
-import { ELEMENTS, ELEMENT_IDS } from '../data/elements.js';
-import { NPCS, QUESTS } from '../data/npcs.js';
-import { SPEAKERS, CHAPTERS, SCENES, MAIN_ORDER } from '../data/story.js';
-import { WORLD_CHAINS } from '../data/world.js';
-import { RECIPES } from '../data/recipes.js';
+import { CLASSES, SKILLS, SKILL_MAX_LV, SKILL_KEYS, PASSIVES, PASSIVE_MAX_LV, PASSIVE_NAMES, passivesOf } from '../../../shared/data/classes.js';
+import { ITEMS, RARITY, SLOT_NAMES, STAT_NAMES, ENHANCE_MAX, ENHANCE_RATE, ENHANCE_SAFE, enhanceCost, GEM_KINDS, GEM_GRADES, GEM_SLOTS, GEM_FUSE, gemId, socketCount, socketCost, unsocketCost, isLookSlot } from '../../../shared/data/items.js';
+import { ELEMENTS, ELEMENT_IDS } from '../../../shared/data/elements.js';
+import { NPCS, QUESTS } from '../../../shared/data/npcs.js';
+import { SPEAKERS, CHAPTERS, SCENES, MAIN_ORDER } from '../../../shared/data/story.js';
+import { WORLD_CHAINS } from '../../../shared/data/world.js';
+import { RECIPES } from '../../../shared/data/recipes.js';
 import { npcLine, fillText } from '../game/chatter.js';
 import { humanoidSheet, HUM_W } from '../gfx/humanoid.js';
 import { monsterSheet } from '../gfx/monsters.js';
 import { drawFrame } from '../gfx/draw.js';
 import { lookFor } from '../game/entities.js';
-import { MAPS, GROUND_Y } from '../data/maps.js';
+import { MAPS, GROUND_Y } from '../../../shared/data/maps.js';
 import { iconForItem } from '../gfx/icons.js';
 import {
   expToNext, entryStats, equipEntry, unequip, removeEntry, addItem, sellPrice, canEquip,
   questStatus, questProgress, removeItem, resolveItemId, rollEquip, gainExp, upgradeSkill, addStat, INV_SIZE,
   entryElement, entryName, enhanceEntry, countItem, todayKey, questTurnIn,
   socketGem, unsocketGem, fuseGems, gemFits, lineVisible, passiveBlock, learnPassive, resetSkills, resetCost, canCraft, craft,
-} from '../game/character.js';
+} from '../../../shared/rules/character.js';
 import { SKILL_GLYPH, SKILL_COLOR } from './skillglyphs.js';
-import { escapeHtml, fmtNum } from '../engine/util.js';
-import { GAME } from '../config.js';
+import { escapeHtml, fmtNum } from '../../../shared/util.js';
+import { GAME } from '../../../shared/config.js';
 import { PremiumUI } from './premium.js';
-import { questIngots } from '../game/premium.js';
+import { questIngots } from '../../../shared/rules/premium.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 

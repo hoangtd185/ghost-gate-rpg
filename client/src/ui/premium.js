@@ -1,13 +1,13 @@
 // Vạn Bảo Các window (premium shop): Nguyên Bảo balance, daily check-in, offers by tab, a live try-on preview.
 // Mixed into GameUI (ui/hud.js). Online every action goes to the server (net.premium) and the result comes back
 // as item changes; offline the save is changed directly (game/premium.js).
-import { ITEMS, SLOT_NAMES, STAT_NAMES, isLookSlot } from '../data/items.js';
-import { PREMIUM_SHOP, PREMIUM_TABS } from '../data/premium.js';
-import { GAME } from '../config.js';
+import { ITEMS, SLOT_NAMES, STAT_NAMES, isLookSlot } from '../../../shared/data/items.js';
+import { PREMIUM_SHOP, PREMIUM_TABS } from '../../../shared/data/premium.js';
+import { GAME } from '../../../shared/config.js';
 import { iconForItem } from '../gfx/icons.js';
 import { Humanoid, lookFor } from '../game/entities.js';
-import { buyLocal, checkinLocal, checkinReward, premiumDay, offerById } from '../game/premium.js';
-import { escapeHtml, fmtNum } from '../engine/util.js';
+import { buyLocal, checkinLocal, checkinReward, premiumDay, offerById } from '../../../shared/rules/premium.js';
+import { escapeHtml, fmtNum } from '../../../shared/util.js';
 
 const PREM_CFG = GAME.premium;
 const ingotImg = () => iconForItem({ icon: 'ingot', color: '#f0c040' }).url;

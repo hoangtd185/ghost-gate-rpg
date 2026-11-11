@@ -4,9 +4,9 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createMobs, statsOf } from '../../server/src/mobs.js';
-import { newCharacter } from '../../client/src/game/character.js';
-import { killExp } from '../../client/src/game/loot.js';
-import { hitDamage, skillMult, skillElement } from '../../client/src/game/combat.js';
+import { newCharacter } from '../../shared/rules/character.js';
+import { killExp } from '../../shared/rules/loot.js';
+import { hitDamage, skillMult, skillElement } from '../../shared/rules/combat.js';
 
 const sent = [];
 const players = new Map();

@@ -5,9 +5,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { openDb } from '../../server/src/db.js';
-import { newCharacter } from '../../client/src/game/character.js';
-import { craftGrants } from '../../client/src/game/loot.js';
-import { GAME } from '../../client/src/config.js';
+import { newCharacter } from '../../shared/rules/character.js';
+import { craftGrants } from '../../shared/rules/loot.js';
+import { GAME } from '../../shared/config.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qmq-custody-'));
 let db, uid, A, B;
@@ -272,7 +272,7 @@ describe('review fixes: bonus stats, renamed items, quests', () => {
   });
 
   it("a daily completion gets the server's date; it can be taken again on a later day", async () => {
-    const { todayKey } = await import('../../client/src/game/character.js');
+    const { todayKey } = await import('../../shared/rules/character.js');
     let ch = load(A);
     ch.quests.d_hunt1 = { s: 'done', p: 15, day: '2099-12-31' };
     db.saveCharacter(uid, ch);

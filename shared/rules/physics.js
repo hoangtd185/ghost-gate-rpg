@@ -1,7 +1,7 @@
 // Basic physics shared by the browser game and the server: gravity + one-way platforms. No drawing here.
 import { GROUND_Y } from '../data/maps.js';
 import { GAME } from '../config.js';
-import { clamp } from '../engine/util.js';
+import { clamp } from '../util.js';
 
 export const GRAVITY = GAME.physics.gravity;
 

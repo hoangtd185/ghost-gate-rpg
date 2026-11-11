@@ -7,11 +7,11 @@
 // and each player is answered only after that commit. The queue has a hard cap (admission control: beyond it a
 // pickup is answered "busy" and the client simply tries again) and each player has a pickup rate limit.
 import crypto from 'node:crypto';
-import { MAPS } from '../../client/src/data/maps.js';
-import { MONSTERS } from '../../client/src/data/monsters.js';
-import { NAMED } from '../../client/src/data/affixes.js';
-import { rollDrops } from '../../client/src/game/loot.js';
-import { GAME } from '../../client/src/config.js';
+import { MAPS } from '../../shared/data/maps.js';
+import { MONSTERS } from '../../shared/data/monsters.js';
+import { NAMED } from '../../shared/data/affixes.js';
+import { rollDrops } from '../../shared/rules/loot.js';
+import { GAME } from '../../shared/config.js';
 
 const L = GAME.net.loot;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));

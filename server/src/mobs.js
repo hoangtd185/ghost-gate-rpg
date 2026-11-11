@@ -8,14 +8,14 @@
 //   - Quest credit: everyone who got EXP.
 // Everything here is in memory (one Node process, one event loop: no locks needed). Only picking up an item
 // touches the database (see loot.js).
-import { NAMED } from '../../client/src/data/affixes.js';
-import { SKILLS } from '../../client/src/data/classes.js';
-import { MobSim } from '../../client/src/game/mobsim.js';
-import { calcStats } from '../../client/src/game/character.js';
-import { killExp } from '../../client/src/game/loot.js';
-import { hitDamage, skillMult, skillElement, knowsSkill, skillReach } from '../../client/src/game/combat.js';
-import { GAME } from '../../client/src/config.js';
-import { randInt } from '../../client/src/engine/util.js';
+import { NAMED } from '../../shared/data/affixes.js';
+import { SKILLS } from '../../shared/data/classes.js';
+import { MobSim } from '../../shared/rules/mobsim.js';
+import { calcStats } from '../../shared/rules/character.js';
+import { killExp } from '../../shared/rules/loot.js';
+import { hitDamage, skillMult, skillElement, knowsSkill, skillReach } from '../../shared/rules/combat.js';
+import { GAME } from '../../shared/config.js';
+import { randInt } from '../../shared/util.js';
 
 const MB = GAME.net.mobs;
 const num = (v, d = 0) => (Number.isFinite(+v) ? +v : d);

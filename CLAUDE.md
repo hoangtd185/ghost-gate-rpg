@@ -30,21 +30,21 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 
 | Change | Place |
 |---|---|
-| Balance numbers (speeds, rates, multipliers, timers, limits) | `client/src/config.js` (`GAME`). No magic numbers in logic |
-| Content (classes, skills, items, monsters, maps, NPCs, quests, dialogue, recipes, named bosses) | `client/src/data/*.js` |
+| Balance numbers (speeds, rates, multipliers, timers, limits) | `shared/config.js` (`GAME`). No magic numbers in logic |
+| Content (classes, skills, items, monsters, maps, NPCs, quests, dialogue, recipes, named bosses) | `shared/data/*.js` |
 | Deployment settings, secrets | `.env` (template `.env.example`), read by `server/src/config.js` |
-| Renamed an id that can be stored in a save | Add old → new to `client/src/data/legacy.js` |
+| Renamed an id that can be stored in a save | Add old → new to `shared/data/legacy.js` |
 | New monster sprite | Draw in `client/src/gfx/monsters.js`, register it in `MAKERS` |
 | New outfit part | Draw helper in `client/src/gfx/humanoid.js` |
-| New cape | An item with `slot: 'cape'` and a `cape` look in `client/src/data/items.js` (options at the top of `client/src/gfx/cape.js`); cloth feel in `GAME.cape` |
-| World quest chains (Genshin-style side stories, choices, branches) | `client/src/data/world.js` (chains + quests), NPCs in `data/npcs.js`, their spots in `data/maps.js` |
-| Premium shop offers, Nguyên Bảo amounts | `client/src/data/premium.js` (offers), `GAME.premium` (check-in, kills, chapter rewards), `reward.ingots` on quests |
-| Monster behaviour (AI, affixes, bosses, spawns) | `client/src/game/mobsim.js` (runs offline and on the server) |
-| Damage formulas (player hits, skill multipliers, reach) | `client/src/game/combat.js` (runs offline and on the server) |
-| Loot tables and rules (drops, what clients may create) | `client/src/data/*` for tables, `client/src/game/loot.js` for rules, `server/src/loot.js` for kill checks |
+| New cape | An item with `slot: 'cape'` and a `cape` look in `shared/data/items.js` (options at the top of `client/src/gfx/cape.js`); cloth feel in `GAME.cape` |
+| World quest chains (Genshin-style side stories, choices, branches) | `shared/data/world.js` (chains + quests), NPCs in `shared/data/npcs.js`, their spots in `shared/data/maps.js` |
+| Premium shop offers, Nguyên Bảo amounts | `shared/data/premium.js` (offers), `GAME.premium` (check-in, kills, chapter rewards), `reward.ingots` on quests |
+| Monster behaviour (AI, affixes, bosses, spawns) | `shared/rules/mobsim.js` (runs offline and on the server) |
+| Damage formulas (player hits, skill multipliers, reach) | `shared/rules/combat.js` (runs offline and on the server) |
+| Loot tables and rules (drops, what clients may create) | `shared/data/*` for tables, `shared/rules/loot.js` for rules, `server/src/loot.js` for kill checks |
 | New realtime message | `server/src/realtime.js` + `client/src/net/realtime.js`; document it in the protocol table in `docs/MULTIPLAYER.md` |
 
-`config.js` and `data/*` are imported by the server too, so keep them plain data (no DOM, no browser-only or Node-only imports).
+Everything under `shared/` (`config.js`, `util.js`, `data/*`, `rules/*`) is imported by both the browser and the server, so keep it plain JS: no DOM, no browser-only or Node-only imports, and never import from `client/` or `server/`. Client-only code (drawing, UI, input, storage) lives in `client/src`; server-only code in `server/src`.
 
 ## Conventions
 
@@ -55,16 +55,16 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 ## Traps
 
 - `tools/build.mjs` concatenates every module into one scope: **top-level names must be unique across modules**. Dev mode uses real ES modules, so a duplicate import in one file breaks dev only. Check both `npm run build` and `npm run dev`.
-- `.gitignore` / `.dockerignore` must use `/data/` with the leading slash. A plain `data/` hides `client/src/data/`.
+- `.gitignore` / `.dockerignore` must use `/data/` with the leading slash. A plain `data/` hides `shared/data/`.
 - `storage.js` uses `this.col.doc(...)` (artifact DB API). It is not the old `doc` element id; never rename it.
 - After accepting a quest, call `world.refreshNpcs()` (NPCs with `until` / `hideWhile`).
 - Realtime: never trust client-sent appearance or items; the server reads them from the database. `world.loadMap` must call `net.entered()` so the server resends the map's players.
-- Online, items reach the bag only through the server (`grantItem`, `commitTrade`) or the custody rules in `db.reconcileItems`. A new way for the client to create an item (shop, quest reward, recipe) must be covered by `freeItems` / `questGrants` / `craftGrants` in `game/loot.js`, or saves will refuse it. Any server-side item change must bump `item_rev` and write a ledger row in the same transaction.
-- Loot rules live in `game/loot.js` (shared). Do not roll drops anywhere else.
-- Monster AI lives in `game/mobsim.js`, shared by the browser and the server: no DOM, no drawing, no direct damage to a player. Anything visible leaves as an event (`world.mobEvent` on the client, `server/src/mobs.js` on the server). `world.monsters` / `world.spawnGroups` are views of `world.sim`.
+- Online, items reach the bag only through the server (`grantItem`, `commitTrade`) or the custody rules in `db.reconcileItems`. A new way for the client to create an item (shop, quest reward, recipe) must be covered by `freeItems` / `questGrants` / `craftGrants` in `shared/rules/loot.js`, or saves will refuse it. Any server-side item change must bump `item_rev` and write a ledger row in the same transaction.
+- Loot rules live in `shared/rules/loot.js` (shared). Do not roll drops anywhere else.
+- Monster AI lives in `shared/rules/mobsim.js`, shared by the browser and the server: no DOM, no drawing, no direct damage to a player. Anything visible leaves as an event (`world.mobEvent` on the client, `server/src/mobs.js` on the server). `world.monsters` / `world.spawnGroups` are views of `world.sim`.
 - Damage to shared monsters is computed by the server: the client sends `net.hit({ uid, sid })`, never a number. Every player hit must carry the skill id (`opts.sid` in `damageMonster`, `sid` on projectiles and zones).
 - Hot paths on the server (positions, hits, kills, loot rolls) never read the database: use the session cache `s.ch` (refreshed on `saved`).
-- Nguyên Bảo online belongs to the server (`characters.ingots`, ledger kind `ingots`): never trust or save the client's `ch.ingots`. New sources go through `server/src/premium.js` / `db.grantIngots` (and `game/premium.js` for the offline rule).
+- Nguyên Bảo online belongs to the server (`characters.ingots`, ledger kind `ingots`): never trust or save the client's `ch.ingots`. New sources go through `server/src/premium.js` / `db.grantIngots` (and `shared/rules/premium.js` for the offline rule).
 - `rollEquip(id, luck, minRarity)`: pass the minimum rarity in. Raising `r` afterwards leaves items without bonus stats.
 
 ## Git and PRs
