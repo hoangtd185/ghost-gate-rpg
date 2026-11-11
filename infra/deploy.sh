@@ -8,6 +8,8 @@ ROOT=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 TF_DIR="$ROOT/infra/terraform"
 HOST=$(terraform -chdir="$TF_DIR" output -raw public_ip)
 DOMAIN=$(terraform -chdir="$TF_DIR" output -raw domain)
+BACKUP_BUCKET=$(terraform -chdir="$TF_DIR" output -raw backup_bucket)
+REGION=$(terraform -chdir="$TF_DIR" output -raw region)
 URL=$(terraform -chdir="$TF_DIR" output -raw game_url)
 
 SSH=(ssh -o StrictHostKeyChecking=accept-new)
@@ -24,6 +26,6 @@ echo "Waiting for the first-boot setup to finish..."
 echo "Uploading $(git -C "$ROOT" rev-parse --short HEAD)..."
 git -C "$ROOT" archive --format=tar HEAD | "${SSH[@]}" 'rm -rf ~/app && mkdir ~/app && tar -x -C ~/app'
 
-"${SSH[@]}" "sudo DOMAIN='$DOMAIN' bash ~/app/infra/server-deploy.sh"
+"${SSH[@]}" "sudo DOMAIN='$DOMAIN' BACKUP_BUCKET='$BACKUP_BUCKET' AWS_REGION='$REGION' bash ~/app/infra/server-deploy.sh"
 
 echo "Deployed: $URL"

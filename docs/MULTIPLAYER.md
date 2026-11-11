@@ -242,7 +242,7 @@ Stage 2 closes the biggest holes (inventing drops, editing item stats, duplicati
 | 3a | EXP and level owned by the server; damage to players computed on the server too |
 | 3b | Forge, shop and quest rewards as server actions |
 | 3c | Write-behind for position/HP/EXP; grace period on disconnect |
-| 3d | Nightly `VACUUM INTO` backups, tested restores; optional [Litestream](https://litestream.io/) |
+| 3d | Nightly `VACUUM INTO` backups to S3 (done: `tools/backup.mjs`, `infra/backup.sh`, README > Backups); a tested restore on a spare machine; optional [Litestream](https://litestream.io/) for seconds-level recovery |
 | 3e | Friends, guilds, party loot options, PvP |
 
 ## 10. Message queue, RabbitMQ: do we need it?

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Runs ON the server as root, from an unpacked release. Called by the SSM document (GitHub Actions) and by infra/deploy.sh.
 # Builds the image, restarts the game (rolling back if it fails its health check), then updates nginx and the certificate.
-# Environment: DOMAIN (empty serves plain HTTP).
+# Environment: DOMAIN (empty serves plain HTTP), BACKUP_BUCKET and AWS_REGION (nightly backup upload; empty keeps backups on the data disk only).
 set -euo pipefail
 
 DOMAIN=${DOMAIN:-}
+BACKUP_BUCKET=${BACKUP_BUCKET:-}
+AWS_REGION=${AWS_REGION:-}
 DATA_ROOT=${DATA_ROOT:-/srv/quymonquan}
 HEALTH_URL=http://127.0.0.1:3000/api/health
 NGINX_IMAGE=nginx:1.30.6-alpine
@@ -94,6 +96,35 @@ docker run -d --name nginx --restart unless-stopped --network host \
   -v "$WEBROOT:/var/www/certbot:ro" \
   --log-opt max-size=10m --log-opt max-file=3 \
   "$NGINX_IMAGE" > /dev/null
+
+# Nightly database backup: a snapshot of game.db (no downtime) kept 7 days on the data disk and copied to S3.
+# Persistent=true runs a missed backup after the server was off at the scheduled time.
+install -m 755 "$RELEASE_DIR/infra/backup.sh" /usr/local/bin/quymonquan-backup
+printf 'BACKUP_BUCKET=%s\nAWS_REGION=%s\nDATA_ROOT=%s\n' "$BACKUP_BUCKET" "$AWS_REGION" "$DATA_ROOT" > /etc/quymonquan-backup.env
+cat > /etc/systemd/system/quymonquan-backup.service <<UNIT
+[Unit]
+Description=Back up the game database
+RequiresMountsFor=$DATA_ROOT
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/quymonquan-backup.env
+ExecStart=/usr/local/bin/quymonquan-backup
+UNIT
+cat > /etc/systemd/system/quymonquan-backup.timer <<UNIT
+[Unit]
+Description=Nightly backup of the game database
+
+[Timer]
+OnCalendar=*-*-* 20:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now quymonquan-backup.timer
 
 if [ -n "$DOMAIN" ]; then
   if [ ! -f "$CERT" ]; then
