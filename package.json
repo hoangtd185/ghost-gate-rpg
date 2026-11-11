@@ -19,7 +19,7 @@
     "hooks": "node tools/check-secrets.mjs --install-hook"
   },
   "dependencies": {
-    "ws": "8.18.0"
+    "ws": "8.22.2"
   },
   "devDependencies": {
     "eslint": "9.13.0",
