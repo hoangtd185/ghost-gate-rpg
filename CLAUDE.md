@@ -48,6 +48,7 @@ Everything under `shared/` (`config.js`, `util.js`, `data/*`, `rules/*`) is impo
 
 ## Conventions
 
+- **Keep files small (about 500 lines at most).** `GameWorld` and `GameUI` are split into mixins (`game/world/*.js`, `ui/hud/*.js`: methods of one class spread over feature files, applied with `Object.assign(Class.prototype, ...)`), the same way as `ui/premium.js`. Add new behaviour to the matching feature file; when one grows past the limit, split it by feature rather than adding to the core file.
 - Code, ids and comments in **English**; player-facing text (dialogue, names, UI, on-screen errors) in **Vietnamese**. Ids are lowercase snake_case.
 - External libraries are allowed. Prefer small, maintained packages; pin versions, commit the lockfile, and note the reason (decisions log or PR). See the dependency policy in `docs/ARCHITECTURE.md`.
 - Every gameplay change gets an acceptance check in `tests/e2e/*.test.mjs` (one `it(...)` per check, helpers in `helpers.mjs`); new content ids are covered by `tests/unit/data.test.mjs`. `npm test` and `npm run uat` must pass before committing. Scenarios that need exact positions build a controlled arena (no spawns, no bots), because random spawns, bots and chieftains make them flaky.

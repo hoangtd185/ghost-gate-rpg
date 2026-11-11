@@ -11,7 +11,8 @@ const CLIENT = path.join(ROOT, 'client');
 const SRC = path.join(CLIENT, 'src');
 const DIST = path.join(CLIENT, 'dist');
 
-const IMPORT_RE = /^\s*import\s*\{[^}]*\}\s*from\s*['"](.+?)['"];?\s*$/gm;
+// `import { a } from './x.js'` and the re-export form `export { a } from './x.js'` (both are dependency edges)
+const IMPORT_RE = /^\s*(?:import|export)\s*\{[^}]*\}\s*from\s*['"](.+?)['"];?\s*$/gm;
 const order = [];
 const seen = new Set();
 

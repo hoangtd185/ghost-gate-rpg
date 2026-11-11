@@ -82,7 +82,7 @@ shared/              used by the browser AND the server (no DOM, no Node-only im
   util.js            clamp, rand, pick, fmtNum, escapeHtml...
   data/              ALL CONTENT (pure data, no logic): classes, items, monsters, maps, npcs, story,
                      chatter, affixes, recipes, elements, bots, premium, world, legacy (old id migration)
-  rules/character.js the character model: stats (calcStats), EXP, inventory, equip, gems, crafting, passives,
+  rules/character.js the character model (parts in rules/character/: entries, gems, crafting, passives, inventory, quests): stats (calcStats), EXP, inventory, equip, gems, crafting, passives,
                      quest state, normalizeCharacter (runs on every load)
   rules/mobsim.js    MobState (monster stats) + MobSim (AI, bosses, spawns, field bosses, damage,
                      deaths); emits events, never draws
@@ -93,7 +93,7 @@ shared/              used by the browser AND the server (no DOM, no Node-only im
 client/src/
   main.js            boot, fixed-step loop (1/60 s), autosave, save results, debug globals
   engine/            input (keyboard, touch, double-tap sprint)
-  game/world.js      GameWorld: map loading, player, skills, hit detection, drops, effects, rendering;
+  game/world.js      GameWorld core (the rest is mixed in from game/world/: combat, drops, net, fx, render): map loading, player, skills, hit detection, drops, effects, rendering;
                      turns monster events into effects and damage to our player; online glue (remote monsters,
                      server drops, item changes)
   game/entities.js   Player / Monster (MobState + sprite) / NPC / Drop / Projectile / RemotePlayer, lookFor
@@ -103,7 +103,7 @@ client/src/
   gfx/               canvas drawing: humanoid.js (chibi characters + outfit parts), cape.js (flowing capes), monsters.js,
                      backgrounds.js, icons.js, pet.js, draw.js (toolkit)
   ui/premium.js      Vạn Bảo Các window (premium shop, check-in, try-on preview), mixed into GameUI
-  ui/hud.js          GameUI: HUD, all windows (inventory, skills, quests, shop, forge, craft, dialogue,
+  ui/hud.js          GameUI core (windows are mixed in from ui/hud/: panels, npc, forge, trade, actions): HUD, all windows (inventory, skills, quests, shop, forge, craft, dialogue,
                      scenes, trade), party panel, quest tracker
   ui/screens.js      login / character select / create
   storage/storage.js ApiStorage (server) | CloudStorage (Claude artifact db) | LocalStore; SaveQueue + outbox
@@ -131,7 +131,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 2. `normalizeCharacter` runs `migrateLegacy`, fills missing fields, removes retired quests, fills forward the main line and cleans up gems.
 3. `GameWorld` runs the game and `GameUI` renders the windows.
 4. The game saves through `SaveQueue` (`storage/storage.js`):
-   - **When:** autosave every 20 s; on map change, level up, death and quest or forge actions; offline, **right away when a rare drop is picked up** (`isRareDrop` in `world.js`); on tab hide or close (`pagehide` / `beforeunload` / `visibilitychange`). Online, monster drops do not depend on this: the server commits them at pickup.
+   - **When:** autosave every 20 s; on map change, level up, death and quest or forge actions; offline, **right away when a rare drop is picked up** (`isRareDrop` in `game/world/helpers.js`, the save call in `pickupDrop` in `game/world/drops.js`); on tab hide or close (`pagehide` / `beforeunload` / `visibilitychange`). Online, monster drops do not depend on this: the server commits them at pickup.
    - **How:** each save is written synchronously to a localStorage **outbox** (`qmq_outbox:<kind>:<user>`), then uploaded in the background. Only the newest snapshot is kept in the queue and only one upload runs at a time. An entry leaves the outbox only after the server confirms it.
    - **Failures:** a failed upload retries with backoff (2 → 30 s) and right away on the browser `online` event. The HUD shows "Chưa gửi được: đã giữ trên máy…".
    - **Closing the page:** also sends a `fetch(..., { keepalive: true })` upload that outlives the page (body ≤ 64 KB).
