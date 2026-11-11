@@ -332,13 +332,14 @@ shared/                 code and data used by BOTH the browser and the Node serv
   data/                 GAME DATA: classes, skills, items, monsters, maps, NPCs, quests, bots
     premium.js          Vạn Bảo Các offers and tabs
     world.js            world quest chains (choices, flags)
-    story.js            main story, tutorial quests, scenes with choices
+    story.js            main story: speakers, chapters, order; the quests are in story/ (prologue, chapter1-3, scenes, tutorial)
     chatter.js          everyday NPC lines and NPC-to-NPC conversations
     affixes.js          monster affixes, intelligence tiers, elites, story and field bosses
     recipes.js          crafting recipes
     legacy.js           old (pre-English) id map, migrates saves made before the rename
   rules/                game rules that run offline in the browser and online on the server
-    character.js        stats, EXP, inventory, equipment, gems, crafting, passives, quest state
+    character.js        the character model (new / normalize / stats / EXP), re-exports the parts in character/
+    character/          entries (rolling, stats, names), gems, crafting, passives, inventory + enhancing, quests
     mobsim.js           monster AI, spawns, bosses
     physics.js          gravity and platforms
     combat.js           damage formulas
@@ -351,17 +352,20 @@ client/
     engine/             keyboard / touch input
     gfx/
       draw.js           drawing toolkit: hi-res canvases, outlines, shading, gradients
-      humanoid.js       chibi characters (hair, eyes, robes, hats, weapons, outfit parts, 14 frames)
+      humanoid.js       chibi characters: drawBody, drawHumanoid, sprite sheet (humanoid/ has frames, parts, outfit)
       cape.js           flowing capes: cloth simulation + drawing, behind the character
-      monsters.js       monster and boss sprites
+      monsters.js       monster sprite sheets and the MAKERS table (monsters/ has one file per region)
       icons.js          item icons and projectiles
-      backgrounds.js    layered backgrounds for every map
+      backgrounds.js    map graphics builder and portals (backgrounds/ has theme, scenery, ground)
     game/
       entities.js       player, monster sprites (their state lives in rules/mobsim.js), drops, projectiles
-      world.js          core logic: combat, drops, rendering
+      world.js          GameWorld core: map loading, update loop, player movement
+      world/            the rest of GameWorld: combat, drops, net (online glue), fx (particles, weather), render
       bots.js           fake-player bot AI and chat
       chatter.js        picks context-aware NPC lines without repeating
-    ui/                 HUD, inventory / skills / quests / shop / forge / crafting windows, login screens
+    ui/                 login screens, skill glyphs, and the in-game UI:
+      hud.js            GameUI core: HUD bars, toasts, chat, minimap, window switching
+      hud/              the windows: panels (inventory, character, skills, quests), npc (dialogue, shop, quests), forge, trade, actions
       premium.js        Vạn Bảo Các window: balance, check-in, offers, try-on preview
     storage/            the 3 storage backends (API / Claude / browser)
     net/realtime.js     WebSocket client: position sync, other players, chat, loot, trades, reconnect
@@ -376,6 +380,7 @@ server/src/
   trade.js              player-to-player trades
   config.js             reads environment variables and .env
   db.js                 SQLite schema, migrations, character read / write
+  db/                   the rest of the database: schema, helpers, items (custody, trades, ledger), premium (ingots)
   auth.js               password hashing (scrypt), login tokens (HMAC)
 tools/
   build.mjs             bundles the client into one HTML file

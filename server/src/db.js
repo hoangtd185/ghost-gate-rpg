@@ -1,173 +1,16 @@
 // SQLite database (uses the built-in node:sqlite module, Node >= 22.13, no packages needed)
-import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
-import { GAME } from '../../shared/config.js'; // game rules shared with the client
-import { ITEMS } from '../../shared/data/items.js';
-import { legacyItem } from '../../shared/data/legacy.js';
+import { DatabaseSync } from 'node:sqlite';
 import { QUESTS } from '../../shared/data/npcs.js';
-import { bonusLimits, todayKey } from '../../shared/rules/character.js';
-import { isFreeItem, freeItems, questGrants, craftGrants, starterKit } from '../../shared/rules/loot.js';
-import { offerById, offerItems, cellsNeeded, checkinReward, premiumDay, questIngots } from '../../shared/rules/premium.js';
-const isFreeItemId = (id) => freeItems().has(id);
+import { todayKey } from '../../shared/rules/character.js';
+import { int, num, str, rowToEntry, cleanFlags } from './db/helpers.js';
+import { SCHEMA, migrate } from './db/schema.js';
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS users (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  username    TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  pass_hash   TEXT NOT NULL,
-  created_at  INTEGER NOT NULL
-);
+import { ItemsDb } from './db/items.js';
+import { PremiumDb } from './db/premium.js';
 
-CREATE TABLE IF NOT EXISTS characters (
-  id           TEXT PRIMARY KEY,
-  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name         TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  cls          TEXT NOT NULL,
-  level        INTEGER NOT NULL DEFAULT 1,
-  exp          INTEGER NOT NULL DEFAULT 0,
-  gold         INTEGER NOT NULL DEFAULT 0,
-  hp           REAL NOT NULL DEFAULT 1,
-  mp           REAL NOT NULL DEFAULT 1,
-  map          TEXT NOT NULL DEFAULT 'village',
-  x            REAL NOT NULL DEFAULT 380,
-  stat_str     INTEGER NOT NULL DEFAULT 0,
-  stat_dex     INTEGER NOT NULL DEFAULT 0,
-  stat_int     INTEGER NOT NULL DEFAULT 0,
-  stat_vit     INTEGER NOT NULL DEFAULT 0,
-  stat_points  INTEGER NOT NULL DEFAULT 0,
-  skill_points INTEGER NOT NULL DEFAULT 0,
-  skills       TEXT NOT NULL DEFAULT '{}',   -- JSON: { skillId: level }
-  pet          TEXT,                         -- JSON: { id, on }, or NULL if no pet yet
-  title        TEXT,                         -- title currently shown
-  flags        TEXT NOT NULL DEFAULT '{}',   -- JSON: story choices, e.g. { bell: 'ring' }
-  play_time    REAL NOT NULL DEFAULT 0,
-  created_at   INTEGER NOT NULL,
-  updated_at   INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_characters_user ON characters(user_id);
-
--- One row per item. A non-NULL equip_slot means it is equipped.
-CREATE TABLE IF NOT EXISTS items (
-  uid          TEXT PRIMARY KEY,
-  character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
-  item_id      TEXT NOT NULL,
-  qty          INTEGER NOT NULL DEFAULT 1,
-  rarity       INTEGER NOT NULL DEFAULT 0,
-  bonus        TEXT NOT NULL DEFAULT '{}',   -- JSON bonus stats
-  equip_slot   TEXT,                         -- weapon | hat | armor | acc | outfit
-  enhance      INTEGER NOT NULL DEFAULT 0,   -- enhancement level +0..+10
-  el           TEXT,                         -- socketed element (fire/ice/thunder/poison)
-  gems         TEXT NOT NULL DEFAULT '[]',   -- JSON: gems in the sockets, e.g. ["gem_atk1"]
-  position     INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_items_char ON items(character_id);
-
-CREATE TABLE IF NOT EXISTS quests (
-  character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
-  quest_id     TEXT NOT NULL,
-  state        TEXT NOT NULL,                -- active | done
-  progress     INTEGER NOT NULL DEFAULT 0,
-  day          TEXT,                         -- completion day (daily quests)
-  PRIMARY KEY (character_id, quest_id)
-);
-
--- Every change the server makes to a character's items or gold (drops picked up, trades), plus saves it refused.
--- rev = the character's item_rev after the change; clients replay rows newer than the rev they know.
-CREATE TABLE IF NOT EXISTS item_ledger (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  at           INTEGER NOT NULL,
-  character_id TEXT NOT NULL,
-  rev          INTEGER NOT NULL,
-  kind         TEXT NOT NULL,                -- gain | loss | gold | ingots | rejected
-  item_uid     TEXT,
-  item_id      TEXT,
-  qty          INTEGER NOT NULL DEFAULT 0,   -- items: quantity; gold, ingots: signed amount
-  entry        TEXT,                         -- JSON item for gains (what the client adds)
-  reason       TEXT NOT NULL,                -- drop | trade | save | premium | checkin | kill | quest
-  ref          TEXT,                         -- drop id, trade id, partner, why a save was refused
-  req_id       TEXT UNIQUE                   -- idempotency key: the same request never applies twice
-);
-CREATE INDEX IF NOT EXISTS idx_ledger_char ON item_ledger(character_id, rev);
-`;
-
-export function openDb(file) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const db = new DatabaseSync(file);
-  // synchronous = FULL: a save that got its "ok" survives a power cut, not only a process crash
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA foreign_keys = ON;');
-  db.exec(SCHEMA);
-  migrate(db);
-  return new GameDb(db);
-}
-
-// Upgrade older databases: add new columns without losing data
-function migrate(db) {
-  const cols = db.prepare('PRAGMA table_info(characters)').all().map((c) => c.name);
-  if (!cols.includes('pet')) db.exec('ALTER TABLE characters ADD COLUMN pet TEXT');
-  if (!cols.includes('title')) db.exec('ALTER TABLE characters ADD COLUMN title TEXT');
-  if (!cols.includes('flags')) db.exec("ALTER TABLE characters ADD COLUMN flags TEXT NOT NULL DEFAULT '{}'");
-  // item_rev: bumped on every server-side item/gold change; saves made from an older rev do not touch items or gold
-  if (!cols.includes('item_rev')) db.exec('ALTER TABLE characters ADD COLUMN item_rev INTEGER NOT NULL DEFAULT 0');
-  // Nguyên Bảo (premium currency) and the last daily check-in ({ day, streak } JSON): only the server changes them
-  if (!cols.includes('ingots')) db.exec('ALTER TABLE characters ADD COLUMN ingots INTEGER NOT NULL DEFAULT 0');
-  if (!cols.includes('checkin')) db.exec('ALTER TABLE characters ADD COLUMN checkin TEXT');
-  const icols = db.prepare('PRAGMA table_info(items)').all().map((c) => c.name);
-  if (!icols.includes('enhance')) db.exec('ALTER TABLE items ADD COLUMN enhance INTEGER NOT NULL DEFAULT 0');
-  if (!icols.includes('el')) db.exec('ALTER TABLE items ADD COLUMN el TEXT');
-  if (!icols.includes('gems')) db.exec("ALTER TABLE items ADD COLUMN gems TEXT NOT NULL DEFAULT '[]'");
-  const qcols = db.prepare('PRAGMA table_info(quests)').all().map((c) => c.name);
-  if (!qcols.includes('day')) db.exec('ALTER TABLE quests ADD COLUMN day TEXT');
-  // Class ids were renamed to English. The class is never re-saved, so it is fixed here;
-  // everything else (maps, items, skills…) is migrated by the client on load and written back on save.
-  const LEGACY_CLS = { kiem: 'swordsman', dao: 'taoist', thich: 'assassin' };
-  const fix = db.prepare('UPDATE characters SET cls = ? WHERE cls = ?');
-  for (const [from, to] of Object.entries(LEGACY_CLS)) fix.run(to, from);
-}
-
-const int = (v, d = 0) => (Number.isFinite(+v) ? Math.floor(+v) : d);
-const num = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
-const str = (v, max = 64) => String(v ?? '').slice(0, max);
-const EQUIP_SLOTS = new Set(GAME.player.equipSlots);
-const INV_SIZE = GAME.player.invSize;
-const ELEMENT_IDS = ['fire', 'ice', 'thunder', 'poison'];
-export const newUid = () => crypto.randomBytes(6).toString('hex') + Date.now().toString(36).slice(-4);
-const isStack = (id) => ITEMS[id] && ITEMS[id].type !== 'equip';
-
-// Item row -> the entry object the client uses
-function rowToEntry(it) {
-  const e = { uid: it.uid, id: it.item_id, qty: it.qty, r: it.rarity, b: JSON.parse(it.bonus || '{}') };
-  if (it.enhance) e.e = it.enhance;
-  if (it.el) e.el = it.el;
-  const gems = JSON.parse(it.gems || '[]');
-  if (gems.length) e.g = gems;
-  return e;
-}
-// Client entry -> clean values for an item row
-function cleanEntry(e) {
-  return {
-    uid: str(e.uid, 40), id: str(e.id, 30), qty: Math.max(1, Math.min(999, int(e.qty, 1))), r: Math.max(0, Math.min(3, int(e.r))),
-    b: e.b && typeof e.b === 'object' && !Array.isArray(e.b) ? e.b : {},
-    e: Math.max(0, Math.min(GAME.forge.enhanceMax, int(e.e))), el: ELEMENT_IDS.includes(e.el) ? e.el : null,
-    g: Array.isArray(e.g) ? e.g.slice(0, 3).map((x) => str(x, 20)) : [],
-  };
-}
-// Bonus stats a save may give an item it adds: none at rarity 0, otherwise only stats rollEquip can roll, each
-// within what that rarity can reach. Anything else is dropped.
-function cleanBonus(id, r, b) {
-  const lim = bonusLimits(id, r), out = {};
-  for (const [k, v] of Object.entries(b || {})) if (lim[k] && Number.isInteger(v) && v > 0 && v <= lim[k]) out[k] = v;
-  return out;
-}
-// Story flags: only keep short string key/value pairs
-function cleanFlags(f) {
-  const out = {};
-  if (f && typeof f === 'object') for (const [k, v] of Object.entries(f).slice(0, 30)) out[str(k, 20)] = str(v, 20);
-  return out;
-}
-
-class GameDb {
+export class GameDb {
   constructor(db) {
     this.db = db;
     this.q = {
@@ -216,6 +59,7 @@ class GameDb {
   close() { try { this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); this.db.close(); } catch { /* already closed */ } }
 
   getUser(username) { return this.q.userByName.get(username); }
+
   createUser(username, passHash) {
     const r = this.q.insertUser.run(username, passHash, Date.now());
     return { id: Number(r.lastInsertRowid), username };
@@ -245,8 +89,11 @@ class GameDb {
   }
 
   listCharacters(userId) { return this.q.charsOfUser.all(userId).map((r) => this.toCharacter(r)); }
+
   countCharacters(userId) { return this.q.countChars.get(userId).n; }
+
   nameTaken(name) { return !!this.q.charByName.get(name); }
+
   getCharacter(id) { const r = this.q.charById.get(id); return r ? this.toCharacter(r) : null; }
 
   createCharacter(userId, ch) {
@@ -312,226 +159,20 @@ class GameDb {
     for (const [qid, [s, p, day]] of out) this.q.insertQuest.run(id, qid, s, p, day);
   }
 
-  // Replace a character's items with the uploaded ones, under the server's rules:
-  //  - an item the server already has keeps its server-side identity (id, rarity, bonus stats); the client
-  //    may change quantity, enhancement, element, gems and where it sits (bag or equipment slot)
-  //  - an item that now belongs to another character (traded away) is dropped
-  //  - "free" items (shops, gems, quest-only items) may be added; any other item may only grow by what this
-  //    save earned: quests accepted/completed in it, crafting materials used up, the starter kit of a new
-  //    character. Monster drops only ever come from the server. Stacks may be merged or used up.
-  // Returns true if anything uploaded was refused or changed.
-  reconcileItems(id, rev, ch, cls, create) {
-    const have = new Map(this.q.itemsOf.all(id).map((r) => [r.uid, r]));
-    const list = [];
-    for (const [slot, e] of Object.entries(ch.equip || {})) if (e && EQUIP_SLOTS.has(slot)) list.push([e, slot]);
-    for (const e of (ch.inventory || []).slice(0, INV_SIZE + 24)) if (e) list.push([e, null]);
-    const keep = [], seen = new Set();
-    let fixed = false;
-    const log = (uid, itemId, qty, why) => this.q.ledgerAdd.run(Date.now(), id, rev, 'rejected', uid, itemId, qty, null, 'save', why, null);
-    for (const [raw, slot] of list) {
-      const e = cleanEntry(raw);
-      if (!e.uid || seen.has(e.uid)) { fixed = true; continue; }
-      seen.add(e.uid);
-      const old = have.get(e.uid);
-      if (old) {
-        const itemId = legacyItem(old.item_id) === e.id ? e.id : old.item_id; // allow renamed ids from data/legacy.js
-        if (e.id !== itemId || e.r !== old.rarity || JSON.stringify(e.b) !== old.bonus) fixed = true;
-        keep.push({ ...e, id: itemId, r: old.rarity, b: JSON.parse(old.bonus || '{}'), slot });
-        continue;
-      }
-      let why = null;
-      if (!ITEMS[e.id]) why = 'unknown';
-      else if (this.q.itemByUid.get(e.uid)) why = 'owned_elsewhere';
-      else if (isFreeItemId(e.id) && !isFreeItem(e.id, e.r)) why = 'rarity';
-      else if (!isFreeItemId(e.id) && e.r > (ITEMS[e.id].type === 'equip' ? 3 : 0)) why = 'rarity';
-      if (why) { fixed = true; log(e.uid, e.id, e.qty, why); continue; }
-      const b = cleanBonus(e.id, e.r, e.b);
-      if (JSON.stringify(b) !== JSON.stringify(e.b)) { fixed = true; log(e.uid, e.id, e.qty, 'bonus'); }
-      keep.push({ ...e, b, slot });
-    }
-    // Quantities of items that are not free: never more than before plus what this save earned
-    const total = (rows, idOf, qtyOf) => rows.reduce((m, x) => m.set(idOf(x), (m.get(idOf(x)) || 0) + qtyOf(x)), new Map());
-    // stored ids from before a rename (data/legacy.js) count as the new id, like the kept entries do
-    const before = total([...have.values()], (r) => legacyItem(r.item_id), (r) => r.qty);
-    const after = total(keep, (e) => e.id, (e) => e.qty);
-    const used = new Map();
-    for (const [itemId, n] of before) if ((after.get(itemId) || 0) < n) used.set(itemId, n - (after.get(itemId) || 0));
-    const dbQuests = {};
-    for (const q of this.q.questsOf.all(id)) dbQuests[q.quest_id] = { s: q.state, p: q.progress, day: q.day };
-    const grants = [questGrants(dbQuests, ch.quests, cls), craftGrants(used, cls), create ? starterKit(cls) : new Map()];
-    const allowed = (itemId) => grants.reduce((n, m) => n + (m.get(itemId) || 0), 0);
-    let final = keep;
-    for (const [itemId, n] of after) {
-      const grew = n - (before.get(itemId) || 0);
-      if (grew <= 0 || isFreeItemId(itemId) || grew <= allowed(itemId)) continue;
-      fixed = true;
-      log(null, itemId, grew, 'not_earned');
-      final = final.filter((e) => e.id !== itemId);
-      for (const r of have.values()) if (legacyItem(r.item_id) === itemId) final.push({ ...cleanEntry(rowToEntry(r)), id: itemId, slot: r.equip_slot });
-    }
-    this.q.clearItems.run(id);
-    let pos = 0;
-    for (const e of final) {
-      // equipped only in its own slot (an item claimed to be in another slot goes back to the bag)
-      const slot = e.slot && EQUIP_SLOTS.has(e.slot) && ITEMS[e.id]?.slot === e.slot ? e.slot : null;
-      if (slot !== (e.slot || null)) fixed = true; // the client must learn where the item really is
-      this.q.insertItem.run(e.uid, id, e.id, e.qty, e.r, JSON.stringify(e.b || {}), slot, pos++, e.e || 0, e.el || null, JSON.stringify(e.g || []));
-    }
-    return fixed;
-  }
-
-  // ===== Server-side item changes (online play) =====
-  // Each runs in one transaction and writes a ledger row before the client is told anything.
-
-  // Put a picked-up drop into a character's bag. reqId makes a repeated request a no-op.
-  // Returns { rev, entry } | { dup: true } | { full: true } | null (no such character)
-  grantItem(charId, item, opts = {}) {
-    return this.transaction(() => this.grantItemTx(charId, item, opts));
-  }
-
-  // Many grants in ONE transaction (one disk sync for the whole batch: "group commit"). Each grant runs in its
-  // own savepoint, so one failing grant does not undo the others. Returns one result per request, in order
-  // (a result is { error: true } if that grant threw).
-  grantItems(reqs) {
-    return this.transaction(() => reqs.map((r, i) => {
-      this.db.exec(`SAVEPOINT g${i}`);
-      try { const out = this.grantItemTx(r.charId, r.item, r.opts || {}); this.db.exec(`RELEASE g${i}`); return out; }
-      catch (e) { this.db.exec(`ROLLBACK TO g${i}`); this.db.exec(`RELEASE g${i}`); console.error('grant failed', e); return { error: true }; }
-    }));
-  }
-
-  grantItemTx(charId, item, { reason = 'drop', ref = null, reqId = null } = {}) {
-    if (reqId && this.q.ledgerByReq.get(reqId)) return { dup: true };
-    const row = this.q.charById.get(charId);
-    if (!row || !ITEMS[item.id]) return null;
-    const stackable = isStack(item.id) && this.q.hasStack.get(charId, item.id);
-    if (!stackable && this.q.invCount.get(charId).n >= INV_SIZE) return { full: true };
-    const e = cleanEntry({ ...item, uid: newUid() });
-    this.q.insertItem.run(e.uid, charId, e.id, e.qty, e.r, JSON.stringify(e.b), null, this.q.maxPos.get(charId).p + 1, e.e, e.el, JSON.stringify(e.g));
-    const rev = this.q.bumpRev.get(charId).item_rev;
-    const entry = rowToEntry(this.q.itemByUid.get(e.uid));
-    this.q.ledgerAdd.run(Date.now(), charId, rev, 'gain', e.uid, e.id, e.qty, JSON.stringify(entry), reason, ref, reqId);
-    return { rev, entry };
-  }
-
-  // Swap the offers of a trade in one transaction. sides: [{ charId, items: [{ uid, qty }], gold }, …] (two sides).
-  // Every item must still belong to its side, unequipped and with the quantity that was shown; gold must be there;
-  // both bags must have room. Returns { ok: true, revs: { [charId]: rev } } or { ok: false, why }.
-  commitTrade(tradeId, sides) {
-    return this.transaction(() => {
-      const rows = sides.map((sd) => this.q.charById.get(sd.charId));
-      if (rows.some((r) => !r)) return { ok: false, why: 'gone' };
-      for (const [i, sd] of sides.entries()) {
-        if (int(sd.gold) < 0 || int(sd.gold) > rows[i].gold) return { ok: false, why: 'gold', who: sd.charId };
-        for (const o of sd.items) {
-          const it = this.q.itemByUid.get(o.uid);
-          if (!it || it.character_id !== sd.charId || it.equip_slot || it.qty !== o.qty) return { ok: false, why: 'item', who: sd.charId };
-        }
-      }
-      for (const [i, sd] of sides.entries()) {
-        const other = sides[1 - i];
-        if (this.q.invCount.get(sd.charId).n - sd.items.length + other.items.length > INV_SIZE) return { ok: false, why: 'full', who: sd.charId };
-      }
-      const revs = {};
-      for (const sd of sides) revs[sd.charId] = this.q.bumpRev.get(sd.charId).item_rev;
-      const now = Date.now();
-      for (const [i, sd] of sides.entries()) {
-        const other = sides[1 - i];
-        let pos = this.q.maxPos.get(other.charId).p;
-        for (const o of sd.items) {
-          const it = this.q.itemByUid.get(o.uid);
-          this.q.moveItem.run(other.charId, ++pos, o.uid);
-          const entry = rowToEntry(this.q.itemByUid.get(o.uid));
-          this.q.ledgerAdd.run(now, sd.charId, revs[sd.charId], 'loss', o.uid, it.item_id, it.qty, null, 'trade', `${tradeId}>${other.charId}`, `trade:${tradeId}:${o.uid}:out`);
-          this.q.ledgerAdd.run(now, other.charId, revs[other.charId], 'gain', o.uid, it.item_id, it.qty, JSON.stringify(entry), 'trade', `${tradeId}<${sd.charId}`, `trade:${tradeId}:${o.uid}:in`);
-        }
-      }
-      for (const [i, sd] of sides.entries()) {
-        const delta = int(sides[1 - i].gold) - int(sd.gold);
-        if (!delta) continue;
-        this.q.setGold.run(rows[i].gold + delta, sd.charId);
-        this.q.ledgerAdd.run(now, sd.charId, revs[sd.charId], 'gold', null, null, delta, null, 'trade', String(tradeId), `trade:${tradeId}:gold:${sd.charId}`);
-      }
-      return { ok: true, revs };
-    });
-  }
-
-  // ===== Nguyên Bảo (premium currency) =====
-  // The balance changes only here, each change with a ledger row (kind 'ingots') at a new item revision, so the
-  // client gets it through the same change replay as pickups. Uploaded saves never touch it.
-  // Run inside a transaction. A change that would take the balance below zero (or an unknown character) throws, so
-  // the whole transaction is undone: no ledger row, no revision bump.
-  addIngotsTx(charId, n, reason, ref, reqId) {
-    if (reqId && this.q.ledgerByReq.get(reqId)) return { dup: true };
-    const delta = int(n);
-    const now = this.q.addIngots.get(delta, charId, delta);
-    if (!now) throw new Error(`ingots: cannot apply ${delta} to ${charId}`);
-    const rev = this.q.bumpRev.get(charId).item_rev;
-    this.q.ledgerAdd.run(Date.now(), charId, rev, 'ingots', null, null, delta, null, reason, ref, reqId);
-    return { rev, ingots: now.ingots };
-  }
-
-  // Ingots won outside the shop (field bosses, chieftains). Returns { rev, ingots } | { dup: true } | null
-  grantIngots(charId, n, reason, ref, reqId) {
-    return this.transaction(() => (this.q.charById.get(charId) ? this.addIngotsTx(charId, n, reason, ref, reqId) : null));
-  }
-
-  // Buy a premium offer: items into the bag and ingots taken, together or not at all. reqId: the client's request id.
-  // Returns { ok: true, rev, ingots } | { ok: false, why: 'offer' | 'ingots' | 'full' | 'dup' | 'gone' }
-  premiumBuy(charId, offerId, reqId) {
-    return this.transaction(() => {
-      const row = this.q.charById.get(charId), o = offerById(offerId);
-      if (!row) return { ok: false, why: 'gone' };
-      if (!o) return { ok: false, why: 'offer' };
-      if (this.q.ledgerByReq.get(reqId)) return { ok: false, why: 'dup' };
-      if (row.ingots < o.price) return { ok: false, why: 'ingots' };
-      const bag = this.q.bagOf.all(charId).map((r) => ({ id: r.item_id }));
-      if (bag.length + cellsNeeded(bag, o) > INV_SIZE) return { ok: false, why: 'full' };
-      offerItems(o).forEach((item, i) => {
-        const g = this.grantItemTx(charId, item, { reason: 'premium', ref: o.id, reqId: `${reqId}:${i}` });
-        if (!g || !g.entry) throw new Error('premium grant failed');
-      });
-      const r = this.addIngotsTx(charId, -o.price, 'premium', o.id, reqId);
-      return { ok: true, rev: r.rev, ingots: r.ingots };
-    });
-  }
-
-  // The daily check-in. Returns { ok: true, rev, ingots, got, streak } | { ok: false, why: 'done' | 'gone' }
-  checkin(charId, now = Date.now()) {
-    return this.transaction(() => {
-      const row = this.q.charById.get(charId);
-      if (!row) return { ok: false, why: 'gone' };
-      const r = checkinReward(row.checkin ? JSON.parse(row.checkin) : null, premiumDay(now));
-      if (!r) return { ok: false, why: 'done' };
-      this.q.setCheckin.run(JSON.stringify({ day: r.day, streak: r.streak }), charId);
-      const g = this.addIngotsTx(charId, r.ingots, 'checkin', r.day, `checkin:${charId}:${r.day}`);
-      return { ok: true, rev: g.rev, ingots: g.ingots, got: r.ingots, streak: r.streak };
-    });
-  }
-
-  // Ingots for a completed quest, once. The quest must be done in the saved character.
-  // Returns { ok: true, rev, ingots, got } | { ok: false, why: 'none' | 'not_done' | 'dup' | 'gone' }
-  claimQuest(charId, qid) {
-    return this.transaction(() => {
-      if (!this.q.charById.get(charId)) return { ok: false, why: 'gone' };
-      const n = questIngots(qid);
-      if (!n) return { ok: false, why: 'none' };
-      if (this.q.questState.get(charId, str(qid, 30))?.state !== 'done') return { ok: false, why: 'not_done' };
-      const g = this.addIngotsTx(charId, n, 'quest', qid, `quest:${charId}:${qid}`);
-      return g.dup ? { ok: false, why: 'dup' } : { ok: true, rev: g.rev, ingots: g.ingots, got: n };
-    });
-  }
-
-  // Item and gold changes after `rev`, oldest first, for the client to replay (after a reconnect, a pickup, a trade)
-  changesSince(charId, rev) {
-    return this.q.ledgerSince.all(charId, int(rev)).map((r) => ({
-      rev: r.rev, kind: r.kind, uid: r.item_uid, id: r.item_id, qty: r.qty, entry: r.entry ? JSON.parse(r.entry) : undefined,
-    }));
-  }
-  itemRev(charId) { return this.q.charById.get(charId)?.item_rev || 0; }
-  item(uid) { const r = this.q.itemByUid.get(uid); return r ? { entry: rowToEntry(r), owner: r.character_id, slot: r.equip_slot } : null; }
-  ledger(charId) { return this.q.ledgerOf.all(charId); }
-
   deleteCharacter(userId, id) { return this.q.deleteChar.run(id, userId).changes > 0; }
+
   leaderboard() { return this.q.top.all(); }
 }
+
+export function openDb(file) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const db = new DatabaseSync(file);
+  // synchronous = FULL: a save that got its "ok" survives a power cut, not only a process crash
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA foreign_keys = ON;');
+  db.exec(SCHEMA);
+
+  migrate(db);
+  return new GameDb(db);
+}
+
+Object.assign(GameDb.prototype, ItemsDb, PremiumDb);

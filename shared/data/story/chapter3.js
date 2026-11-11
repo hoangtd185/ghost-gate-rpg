@@ -1,0 +1,137 @@
+// Main story: chapter 3 · Mặt Nạ Trắng
+import { main } from './helpers.js';
+
+export const CHAPTER3 = {
+  st13: main('c3', {
+    name: 'Tro Tàn Trở Về', npc: 'fire_master', lv: 27, requires: 'st12', type: 'talk', target: 'lan', count: 1,
+    text: 'Về Làng Trúc Lâm gặp Tiểu Lan.',
+    intro: [
+      ['fire_master', 'Đạo Trưởng làng ngươi tên Huyền Cơ, nhận ra chuông Trấn Hồn, lại rành Nhang Dẫn Hồn?'],
+      ['fire_master', 'Thẩm Huyền năm xưa giỏi nhất môn chế hương. Và hắn luôn đeo mặt nạ trắng mỗi khi luyện cấm thuật.'],
+      ['me', 'Không thể nào… Ông ấy đã giúp tôi suốt từ đầu.'],
+      ['fire_master', 'Hoặc là đã dùng ngươi suốt từ đầu. Về Trúc Lâm ngay. Con bé Thuần Âm đang ở gần hắn nhất.'],
+    ],
+    outro: [
+      ['lan', 'Đại hiệp về rồi! Em đợi mãi…'],
+      ['lan', 'Đạo Trưởng đi đâu mất từ ba hôm trước. Am của ông ấy khóa trái, đêm nào cũng có mùi nhang bay ra.'],
+      ['lan', 'Hôm qua em lén nhìn qua khe cửa… trên bàn thờ có một chiếc mặt nạ trắng.'],
+      ['lan', 'Đại hiệp… người trong giấc mơ của em có phải là…'],
+      ['me', 'Đừng sợ. Có ta ở đây.'],
+    ],
+    reward: { exp: 12000, gold: 3000 },
+  }),
+  st14: main('c3', {
+    name: 'Nhật Ký Trong Am', npc: 'lan', lv: 27, requires: 'st13', type: 'talk', target: 'elder', count: 1,
+    text: 'Xin Trưởng Làng mở am của Đạo Trưởng.',
+    intro: [
+      ['lan', 'Chìa khóa am Đạo Trưởng do Trưởng Làng giữ. Ông ấy không cho em vào đâu.'],
+      ['lan', 'Đại hiệp đi hỏi đi. Ông ấy thương đại hiệp nhất làng.'],
+    ],
+    outro: [
+      ['elder', 'Lão biết sớm muộn gì cũng có ngày này.'],
+      ['elder', 'Ba mươi năm trước, Huyền Cơ lết vào làng giữa đêm mưa, người đầy máu, trong tay nải có một chiếc mặt nạ trắng. Lão đã cứu hắn.'],
+      ['elder', 'Hắn trừ tà giúp làng ba mươi năm. Lão cứ ngỡ hắn đã chôn quá khứ rồi.'],
+      ['sys', 'Trưởng Làng mở am. Trên bàn thờ có một cuốn nhật ký đã ngả vàng.'],
+      ['sys', '"Sư phụ chết vì ta. Ta chỉ muốn học cách gọi người chết trở về, sư phụ lại gọi đó là cấm thuật."'],
+      ['sys', '"Cần ba thứ: thân xác Thuần Âm làm vật chứa, huyết khí của Huyết Ma Châu làm lửa dẫn, và Chuông Trấn Hồn để gọi hồn."'],
+      ['sys', '"Cái bóng ta luyện từ viên châu đã phản chủ, bắt con bé đi trước kỳ. Đứa trẻ mang ấn ký đã diệt nó giúp ta."'],
+      ['sys', '"Viên châu nuôi trong lửa Kỳ Lân đã đủ ngày. Chỉ cần có người phá nó, huyết khí sẽ tự chảy về Cổ Tự."'],
+      ['sys', '"Đứa trẻ đó đã cướp chuông trên tế đàn. Ta lỡ tay đánh nó mất trí. Có lẽ là ý trời: cứ để nó làm thanh kiếm thay ta."'],
+      ['me', '…Thanh kiếm thay ông ta.'],
+      ['elder', 'Trang cuối viết: "Đêm trăng máu thứ hai, tại Huyền Môn Cổ Tự."'],
+    ],
+    reward: { exp: 12000, gold: 3000 },
+  }),
+  st15: main('c3', {
+    name: 'Lời Thú Nhận Của A Tuyết', npc: 'elder', lv: 28, requires: 'st14', type: 'talk', target: 'huntress', count: 1,
+    text: 'Lên Tuyết Sơn hỏi A Tuyết đường tới Huyền Môn Cổ Tự.',
+    intro: [
+      ['elder', 'Huyền Môn Cổ Tự ở đâu, lão không biết. Nhưng người Huyền Môn thì còn A Tuyết trên Tuyết Sơn.'],
+      ['elder', 'Đi đi con. Lão sẽ trông chừng con bé Tiểu Lan.'],
+    ],
+    outro: [
+      ['huntress', 'Thẩm Huyền… Huyền Cơ… Hắn chẳng buồn đổi tên cho khác đi.'],
+      ['huntress', 'Năm đó ta mở cửa cho hắn chạy vì hắn khóc, nói chỉ muốn cứu sư phụ. Ta đã tin.'],
+      ['huntress', 'Cổ Tự nằm sau một bức tường ảo giữa Nghĩa Địa Cổ. Ta đã vẽ lại lối mở lên bản đồ của ngươi.'],
+      ['huntress', 'Sư phụ từng dặn: Chuông Trấn Hồn không gọi hồn theo ý người rung, mà theo ý người được gọi.'],
+      ['huntress', 'Nếu hắn bắt ngươi rung chuông, hãy nhớ câu đó. Ta và Liệt Dương sẽ đợi ngươi ở cổng Cổ Tự.'],
+    ],
+    reward: { exp: 13000, gold: 3200, items: [['hp_l', 10], ['mp_l', 5]] },
+  }),
+  st16: main('c3', {
+    name: 'Âm Binh Huyết Sắc', npc: 'huntress_temple', lv: 28, requires: 'st15', type: 'kill', target: 'blood_jiangshi', count: 15,
+    text: 'Diệt 15 Huyết Cương Thi ở sân ngoài Huyền Môn Cổ Tự để hai đệ tử lập trận.',
+    intro: [
+      ['huntress_temple', 'Ngươi tới rồi. Cả Liệt Dương cũng tới… cái tên cứng đầu đó.'],
+      ['fire_master_temple', 'Ta tới vì sư phụ, không phải vì sư tỷ.'],
+      ['huntress_temple', '…Ừ.'],
+      ['huntress_temple', 'Sân ngoài đầy Huyết Cương Thi, xác người hắn nuôi bằng huyết khí. Dọn đường cho bọn ta lập trận.'],
+    ],
+    outro: [
+      ['huntress_temple', 'Trận đã dựng. Huyết khí bị chặn ở chính điện, hắn không hút thêm được nữa.'],
+      ['fire_master_temple', 'Sư tỷ… năm đó nếu là ta, có lẽ ta cũng mở cửa cho hắn.'],
+      ['huntress_temple', 'Ngươi nói gì?'],
+      ['fire_master_temple', 'Không có gì. Lo đánh đi.'],
+    ],
+    reward: { exp: 16000, gold: 4000, items: [['stone', 5], ['gem_atk2', 1]] },
+  }),
+  st16b: main('c3', {
+    name: 'Tướng Quân Không Đầu Hàng', npc: 'huntress_temple', lv: 29, requires: 'st16', type: 'kill', target: 'nb_blood_jiangshi', count: 1,
+    text: 'Hạ Huyết Thi Tướng canh cửa Chính Điện ở cuối Huyền Môn Cổ Tự.',
+    intro: [
+      ['huntress_temple', 'Trước cửa chính điện có một cái xác mặc giáp tướng. Hắn từng là tướng quân giữ thành này.'],
+      ['fire_master_temple', 'Thẩm Huyền dùng huyết khí trói hồn ông ta lại. Mỗi nhát ngươi chém trúng, nó sẽ dội ngược vào ngươi.'],
+      ['huntress_temple', 'Đánh từng nhịp, máu thấp thì lùi ra uống thuốc. Đừng tham đòn.'],
+    ],
+    outro: [
+      ['sys', 'Huyết Thi Tướng quỳ xuống, đầu gục trên cán thương. Cánh cửa chính điện kẽo kẹt mở ra một khe.'],
+      ['fire_master_temple', 'Ông ta được yên nghỉ rồi. Đến lượt Thẩm Huyền.'],
+    ],
+    reward: { gold: 6000, items: [['stone', 5], ['GEM2', 1], ['protect', 1]] },
+  }),
+  st17: main('c3', {
+    name: 'Nửa Kia Của Chiếc Chuông', npc: 'fire_master_temple', turnIn: 'smith', lv: 30, requires: 'st16b', type: 'collect', target: 'q_bell2', count: 1,
+    drop: { mob: 'maskghost', item: 'q_bell2', chance: 0.3 },
+    text: 'Lấy nửa chiếc chuông còn lại từ Bạch Diện Quỷ, mang về Thợ Rèn Anh Sắt ở làng để nối lại.',
+    intro: [
+      ['fire_master_temple', 'Lũ Bạch Diện Quỷ kia đeo mặt nạ giống hắn. Hắn chia hồn mình ra để canh nửa chiếc chuông còn lại.'],
+      ['fire_master_temple', 'Lấy lại nó. Chuông nguyên vẹn thì hắn mới sợ.'],
+      ['fire_master_temple', 'Pháp khí Huyền Môn rèn bằng đồng thiên thạch, nối lại phải nhờ thợ giỏi. Làng ngươi có ai không?'],
+      ['me', 'Có. Anh Sắt.'],
+    ],
+    outro: [
+      ['smith', 'Đồng thiên thạch? Cả đời tôi mới thấy lần đầu!'],
+      ['smith', 'Nối pháp khí thì không dùng búa. Phải dùng lửa và… cái này.'],
+      ['sys', 'Anh Sắt ép một viên Hoàng Ngọc vào vết nứt. Hai nửa chuông liền lại không còn đường nối.'],
+      ['sys', 'Chiếc chuông tự rung lên một tiếng. Ký ức ùa về như nước vỡ bờ…'],
+      ['sys', 'Đêm trăng máu ba tháng trước. Bạn, một kẻ lữ hành, lạc vào Cổ Tự. Người đeo mặt nạ trắng đang tụng chú bên tế đàn.'],
+      ['sys', 'Chiếc chuông trên tế đàn tự bay vào tay bạn. Hắn quát lên, một luồng huyết quang đánh thẳng vào trán bạn…'],
+      ['me', 'Tôi nhớ ra rồi. Chuông đã chọn tôi, không phải chọn hắn.'],
+      ['smith', 'Tôi chẳng hiểu gì cả, nhưng nghe ngầu đấy. Cầm lấy, đi đánh cho hắn một trận.'],
+    ],
+    reward: { exp: 20000, gold: 5000, items: [['acc_bell', 1]] },
+  }),
+  st18: main('c3', {
+    name: 'Đêm Trăng Máu Thứ Hai', npc: 'elder', lv: 32, requires: 'st17', type: 'kill', target: 'blood_demon', count: 1,
+    text: 'Vào Chính Điện ở cuối Huyền Môn Cổ Tự, cứu Tiểu Lan và chấm dứt mọi chuyện.',
+    intro: [
+      ['elder', 'Con về rồi! Tiểu Lan… con bé biến mất lúc chập tối. Cửa am Đạo Trưởng mở toang.'],
+      ['elder', 'Trăng lại đỏ như ba tháng trước. Lão già này không làm được gì nữa, chỉ biết trông vào con.'],
+      ['me', 'Tôi sẽ đưa cô bé về. Lần này, kết thúc mọi chuyện.'],
+    ],
+    outro: [
+      ['sys', 'Huyết Ma tan biến. Giữa tro bụi, Huyền Cơ nằm đó, chiếc mặt nạ trắng vỡ làm đôi.'],
+      ['priest', 'Ta đã… làm gì thế này…'],
+      ['old_master', 'Thẩm Huyền, về thôi con. Ta đợi con ba mươi năm rồi.', 'bell=ring'],
+      ['priest', 'Sư phụ… con xin lỗi.', 'bell=ring'],
+      ['me', 'Tiếng chuông cuối cùng này là để tiễn ông.', 'bell=refuse'],
+      ['sys', 'Bạn rung chuông. Trong ánh sáng, một bóng hình già nua hiện ra, đưa tay về phía Huyền Cơ.', 'bell=refuse'],
+      ['priest', 'Sư phụ… người đến đón con sao?', 'bell=refuse'],
+      ['sys', 'Hai bóng hình nhạt dần trong tiếng chuông ngân. Lần này chuông gọi hồn đi, chứ không gọi về.'],
+      ['lan', 'Đại hiệp! Em mơ thấy Đạo Trưởng xoa đầu em, bảo em về nhà đi…'],
+      ['elder', 'Con đã cứu làng này hai lần. Từ nay Trúc Lâm là nhà của con.'],
+      ['sys', 'Chương 3 kết thúc. Chuông Trấn Hồn đã chọn người kế thừa Huyền Môn.'],
+    ],
+    reward: { exp: 45000, gold: 30000, items: [['W7', 1], ['stone', 10], ['protect', 3], ['gem_atk3', 1]], title: 'Chưởng Môn Huyền Môn' },
+  }),
+};
