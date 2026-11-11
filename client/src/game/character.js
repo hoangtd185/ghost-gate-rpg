@@ -442,6 +442,7 @@ export function questStatus(ch, qid) {
     return prog >= q.count ? 'ready' : 'active';
   }
   if (q.requires && questStatus(ch, q.requires) !== 'done') return 'locked';
+  if (q.needFlag && !lineVisible(ch, q.needFlag)) return 'locked'; // a branch of a world quest chain ('key=value' story flag)
   if (ch.level < q.lv) return 'locked';
   return 'available';
 }
@@ -484,6 +485,7 @@ export function npcMarker(ch, npcId) {
   const avail = (npc.quests || []).filter((qid) => questStatus(ch, qid) === 'available').map((qid) => QUESTS[qid]);
   if (avail.some((q) => q.cat === 'main')) return '!!';
   if (avail.some((q) => q.cat === 'tut')) return '!t';
+  if (avail.some((q) => q.cat === 'world')) return '!w';
   if (avail.length) return '!';
   return null;
 }
@@ -511,6 +513,8 @@ export function lineVisible(ch, cond) {
 // Whether an NPC is standing on the map (depends on story progress)
 export function npcPresent(ch, entry) {
   if (entry.after && questStatus(ch, entry.after) !== 'done') return false;
+  if (entry.from && !ch.quests[entry.from]) return false; // appears once that quest is accepted
+  if (entry.gone && questStatus(ch, entry.gone) === 'done') return false; // leaves once that quest is done
   if (entry.until && ch.quests[entry.until]) return false;
   if (entry.hideWhile) { const s = questStatus(ch, entry.hideWhile); if (s === 'active' || s === 'ready') return false; }
   return true;

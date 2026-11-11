@@ -18,6 +18,7 @@ It plays like an MMO. On the Node server, real players on the same map see each 
 - **Vạn Bảo Các (premium shop)**: capes, outfits and utilities for Nguyên Bảo, earned in game only (daily check-in, chieftains, field bosses, chapter finales); live try-on preview; online the server owns the balance
 - **Main story "Huyền Môn Phong Ấn"**: a prologue + 3 chapters (32 quests), voiced-style dialogue with character portraits, an in-story choice that changes the ending, story-gated zones that require leveling up
 - Tutorial quests, side quests, daily bounty quests, daily gifts, titles shown above the character
+- **World quests** (Genshin style): four story chains found around the world, two cheerful and two dark, each ending with a choice that changes how the story ends; rewards include Nguyên Bảo, titles and a cape
 - Context-aware NPC dialogue (story progress, time of day, class, pet, gear…) and NPCs that chat with each other
 - A pet ghost (Tiểu Quỷ) that follows you and picks up loot in range, even on high platforms
 - Double jump and variable jump height
@@ -332,6 +333,8 @@ client/
     config.js           GAME: every balance / tuning number in one place (also read by the server)
     engine/             keyboard / touch input, utilities
     data/               GAME DATA: classes, skills, items, monsters, maps, NPCs, quests, bots
+      premium.js        Vạn Bảo Các offers and tabs
+      world.js          world quest chains (choices, flags)
       story.js          main story, tutorial quests, scenes with choices
       chatter.js        everyday NPC lines and NPC-to-NPC conversations
       affixes.js        monster affixes, intelligence tiers, elites, story and field bosses
@@ -353,13 +356,16 @@ client/
       combat.js         damage formulas (shared with the server)
       bots.js           fake-player bot AI and chat
       chatter.js        picks context-aware NPC lines without repeating
+      premium.js        Nguyên Bảo rules shared with the server: check-in, kill and quest rewards, offline purchases
     ui/                 HUD, inventory / skills / quests / shop / forge / crafting windows, login screens
+      premium.js        Vạn Bảo Các window: balance, check-in, offers, try-on preview
     storage/            the 3 storage backends (API / Claude / browser)
     net/realtime.js     WebSocket client: position sync, other players, chat, loot, trades, reconnect
     style.css
 server/src/
   index.js              HTTP server, API routing, security headers, rate limits, static files
-  realtime.js           WebSocket server at /ws: presence, movement, chat, loot, trades
+  realtime.js           WebSocket server at /ws: presence, movement, chat, loot, trades, premium requests
+  premium.js            Vạn Bảo Các: purchases, check-in, quest and kill Nguyên Bảo (server owns the balance)
   mobs.js               shared monsters: one simulation per map, hits, rewards
   party.js              parties
   loot.js               personal loot: drops, pickup commit queue
@@ -430,7 +436,7 @@ Almost all content lives in `client/src/data/`, so most changes are data edits:
 - **New boss**: set `behavior: 'boss'`, `proj` (projectile), `summon` (summoned minion) and `lines` (dialogue) in `data/monsters.js`.
 - **New named / field boss**: add an entry to `NAMED` in `data/affixes.js` based on an existing monster, with multipliers, affixes, drops and either a `quest` (story boss) or an `every` respawn timer (field boss).
 - **New item**: add it to `items.js`, then to a monster's drop table, an NPC shop in `npcs.js`, or a recipe in `recipes.js`.
-- **New quest**: add it to `QUESTS` in `npcs.js` (side quests) or to `story.js` (story, tutorials), then add its id to the NPC's `quests` list.
+- **New quest**: add it to `QUESTS` in `npcs.js` (side quests), to `story.js` (story, tutorials) or to `world.js` (world quest chains: `chain`, `choice`, `needFlag`), then add its id to the NPC's `quests` list.
 - **New NPC line**: add it to `data/chatter.js`. Conditional lines are written as `['line', { a: 'st7' }]` (only said after quest st7 is done).
 - **Balancing**: stat formulas in `calcStats`, EXP curve in `expToNext` (`game/character.js`), damage in `hitDamage` (`game/combat.js`, used by the browser and the server).
 

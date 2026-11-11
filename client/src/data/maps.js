@@ -15,6 +15,7 @@ export const MAPS = {
     portals: [{ x: 1440, to: 'forest', toX: 70, label: 'Rừng Ma Trơi' }],
     npcs: [
       { id: 'elder', x: 220 },
+      { id: 'kid_bin', x: 440 }, // world quest: Đêm Hội Rước Đèn
       { id: 'healer', x: 560 },
       { id: 'smith', x: 760 },
       { id: 'constable', x: 980 },
@@ -67,6 +68,10 @@ export const MAPS = {
     ],
     portals: [{ x: 50, to: 'field', toX: 2300, label: 'Cánh Đồng Hoang' }, { x: 2450, to: 'ghost_gate', toX: 80, label: 'Quỷ Môn Quan', lock: 'st6d' },
       { x: 1310, to: 'temple', toX: 80, label: 'Huyền Môn Cổ Tự', req: 'st15', color: '#ff6a7a' }],
+    npcs: [
+      { id: 'gravekeeper', x: 260 },
+      { id: 'ghost_girl', x: 1180, from: 'wq_well1', gone: 'wq_well4' }, // only while her story is going on
+    ],
     spawns: [
       { mob: 'jiangshi', x1: 150, x2: 2400, y: GROUND_Y, count: 7 },
       { mob: 'jiangshi', x1: 760, x2: 980, y: 254, count: 2 },
@@ -93,7 +98,7 @@ export const MAPS = {
       { x: 1700, y: 204, w: 180 }, { x: 1960, y: 252, w: 220 }, { x: 2050, y: 150, w: 140 },
     ],
     portals: [{ x: 50, to: 'field', toX: 1250, label: 'Cánh Đồng Hoang' }],
-    npcs: [{ id: 'fisherman', x: 190 }],
+    npcs: [{ id: 'fisherman', x: 190 }, { id: 'golden_carp', x: 400, after: 'wq_carp2' }],
     spawns: [
       { mob: 'frog', x1: 400, x2: 2300, y: GROUND_Y, count: 6 },
       { mob: 'frog', x1: 820, x2: 1020, y: 252, count: 2 },
@@ -112,7 +117,7 @@ export const MAPS = {
       { x: 1800, y: 200, w: 200 }, { x: 2080, y: 252, w: 220 }, { x: 2150, y: 144, w: 160 },
     ],
     portals: [{ x: 50, to: 'ghost_gate', toX: 1180, label: 'Quỷ Môn Quan' }, { x: 2550, to: 'ice_cave', toX: 80, label: 'Huyền Băng Động', lock: 'st9' }],
-    npcs: [{ id: 'huntress', x: 200 }],
+    npcs: [{ id: 'huntress', x: 200 }, { id: 'snow_bride', x: 1300, until: 'wq_bride4a' }],
     spawns: [
       { mob: 'snowfox', x1: 350, x2: 2450, y: GROUND_Y, count: 6 },
       { mob: 'yeti', x1: 900, x2: 2450, y: GROUND_Y, count: 3 },

@@ -219,6 +219,16 @@ Object.assign(ITEMS, {
     cape: { c: '#1c1a24', c2: '#08080e', t: '#e8c35a', len: 30, w: 18, hem: 'plain', motif: 'dragon', mc: '#ffd76a', lining: '#8a1420', fx: { c: '#ffd76a', shape: 'star' } } },
 });
 
+// World quest items and rewards (data/world.js)
+Object.assign(ITEMS, {
+  q_star_lantern: { name: 'Đèn Ông Sao', type: 'quest', icon: 'flame', color: '#ffd84a', price: 0, desc: 'Đèn ông sao năm cánh của Bé Bin, một cánh hơi cháy sém.' },
+  q_hairpin: { name: 'Kẹp Tóc Hình Bướm', type: 'quest', icon: 'petal', color: '#f0c8a0', price: 0, desc: 'Kẹp tóc gỗ thị khắc hình con bướm. Vẫn còn thơm.' },
+  q_love_letter: { name: 'Lá Thư Chưa Gửi', type: 'quest', icon: 'scroll', color: '#f0e4d0', price: 0, desc: 'Lá thư nhàu nát, mực nhoè vì tuyết. Gửi "Hàn muội".' },
+  cape_bride: { name: 'Hồng Y Tuyết Nương', type: 'equip', slot: 'cape', lv: 15, color: '#c8243a', price: 0,
+    stats: { hp: 120, def: 8, res_ice: 12 }, src: 'Nhiệm vụ thế giới: Tân Nương Tuyết Sơn',
+    cape: { c: '#c8243a', c2: '#6a0a1a', t: '#ffd6a0', len: 30, w: 17, hem: 'scallop', motif: 'snow', mc: '#ffe8f0', lining: '#ffd6a0', fx: { c: '#ffe8f0', shape: 'snow' } } },
+});
+
 // Cosmetic slots: outfits and capes (no sockets, always Legendary, change how the character looks)
 export const isLookSlot = (slot) => slot === 'outfit' || slot === 'cape';
 

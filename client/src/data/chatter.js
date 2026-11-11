@@ -212,6 +212,36 @@ export const CHATTER = {
     hi: ['Hừm.', 'Nóng không? Quen là được.'],
   },
 
+  kid_bin: {
+    lines: [
+      'Đại ca ơi, đèn ông sao có mấy cánh? …Năm! Đại ca giỏi ghê.',
+      'Bà Tư bảo ăn bánh nướng nhiều là đau bụng. Em ăn hai cái chưa đau, chắc phải ăn cái thứ ba mới biết.',
+      ['Sang năm em dán đèn sáu cánh!', { a: 'wq_lan4' }],
+    ],
+    greet: ['Đại ca! Đại ca!', 'Đại ca chơi rước đèn với em hông?'],
+    hi: ['Đại ca tới rồi!'],
+  },
+  gravekeeper: {
+    lines: [
+      'Người chết không đáng sợ. Người sống quên mới đáng sợ.',
+      'Canh ba đừng ra gần cái giếng cạn.',
+      ['Mai lão xuống làng. Có mấy người già cần nghe chuyện.', { a: 'wq_well5a' }],
+    ],
+    greet: ['Ngươi lại tới à. Ngồi đi, nghĩa địa không thiếu chỗ.', 'Đêm nay sương dày.'],
+    hi: ['…'],
+  },
+  ghost_girl: {
+    lines: ['Mẹ ơi…', 'Anh có thấy mẹ em không?', 'Lạnh quá…'],
+    greet: ['Anh nhìn thấy em hả?', 'Anh tới chơi với em hả?'],
+  },
+  golden_carp: {
+    lines: ['Ba trăm năm tu luyện, vẫn phải nghe lão già say xỉn hát dở.', 'Đừng nhìn vảy ta. Vảy ta không bán.', 'Bùm! …Ta nhảy lên mặt nước cho vui thôi.'],
+    greet: ['Lại là ngươi. Hết điều ước rồi nhé.', 'Muốn gì? Ta đang tắm.'],
+  },
+  snow_bride: {
+    lines: ['Chàng sắp tới rồi.', 'Tuyết đầu mùa đẹp quá. Chàng hẹn trước tuyết đầu mùa.', 'Áo cưới của ta còn đỏ không?'],
+    greet: ['Chàng tới rồi sao? …Không phải.', 'Người lạ, ngươi có thấy ai trèo đèo không?'],
+  },
   merchant: {
     lines: [
       'Vạn Bảo Các, hàng thật giá thật! Chỉ nhận Nguyên Bảo thôi nhé.',

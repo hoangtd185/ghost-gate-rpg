@@ -4,6 +4,7 @@ import { ITEMS, RARITY, SLOT_NAMES, STAT_NAMES, ENHANCE_MAX, ENHANCE_RATE, ENHAN
 import { ELEMENTS, ELEMENT_IDS } from '../data/elements.js';
 import { NPCS, QUESTS } from '../data/npcs.js';
 import { SPEAKERS, CHAPTERS, SCENES, MAIN_ORDER } from '../data/story.js';
+import { WORLD_CHAINS } from '../data/world.js';
 import { RECIPES } from '../data/recipes.js';
 import { npcLine, fillText } from '../game/chatter.js';
 import { humanoidSheet, HUM_W } from '../gfx/humanoid.js';
@@ -55,7 +56,15 @@ function nextMainQuest(ch) {
 }
 
 // Quest type tag
-const CAT = { main: ['story', 'Cốt truyện'], tut: ['tut', 'Hướng dẫn'], side: ['side', 'Phụ'], daily: ['daily', 'Hằng ngày'] };
+const CAT = { main: ['story', 'Cốt truyện'], tut: ['tut', 'Hướng dẫn'], side: ['side', 'Phụ'], daily: ['daily', 'Hằng ngày'], world: ['world', 'Thế giới'] };
+const TONE = { light: ['light', '☀ Vui tươi'], dark: ['dark', '☾ U tối'] };
+const toneTag = (c) => `<span class="qtone ${TONE[c.tone][0]}">${TONE[c.tone][1]}</span>`;
+// World quest chain progress. Branch epilogues (needFlag) count as one step: only one of them can be played.
+function chainProgress(ch, c) {
+  const total = c.steps.filter((qid) => !QUESTS[qid].needFlag).length + (c.steps.some((qid) => QUESTS[qid].needFlag) ? 1 : 0);
+  const done = c.steps.filter((qid) => questStatus(ch, qid) === 'done').length;
+  return { done, total };
+}
 const catOf = (q) => q.cat || (q.daily ? 'daily' : 'side');
 function catTag(q) { const c = CAT[catOf(q)]; return `<span class="qtag ${c[0]}">${c[1]}</span>`; }
 
@@ -200,7 +209,7 @@ export class GameUI {
   // Quest tracker in the top right: story first, then tutorials, at most 3 lines
   refreshTracker() {
     const ch = this.ch, el = $('#hTrack', this.root);
-    const order = { main: 0, tut: 1, side: 2, daily: 3 };
+    const order = { main: 0, world: 1, tut: 2, side: 3, daily: 4 };
     const act = Object.keys(ch.quests).filter((qid) => QUESTS[qid] && ['active', 'ready'].includes(questStatus(ch, qid)))
       .sort((a, b) => order[catOf(QUESTS[a])] - order[catOf(QUESTS[b])]);
     const hasMain = act.some((qid) => catOf(QUESTS[qid]) === 'main');
@@ -293,9 +302,25 @@ export class GameUI {
   setMap(map) {
     $('#hMap', this.root).textContent = map.name;
     setTimeout(() => this.checkScenes(), 900);
+    setTimeout(() => this.discoverWorldQuests(), 1800);
     const b = $('#hBanner', this.root);
     b.innerHTML = `<small>${map.safe ? 'Khu an toàn' : 'Cấp đề nghị ' + (map.minLv || 1) + '+'}</small>${escapeHtml(map.name)}`;
     b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  }
+
+  // Genshin-style discovery: the first time we reach a map where a world quest chain can start, announce it
+  discoverWorldQuests() {
+    const w = this.world, ch = this.ch;
+    if (!w) return;
+    for (const [id, c] of Object.entries(WORLD_CHAINS)) {
+      const first = QUESTS[c.steps[0]], key = 'wq_' + id;
+      if (ch.flags[key] || questStatus(ch, c.steps[0]) !== 'available' || !w.npcs.some((n) => n.id === first.npc)) continue;
+      ch.flags[key] = 'seen';
+      this.banner(`<small>Phát hiện nhiệm vụ thế giới</small>${escapeHtml(c.name)}`);
+      this.toast(`◈ <b>${escapeHtml(c.name)}</b> · ${escapeHtml(c.blurb)} Tìm ${escapeHtml(NPCS[first.npc].name)} (dấu ! tím).`, 'quest');
+      this.cb.save();
+      return; // one at a time
+    }
   }
 
   banner(html) {
@@ -499,12 +524,12 @@ export class GameUI {
 
   winQuests() {
     const ch = this.ch;
-    const groups = { active: [], main: [], tut: [], side: [], daily: [], done: [] };
-    const order = { main: 0, tut: 1, side: 2, daily: 3 };
+    const groups = { active: [], main: [], tut: [], side: [], daily: [], world: [], done: [] };
+    const order = { main: 0, world: 1, tut: 2, side: 3, daily: 4 };
     const ids = Object.keys(QUESTS).sort((a, b) => order[catOf(QUESTS[a])] - order[catOf(QUESTS[b])]);
     for (const qid of ids) {
       const s = questStatus(ch, qid), q = QUESTS[qid];
-      const tags = catTag(q) + (q.chapter ? ` <span class="chap">${escapeHtml(CHAPTERS[q.chapter])}</span>` : '');
+      const tags = catTag(q) + (q.chapter ? ` <span class="chap">${escapeHtml(CHAPTERS[q.chapter])}</span>` : '') + (q.chain ? ` <span class="chap">${escapeHtml(WORLD_CHAINS[q.chain].name)}</span>` : '');
       if (s === 'active' || s === 'ready') {
         const prog = q.type === 'talk' ? `<p class="muted small">Đến gặp ${NPCS[q.target].name} ở ${npcMapName(q.target)}.</p>`
           : `<div class="prog"><i style="width:${100 * questProgress(ch, qid) / q.count}%"></i><b>${questProgress(ch, qid)} / ${q.count}</b></div>`;
@@ -512,9 +537,22 @@ export class GameUI {
           ${q.hint ? `<p class="qhint">💡 ${escapeHtml(fillText(q.hint, ch))}</p>` : ''}
           <p class="reward">Thưởng: ${rewardText(q, ch.cls)}</p>
           ${s === 'ready' ? `<p class="good">Đã xong! Đến gặp ${NPCS[questTurnIn(q)].name} (${npcMapName(questTurnIn(q))}).</p>` : ''}</li>`);
+      } else if (s === 'available' && catOf(q) === 'world') {
+        continue; // listed per chain below
       } else if (s === 'available') {
         groups[catOf(q)].push(`<li class="c-${catOf(q)}"><h3>${q.name} ${tags}</h3><p class="muted">Gặp ${NPCS[q.npc].name} ở ${npcMapName(q.npc)}. Cấp ${q.lv}+</p><p class="reward">Thưởng: ${rewardText(q, ch.cls)}</p></li>`);
       } else if (s === 'done' && catOf(q) === 'main') groups.done.push(`<li class="done"><h3>${q.name} <span class="chap">${escapeHtml(CHAPTERS[q.chapter])}</span></h3></li>`);
+    }
+    // world quest chains: mood, progress, where the next step starts
+    for (const [id, c] of Object.entries(WORLD_CHAINS)) {
+      const { done, total } = chainProgress(ch, c);
+      const nextQ = c.steps.map((qid) => [qid, questStatus(ch, qid)]).find(([, st]) => st === 'available');
+      const busy = c.steps.some((qid) => ['active', 'ready'].includes(questStatus(ch, qid)));
+      const finished = done >= total;
+      if (!nextQ && !busy && !finished && !ch.flags['wq_' + id]) continue; // not found yet
+      const where = nextQ ? `Bước tiếp: <b>${QUESTS[nextQ[0]].name}</b> · gặp ${NPCS[QUESTS[nextQ[0]].npc].name} ở ${npcMapName(QUESTS[nextQ[0]].npc)} (cấp ${QUESTS[nextQ[0]].lv}+)` : busy ? 'Đang làm (xem phía trên).' : finished ? 'Đã hoàn thành.' : 'Bước tiếp chưa mở (cần cấp cao hơn).';
+      groups.world.push(`<li class="c-world ${finished ? 'done' : ''}"><h3>${escapeHtml(c.name)} ${toneTag(c)} <span class="chap">${done}/${total}</span></h3>
+        ${finished ? '' : `<p class="muted small">${escapeHtml(c.blurb)}</p>`}<p class="small">${where}</p></li>`);
     }
     const next = nextMainQuest(ch);
     const nextMsg = next && questStatus(ch, next) === 'locked' ? `<li class="muted">Cốt truyện tiếp theo: <b>${QUESTS[next].name}</b> mở ở cấp ${QUESTS[next].lv}.</li>` : '';
@@ -523,6 +561,7 @@ export class GameUI {
     return `<p class="muted small">Tiến độ cốt truyện: <b>${nDone}/${nMain}</b></p>`
       + sec('Đang làm', groups.active, 'Chưa nhận nhiệm vụ nào.')
       + sec('Cốt truyện', groups.main.length ? groups.main : nextMsg ? [nextMsg] : [], nDone >= nMain ? 'Bạn đã đi hết cốt truyện hiện có.' : 'Hoàn thành nhiệm vụ đang làm để mở tiếp.')
+      + (groups.world.length ? sec('Nhiệm vụ thế giới', groups.world) : '')
       + (groups.tut.length ? sec('Hướng dẫn', groups.tut) : '')
       + (groups.side.length ? sec('Nhiệm vụ phụ', groups.side) : '')
       + (groups.daily.length ? sec('Hằng ngày', groups.daily) : '')
@@ -844,6 +883,15 @@ export class GameUI {
       case 'dnext': if (this.dlg && this.dlg.i < this.dlg.lines.length - 1) { this.dlg.i++; this.renderWin(); } else if (this.dlg && !(this.dlg.choices || []).some((c) => c.big)) this.act((this.dlg.choices || [{ act: 'dend' }])[0].act, {}); break;
       case 'daccept': { const { qid, npc } = this.dlg; this.npcId = npc; this.acceptQuest(qid); break; }
       case 'dlater': { const { npc } = this.dlg; this.dlg = null; this.openNpc(npc); break; }
+      case 'qchoice': {
+        // choice at the end of a quest: set the flag, play its lines, then the reward
+        const q = QUESTS[this.dlg.qid], o = q && q.choice && q.choice.options[+d.i];
+        if (!o) break;
+        ch.flags[o.flag[0]] = o.flag[1];
+        const { onEnd, title, chapter } = this.dlg;
+        this.startDialog(o.lines, { title, chapter, onEnd, choices: [{ act: 'dend', label: 'Nhận thưởng' }] });
+        break;
+      }
       case 'dchoice': {
         // choice in a story scene: set the flag, then play its own dialogue
         const sc = SCENES[this.sceneId], c = sc && sc.choices[+d.i];
@@ -942,7 +990,10 @@ export class GameUI {
     const q = QUESTS[qid], npc = this.npcId;
     const done = () => { this.openNpc(npc); this.completeQuest(qid); };
     const outro = q.outro || (q.done ? [[questTurnIn(q), q.done]] : null);
-    if (outro) this.startDialog(outro, { chapter: q.chapter && CHAPTERS[q.chapter], title: q.name, onEnd: done, choices: [{ act: 'dend', label: 'Nhận thưởng' }] });
+    const chapter = q.chapter ? CHAPTERS[q.chapter] : q.chain ? 'Nhiệm vụ thế giới · ' + WORLD_CHAINS[q.chain].name : '';
+    // a choice at the end (world quests): it sets a story flag and plays its own lines before the reward
+    const choices = q.choice ? q.choice.options.map((o, i) => ({ act: 'qchoice', label: o.label, big: true, i })) : [{ act: 'dend', label: 'Nhận thưởng' }];
+    if (outro) this.startDialog(outro, { chapter, title: q.name, onEnd: done, choices, qid });
     else done();
   }
 
@@ -1021,7 +1072,8 @@ export class GameUI {
     for (const [id0, n] of q.reward.items || []) {
       const id = resolveItemId(id0, ch.cls);
       const it = ITEMS[id];
-      if (it.type === 'equip') { const r = rollEquip(id, 0, 1); addItem(ch, id, n, r.r, r.bonus); }
+      if (isLookSlot(it.slot)) addItem(ch, id, n, 3, {}); // outfits and capes are always Legendary, no bonus stats
+      else if (it.type === 'equip') { const r = rollEquip(id, 0, 1); addItem(ch, id, n, r.r, r.bonus); }
       else addItem(ch, id, n);
       got.push(`${it.name}${n > 1 ? ' ×' + n : ''}`);
     }

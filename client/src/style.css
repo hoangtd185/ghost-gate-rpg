@@ -347,6 +347,10 @@ blockquote { border-radius: 0 10px 10px 0; }
 .qtag.tut { background: #12303a; color: #7ae4ff; border-color: #2a6a80; }
 .qtag.side { background: #2a2232; color: #d8cce8; border-color: #5a4a6a; }
 .qtag.daily { background: #3a2a14; color: #ffd36a; border-color: #8a6a2a; }
+.qtag.world { background: #2a1a3a; color: #d0b0ff; border-color: #6a4a9a; }
+.qtone { font-size: .68em; padding: .05em .5em; border-radius: 999px; vertical-align: middle; font-weight: 700; white-space: nowrap; }
+.qtone.light { background: #3a3014; color: #ffe08a; } .qtone.dark { background: #1a1424; color: #b8a0d8; border: 1px solid #4a3a6a; }
+.quests li.c-world { border-left: 3px solid #8a6ad0; }
 .chap { font-size: .68em; color: var(--muted); font-weight: 400; vertical-align: middle; }
 .quests li.c-main { border-left: 3px solid #c8603a; }
 .quests li.c-tut { border-left: 3px solid #3ab0d0; }
@@ -360,7 +364,7 @@ blockquote { border-radius: 0 10px 10px 0; }
 .hud-track { position: absolute; right: 1.2em; top: 9.4em; width: 19em; pointer-events: none !important; }
 .hud-track ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .3em; }
 .hud-track li { background: linear-gradient(90deg, #0a080e00, #0a080ecc 30%); padding: .25em .6em; text-align: right; border-right: 3px solid #5a4a6a; text-shadow: 0 1px 2px #000; }
-.hud-track li.main { border-right-color: #ff8a5a; } .hud-track li.tut { border-right-color: #6ae0ff; } .hud-track li.daily { border-right-color: #ffd36a; }
+.hud-track li.main { border-right-color: #ff8a5a; } .hud-track li.tut { border-right-color: #6ae0ff; } .hud-track li.daily { border-right-color: #ffd36a; } .hud-track li.world { border-right-color: #b98aff; }
 .hud-track b { display: block; font-size: .86em; color: var(--paper); }
 .hud-track em { font-style: normal; font-size: .76em; color: var(--muted); font-variant-numeric: tabular-nums; }
 .hud-track em.good { color: #8af0a0; }
