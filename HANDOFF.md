@@ -50,6 +50,7 @@ Also exposed: `__ui()` (the GameUI), `__lookFor`, `__humSheet`, `__drawFrame` an
   - `premium.test.mjs`: offers, check-in streak and day boundary, kill / quest ingots, offline purchases; on the server: saves cannot change the balance, check-in once a day, purchases all-or-nothing and applied once, full bag, quest ingots once and only when saved as done.
   - `cape.test.mjs`: every cape item is drawable; the cloth hangs behind the back, trails while moving, keeps its segment length, never rises over the shoulders, restarts after a teleport.
   - `trade.test.mjs`: trade offers on the server: only the owner's unequipped items with the shown quantity, never quest items.
+  - `backup.test.mjs`: the backup is a consistent gzip snapshot that restores to the same data, later writes do not change it, old backups are pruned, a missing database or a damaged file fails clearly.
   - `mixins.test.mjs`: the methods that `GameWorld`, `GameUI` and `GameDb` get from their feature files never share a name with each other or with the core class.
   - `lootqueue.test.mjs`: pickup commit queue (one batch for many players, answered after the commit, no double queueing, per-player rate limit → `busy`), kill reports only for story bosses.
   - `auth.test.mjs`: login tokens; malformed tokens are rejected without throwing.
@@ -377,7 +378,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 3. **Server-side hit detection.** Clients decide which skill touched which monster (the server checks skill, reach and rate). Doing it on the server needs player projectiles there and lag compensation.
 4. **Forge, shop and quests as server actions** (enhance success, sockets, fusing, purchases, quest rewards are client-decided, bounded by the custody rules).
 5. **Write-behind** for position/HP/EXP and a grace period on disconnect.
-6. **Backups**: nightly `VACUUM INTO`, tested restores, optionally Litestream.
+6. **Backups**: the nightly backup to S3 is written (`tools/backup.mjs`, `infra/backup.sh`, Terraform bucket; README > Backups) but needs `terraform apply` + a deploy to start. Still open: a restore tried on a spare machine, an alert when a backup fails, optionally Litestream.
 7. Online gaps that are accepted for now: smart monsters do not dodge projectiles online (the server does not see them); bots never hurt shared monsters; story bosses are personal (each player's own client runs them).
 8. **Social**: friends, guilds, party loot options (round robin, leader decides), PvP, a real leaderboard page.
 9. **Scaling past one process** (only when needed): maps as shards in separate processes, Redis for chat/parties/trades across them, PostgreSQL instead of SQLite.

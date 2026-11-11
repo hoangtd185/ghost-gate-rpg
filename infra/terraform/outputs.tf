@@ -18,6 +18,16 @@ output "domain" {
   value       = var.domain
 }
 
+output "region" {
+  description = "AWS region of the server and the buckets."
+  value       = var.region
+}
+
+output "backup_bucket" {
+  description = "S3 bucket with the nightly database backups."
+  value       = aws_s3_bucket.backups.id
+}
+
 output "instance_id" {
   description = "EC2 instance id."
   value       = aws_instance.game.id

@@ -204,7 +204,25 @@ How a deploy works: the job gets short-lived AWS credentials through OIDC (only 
 - **nginx:** edit `infra/nginx/` (`proxy.inc`, `http.conf`, `https.conf`). The next deploy runs `nginx -t` on the new config before changing anything live. Keep `X-Forwarded-For $remote_addr` in `proxy.inc`: the server rate limits by the first address in that header, so `$proxy_add_x_forwarded_for` would let clients fake their IP.
 - **Cost:** the plan fails unless AWS reports the instance type as free tier eligible for your account. Disks total 18 GB of the 30 GB allowance. CPU credits are set to `standard`, so a busy server slows down rather than adding charges. The free tier has limits (time, credits, traffic), so set up an AWS budget alert. Other instances, disks or an IP left idle in the same account count too.
 - **Secrets:** first boot generates `TOKEN_SECRET` into `/srv/quymonquan/app.env` on the data disk, so it is not in Terraform state or user data. Other settings from the table below (such as `ALLOW_REGISTER`) go in the same file and apply on the next deploy.
-- **Data:** `game.db`, `app.env`, the nginx config and the certificates live on the data disk at `/srv/quymonquan`. They survive replacing the instance, but there are no automatic backups yet (see stage 3d in [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)).
+- **Data:** `game.db`, `app.env`, the nginx config and the certificates live on the data disk at `/srv/quymonquan`. They survive replacing the instance. Database backups: see below.
+- **Backups:** every night at 03:30 Vietnam time a systemd timer (`quymonquan-backup`, installed by `infra/server-deploy.sh`) takes a consistent snapshot of `game.db` while the game keeps running (`tools/backup.mjs`: `VACUUM INTO`, an integrity check, gzip). The newest 7 stay on the data disk (`/srv/quymonquan/game/backups`) and each one is copied to a private, versioned S3 bucket that expires files after 30 days (`terraform output backup_bucket`). The server may only add files there: it cannot read, overwrite or delete them. The first time, run `terraform apply` (creates the bucket and the permission) and deploy; check with `sudo systemctl start quymonquan-backup && journalctl -u quymonquan-backup -n 20`. A failed run shows up in `systemctl status quymonquan-backup`.
+- **Restoring a backup** (do this from your own machine for the download, you need AWS credentials that can read the bucket):
+
+  ```bash
+  aws s3 ls s3://<backup bucket>/backups/
+  aws s3 cp s3://<backup bucket>/backups/game-<time>.db.gz .
+  node tools/backup.mjs --verify game-<time>.db.gz     # integrity: ok and the row counts
+  scp game-<time>.db.gz ec2-user@<ip>:
+  # on the server:
+  sudo docker stop quymonquan
+  sudo mv /srv/quymonquan/game/game.db /srv/quymonquan/game/game.db.broken
+  sudo rm -f /srv/quymonquan/game/game.db-wal /srv/quymonquan/game/game.db-shm
+  gunzip -c game-<time>.db.gz | sudo tee /srv/quymonquan/game/game.db > /dev/null
+  sudo chown 1000:1000 /srv/quymonquan/game/game.db
+  sudo docker start quymonquan
+  ```
+
+  Everything after the backup time is lost, so restore only when the database is damaged. Try a restore on a spare machine once, before you need it.
 - **Replacing the instance:** after a replacement, run `ssh-keygen -R <public_ip>` (the host key changes), update `DEPLOY_INSTANCE_ID` by repeating step 2, and deploy again (containers live on the old root disk).
 - **Your IP changed:** update `ssh_allowed_cidr` and run `terraform apply`.
 - **Removing everything:** `terraform destroy` stops at the data disk on purpose. To really delete all player data, remove the `prevent_destroy` block from `aws_ebs_volume.data` in `main.tf` and run it again.
@@ -385,6 +403,7 @@ server/src/
 tools/
   build.mjs             bundles the client into one HTML file
   check-secrets.mjs     secret scanner used by `npm run check` and the pre-commit hook
+  backup.mjs            database backup (snapshot, integrity check, gzip, rotation) and --verify
 .env.example            configuration template
 infra/
   terraform/            AWS EC2 free tier server and deploy permissions (see Deployment)
@@ -392,6 +411,7 @@ infra/
   server-deploy.sh      runs on the server: build, restart, roll back on failure, nginx, certificate
   ci-deploy.sh          runs in GitHub Actions: uploads the release and starts the deploy
   deploy.sh             manual deploy over SSH
+  backup.sh             runs on the server: nightly database backup to the data disk and S3
 Dockerfile              production image
 ```
 
