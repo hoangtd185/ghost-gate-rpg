@@ -290,6 +290,8 @@ client/
     config.js           GAME: every balance / tuning number in one place (also read by the server)
     engine/             keyboard / touch input, utilities
     data/               GAME DATA: classes, skills, items, monsters, maps, NPCs, quests, bots
+      premium.js        Vạn Bảo Các offers and tabs
+      world.js          world quest chains (choices, flags)
       story.js          main story, tutorial quests, scenes with choices
       chatter.js        everyday NPC lines and NPC-to-NPC conversations
       affixes.js        monster affixes, intelligence tiers, elites, story and field bosses
@@ -311,13 +313,16 @@ client/
       combat.js         damage formulas (shared with the server)
       bots.js           fake-player bot AI and chat
       chatter.js        picks context-aware NPC lines without repeating
+      premium.js        Nguyên Bảo rules shared with the server: check-in, kill and quest rewards, offline purchases
     ui/                 HUD, inventory / skills / quests / shop / forge / crafting windows, login screens
+      premium.js        Vạn Bảo Các window: balance, check-in, offers, try-on preview
     storage/            the 3 storage backends (API / Claude / browser)
     net/realtime.js     WebSocket client: position sync, other players, chat, loot, trades, reconnect
     style.css
 server/src/
   index.js              HTTP server, API routing, security headers, rate limits, static files
-  realtime.js           WebSocket server at /ws: presence, movement, chat, loot, trades
+  realtime.js           WebSocket server at /ws: presence, movement, chat, loot, trades, premium requests
+  premium.js            Vạn Bảo Các: purchases, check-in, quest and kill Nguyên Bảo (server owns the balance)
   mobs.js               shared monsters: one simulation per map, hits, rewards
   party.js              parties
   loot.js               personal loot: drops, pickup commit queue

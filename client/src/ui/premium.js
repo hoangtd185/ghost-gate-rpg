@@ -19,6 +19,7 @@ export const PremiumUI = {
 
   online() { return !!(this.world && this.world.net); },
 
+  // The window's HTML: balance, check-in, tabs, offer cards and the selected offer's details
   winPremium() {
     const ch = this.ch, tab = this.premTab || 'cape';
     const list = PREMIUM_SHOP.filter((o) => o.tab === tab);
@@ -58,6 +59,7 @@ export const PremiumUI = {
   },
 
   // A live try-on: our character wearing the cape / outfit, walking in place, the cloth flowing
+  // A live try-on: our character wearing the cape / outfit, walking in place
   startPreview() {
     const cv = document.getElementById('pPreview');
     if (!cv) return;
@@ -90,6 +92,20 @@ export const PremiumUI = {
     this.premRaf = requestAnimationFrame(frame);
   },
 
+  // A request is on its way: disable its button until the answer arrives. If no answer comes within
+  // GAME.premium.replyTimeoutSec the button is freed again.
+  premiumWait(what) {
+    this.premBusy = what;
+    clearTimeout(this.premBusyT);
+    this.premBusyT = setTimeout(() => {
+      if (this.premBusy !== what) return;
+      this.premBusy = null;
+      this.toast('Chưa nhận được phản hồi từ máy chủ, thử lại sau', 'warn');
+      if (this.open === 'premium') this.renderWin();
+    }, GAME.premium.replyTimeoutSec * 1000);
+  },
+
+  // Window actions (tab, select, buy, check in). Returns true when the action was ours.
   premiumAct(a, d) {
     const ch = this.ch;
     switch (a) {
@@ -100,7 +116,7 @@ export const PremiumUI = {
         if (!o) return true;
         if (this.online()) {
           if (!this.world.net.premium('buy', { offer: o.id, req: reqId() })) { this.toast('Chưa kết nối máy chủ, thử lại sau', 'warn'); return true; }
-          this.premBusy = o.id; this.renderWin();
+          this.premiumWait(o.id); this.renderWin();
         } else {
           const r = buyLocal(ch, o.id);
           if (!r.ok) { this.toast(r.msg, 'warn'); return true; }
@@ -112,7 +128,7 @@ export const PremiumUI = {
       case 'pcheckin': {
         if (this.online()) {
           if (!this.world.net.premium('checkin')) { this.toast('Chưa kết nối máy chủ, thử lại sau', 'warn'); return true; }
-          this.premBusy = 'checkin'; this.renderWin();
+          this.premiumWait('checkin'); this.renderWin();
         } else {
           const r = checkinLocal(ch);
           if (r) this.checkedIn(r.ingots, r.streak);
@@ -124,6 +140,7 @@ export const PremiumUI = {
     return false;
   },
 
+  // Feedback for a successful purchase: toast, banner for cosmetics, sparkles
   boughtPremium(o) {
     const it = ITEMS[o.items[0][0]];
     this.toast(`Đã mua <b>${escapeHtml(it.name)}</b>${o.items[0][1] > 1 ? ' ×' + o.items[0][1] : ''}`, 'quest');
@@ -131,6 +148,7 @@ export const PremiumUI = {
     const w = this.world;
     w.burst(w.player.cx, w.player.cy, '#ffd76a', 20, 100, { shape: 'star' });
   },
+  // Feedback for a successful check-in: toast and floating text
   checkedIn(n, streak) {
     this.toast(`Điểm danh ngày ${streak}/${PREM_CFG.checkin.streakDays}: +${n} Nguyên Bảo`, 'quest');
     const w = this.world;
@@ -141,11 +159,11 @@ export const PremiumUI = {
   onPremium(m) {
     const ch = this.ch, why = { ingots: 'Không đủ Nguyên Bảo', full: 'Túi đồ đầy', offer: 'Món này không còn bán', rate: 'Thao tác quá nhanh, thử lại sau', done: 'Hôm nay đã điểm danh rồi' };
     if (m.op === 'buy') {
-      this.premBusy = null;
+      clearTimeout(this.premBusyT); this.premBusy = null;
       if (m.ok) this.boughtPremium(offerById(m.offer));
       else if (m.why !== 'dup') this.toast(why[m.why] || 'Không mua được', 'warn');
     } else if (m.op === 'checkin') {
-      this.premBusy = null;
+      clearTimeout(this.premBusyT); this.premBusy = null;
       if (m.ok) { ch.checkin = { day: premiumDay(), streak: m.streak }; this.checkedIn(m.got, m.streak); }
       else if (m.why === 'done') { ch.checkin = { day: premiumDay(), streak: ch.checkin?.streak || 1 }; this.toast(why.done, 'warn'); }
     } else if (m.op === 'claim') {

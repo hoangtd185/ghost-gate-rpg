@@ -1064,7 +1064,8 @@ export class GameUI {
     for (const [id0, n] of q.reward.items || []) {
       const id = resolveItemId(id0, ch.cls);
       const it = ITEMS[id];
-      if (it.type === 'equip') { const r = rollEquip(id, 0, 1); addItem(ch, id, n, r.r, r.bonus); }
+      if (isLookSlot(it.slot)) addItem(ch, id, n, 3, {}); // outfits and capes are always Legendary, no bonus stats
+      else if (it.type === 'equip') { const r = rollEquip(id, 0, 1); addItem(ch, id, n, r.r, r.bonus); }
       else addItem(ch, id, n);
       got.push(`${it.name}${n > 1 ? ' ×' + n : ''}`);
     }

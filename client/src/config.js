@@ -103,6 +103,7 @@ export const GAME = {
     checkin: { ingots: 10, streakDays: 7, streakBonus: 40 }, // +40 more on every 7th day in a row
     kill: { chief: 2, fieldBoss: 5 }, // for the group that did the most damage (each party member)
     chapterIngots: 30, // for each chapter finale (st7, st12, st18)
+    replyTimeoutSec: 10, // an unanswered request frees its button after this long (the answer may be lost)
     opsPerMin: 30, // premium requests per player per minute (online)
   },
 
