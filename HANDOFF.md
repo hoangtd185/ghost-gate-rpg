@@ -131,7 +131,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 2. `normalizeCharacter` runs `migrateLegacy`, fills missing fields, removes retired quests, fills forward the main line and cleans up gems.
 3. `GameWorld` runs the game and `GameUI` renders the windows.
 4. The game saves through `SaveQueue` (`storage/storage.js`):
-   - **When:** autosave every 20 s; on map change, level up, death and quest or forge actions; offline, **right away when a rare drop is picked up** (`isRareDrop` in `world.js`); on tab hide or close (`pagehide` / `beforeunload` / `visibilitychange`). Online, monster drops do not depend on this: the server commits them at pickup.
+   - **When:** autosave every 20 s; on map change, level up, death and quest or forge actions; offline, **right away when a rare drop is picked up** (`isRareDrop` in `game/world/helpers.js`, the save call in `pickupDrop` in `game/world/drops.js`); on tab hide or close (`pagehide` / `beforeunload` / `visibilitychange`). Online, monster drops do not depend on this: the server commits them at pickup.
    - **How:** each save is written synchronously to a localStorage **outbox** (`qmq_outbox:<kind>:<user>`), then uploaded in the background. Only the newest snapshot is kept in the queue and only one upload runs at a time. An entry leaves the outbox only after the server confirms it.
    - **Failures:** a failed upload retries with backoff (2 → 30 s) and right away on the browser `online` event. The HUD shows "Chưa gửi được: đã giữ trên máy…".
    - **Closing the page:** also sends a `fetch(..., { keepalive: true })` upload that outlives the page (body ≤ 64 KB).

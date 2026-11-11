@@ -149,7 +149,10 @@ export const NpcUI = {
       setTimeout(() => this.banner(`<small>${escapeHtml(a)}</small>${escapeHtml(b || a)}`), 400);
     }
     this.toast(`Nhận nhiệm vụ: <b>${q.name}</b>`, 'quest');
-    for (const [id, n] of q.give || []) { addItem(ch, id, n); this.toast(`Nhận ${ITEMS[id].name}${n > 1 ? ' ×' + n : ''}`); }
+    for (const [id, n] of q.give || []) {
+      if (addItem(ch, id, n)) this.toast(`Nhận ${ITEMS[id].name}${n > 1 ? ' ×' + n : ''}`);
+      else this.toast('Túi đồ đã đầy', 'warn');
+    }
     if (q.hint) this.toast(`💡 ${escapeHtml(fillText(q.hint, ch))}`, 'hint');
     if (q.daily) this.world.event('daily');
     this.world.refreshNpcs(); // some NPCs appear/disappear when a quest is accepted
