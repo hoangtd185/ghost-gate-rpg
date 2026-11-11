@@ -59,7 +59,6 @@ export const PremiumUI = {
   },
 
   // A live try-on: our character wearing the cape / outfit, walking in place, the cloth flowing
-  // A live try-on: our character wearing the cape / outfit, walking in place
   startPreview() {
     const cv = document.getElementById('pPreview');
     if (!cv) return;
