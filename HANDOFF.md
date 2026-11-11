@@ -2,7 +2,7 @@
 
 This file lets a person or another AI pick up the project from zero: what the game is, how the code is organized, what has been built so far, the decisions behind it, the traps to avoid and what is planned next. Read it together with `README.md`, which covers setup, deployment, the env variables and the API.
 
-Last updated: 2026-11-01.
+Last updated: 2026-11-11.
 
 ---
 
@@ -24,6 +24,7 @@ npm run dev      # server + raw ES modules from client/src (edit and refresh)
 npm run build    # bundles to client/dist/index.html and client/dist/artifact.html
 npm start        # serves the build (production mode needs TOKEN_SECRET, see .env.example)
 npm run check    # scans files for leaked secrets
+npm run lint     # eslint no-undef: a name used without an import (the bundle hides this, dev mode does not)
 npm run hooks    # installs the pre-commit secret scan
 ```
 
@@ -48,6 +49,8 @@ Also exposed: `__ui()` (the GameUI), `__lookFor`, `__humSheet`, `__drawFrame` an
   - `custody.test.mjs`: what an uploaded save may change (free / earned / server-only items, revisions, ownership after trades), `grantItem`, batched `grantItems`, `commitTrade`, the ledger, crafted capes, items only in their own slot.
   - `premium.test.mjs`: offers, check-in streak and day boundary, kill / quest ingots, offline purchases; on the server: saves cannot change the balance, check-in once a day, purchases all-or-nothing and applied once, full bag, quest ingots once and only when saved as done.
   - `cape.test.mjs`: every cape item is drawable; the cloth hangs behind the back, trails while moving, keeps its segment length, never rises over the shoulders, restarts after a teleport.
+  - `trade.test.mjs`: trade offers on the server: only the owner's unequipped items with the shown quantity, never quest items.
+  - `mixins.test.mjs`: the methods that `GameWorld`, `GameUI` and `GameDb` get from their feature files never share a name with each other or with the core class.
   - `lootqueue.test.mjs`: pickup commit queue (one batch for many players, answered after the commit, no double queueing, per-player rate limit → `busy`), kill reports only for story bosses.
   - `auth.test.mjs`: login tokens; malformed tokens are rejected without throwing.
 - `npm run uat`: **end-to-end acceptance scenarios** (`tests/e2e/*.test.mjs`, about 5 minutes). It builds the client, then drives the real game in headless Chromium, one file at a time (the scenarios are timing-sensitive). Each `it(...)` is one acceptance check, and every file ends with a "no page errors" check. Server scenarios start their own throwaway server (free port, temp database) through `startServer()` in `helpers.mjs`.
@@ -100,8 +103,9 @@ client/src/
   game/bots.js       fake players (hunt, chat, change maps, reply to the player)
   game/chatter.js    context-aware NPC lines (no repeats) and NPC-to-NPC banter
   game/pet.js        the imp pet that picks up drops
-  gfx/               canvas drawing: humanoid.js (chibi characters + outfit parts), cape.js (flowing capes), monsters.js,
-                     backgrounds.js, icons.js, pet.js, draw.js (toolkit)
+  gfx/               canvas drawing: humanoid.js + humanoid/ (chibi characters: frames, parts, outfit), cape.js (flowing capes),
+                     monsters.js + monsters/ (one file per region), backgrounds.js + backgrounds/ (theme, scenery, ground),
+                     icons.js, pet.js, draw.js (toolkit)
   ui/premium.js      Vạn Bảo Các window (premium shop, check-in, try-on preview), mixed into GameUI
   ui/hud.js          GameUI core (windows are mixed in from ui/hud/: panels, npc, forge, trade, actions): HUD, all windows (inventory, skills, quests, shop, forge, craft, dialogue,
                      scenes, trade), party panel, quest tracker
@@ -118,8 +122,8 @@ server/src/
   party.js           parties (invite, answer, leave)
   loot.js            per-player drops, story-boss kill checks, pickup commit queue (group commit, admission control)
   trade.js           trade sessions: ask, offer, lock, confirm → db.commitTrade
-  db.js              SQLite schema + migrations, character read/write, item custody (reconcileItems),
-                     item_ledger, grantItem(s), commitTrade, changesSince
+  db.js              GameDb core: character read/write. The rest is in db/: schema + migrations, helpers,
+                     items (custody via reconcileItems, item_ledger, grantItem(s), commitTrade, changesSince), premium (ingots)
   auth.js            scrypt passwords, HMAC tokens · config.js reads .env
 tools/               build.mjs (custom bundler), check-secrets.mjs
 tests/unit/          node --test unit tests
@@ -239,7 +243,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 
   - Outfits drop at about 1.5–4% from bosses and elites.
   - Three can be crafted at the embroiderer: `r_peach_fairy`, `r_rainbow_fairy`, `r_fox`. The fairy robes need `mat_dew`, `mat_peach` and `mat_icesilk`.
-  - An outfit's `look` draws extra parts in `gfx/humanoid.js`. The fairy `ribbons` and the `aura` are animated in `world.js`.
+  - An outfit's `look` draws extra parts in `gfx/humanoid/outfit.js`. The fairy `ribbons` and the `aura` are animated in `game/world/render.js`.
 - **Capes (6th equip slot `cape`, worn together with an outfit)**: `cape_traveler` (lv 1), `cape_moon` (lv 12), both crafted at the embroiderer (`r_cape_traveler`, `r_cape_moon`).
   - `ITEMS[id].cape` describes the look (colors, length, width, hem, motif, particles; see the top of `gfx/cape.js`).
   - Drawn live, not in the sprite sheet: `CapeCloth` (`gfx/cape.js`) is a chain of points pinned at the back of the neck (`capeAnchor(frame)` in `humanoid.js`), stepped at a fixed 1/120 s (Verlet) with gravity, air drag (so it flies out while running), a backward pull (so it drapes over the back standing still), a travelling wave while moving, and constraints (fixed segment length, never in front of the body, never rising over the shoulders). Tuning: `GAME.cape`.
@@ -273,8 +277,8 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 - **Renaming a stored id?** Add the old → new mapping to `shared/data/legacy.js`. `migrateLegacy` runs first inside `normalizeCharacter` and on the character list screen. It covers class, map, pet, skills, items (including `w_*`, `orb_*`, outfits), item element, `r_*` → `res_*` bonus keys and quest ids.
   - The server also rewrites old class ids in `db.js` → `migrate()`, because `cls` is never re-saved.
 - **Content changes are data edits** in `shared/data/`.
-  - A new monster also needs a draw function registered in `MAKERS` (`gfx/monsters.js`).
-  - A new outfit part needs a draw helper in `gfx/humanoid.js`.
+  - A new monster also needs a draw function in `gfx/monsters/<region>.js`, registered in `MAKERS` (`gfx/monsters.js`).
+  - A new outfit part needs a draw helper in `gfx/humanoid/outfit.js`.
 - **Story lines** are `[speaker, text, cond?]`:
   - The speaker is an NPC id, `me`, `sys`, or a monster id (for its portrait).
   - `cond` looks like `'bell=ring'`.
@@ -361,7 +365,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 
 ## 8. Status: done, not done, open items
 
-**Git state (2026-11-01):** multiplayer phase 2 is committed on `feature/server-side-dmg-calculator` (`daf3162`, `c8badd1`). Three stacked feature branches on top of it, each one commit (plus `docs: add HANDOFF.md` at the bottom), not pushed yet: `feature/capes` → `feature/premium-shop` → `feature/world-quests`. Merge them in that order.
+**Git state (2026-11-11):** every feature branch (capes, premium shop, world quests) and the two refactors (`shared/` folder, files split by feature) are merged into `main`. New work goes on a branch off `main` and into a PR.
 
 **Done (gameplay, 2026-11-01):** flowing capes (own slot) · Vạn Bảo Các premium shop and Nguyên Bảo · four world quest chains.
 

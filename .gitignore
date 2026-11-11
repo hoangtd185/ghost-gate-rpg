@@ -33,3 +33,6 @@ tests/e2e/out/
 *.tfstate
 *.tfstate.*
 *.tfvars
+
+# Local tool state
+/.nodeterm/

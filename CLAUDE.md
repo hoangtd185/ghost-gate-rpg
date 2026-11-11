@@ -18,6 +18,7 @@ npm run dev     # server + raw ES modules from client/src (edit and refresh)
 npm run build   # bundle to client/dist/index.html and client/dist/artifact.html
 npm start       # serve the build (production needs TOKEN_SECRET >= 32 chars)
 npm run check   # secret scan
+npm run lint    # eslint no-undef (missing imports: the bundle hides them, dev mode does not)
 npm test        # unit tests (node --test): data integrity, character model, config, a few seconds
 npm run uat     # build + every e2e scenario in headless Chromium (node --test + playwright-core), ~3-4 min
 node --test tests/e2e/orbs.test.mjs   # one scenario
@@ -34,8 +35,8 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 | Content (classes, skills, items, monsters, maps, NPCs, quests, dialogue, recipes, named bosses) | `shared/data/*.js` |
 | Deployment settings, secrets | `.env` (template `.env.example`), read by `server/src/config.js` |
 | Renamed an id that can be stored in a save | Add old → new to `shared/data/legacy.js` |
-| New monster sprite | Draw in `client/src/gfx/monsters.js`, register it in `MAKERS` |
-| New outfit part | Draw helper in `client/src/gfx/humanoid.js` |
+| New monster sprite | Draw in `client/src/gfx/monsters/<region>.js`, register it in `MAKERS` (`client/src/gfx/monsters.js`) |
+| New outfit part | Draw helper in `client/src/gfx/humanoid/outfit.js` |
 | New cape | An item with `slot: 'cape'` and a `cape` look in `shared/data/items.js` (options at the top of `client/src/gfx/cape.js`); cloth feel in `GAME.cape` |
 | World quest chains (Genshin-style side stories, choices, branches) | `shared/data/world.js` (chains + quests), NPCs in `shared/data/npcs.js`, their spots in `shared/data/maps.js` |
 | Premium shop offers, Nguyên Bảo amounts | `shared/data/premium.js` (offers), `GAME.premium` (check-in, kills, chapter rewards), `reward.ingots` on quests |
@@ -55,6 +56,7 @@ Everything under `shared/` (`config.js`, `util.js`, `data/*`, `rules/*`) is impo
 
 ## Traps
 
+- A name used without an import still builds (one shared scope) but throws in dev mode: `npm run lint` catches it. Mixin methods (`game/world/*.js`, `ui/hud/*.js`, `server/src/db/*.js`) must have unique names across the class (`tests/unit/mixins.test.mjs`).
 - `tools/build.mjs` concatenates every module into one scope: **top-level names must be unique across modules**. Dev mode uses real ES modules, so a duplicate import in one file breaks dev only. Check both `npm run build` and `npm run dev`.
 - `.gitignore` / `.dockerignore` must use `/data/` with the leading slash. A plain `data/` hides `shared/data/`.
 - `storage.js` uses `this.col.doc(...)` (artifact DB API). It is not the old `doc` element id; never rename it.
