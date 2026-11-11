@@ -124,6 +124,7 @@ export async function startServer(env = {}) {
   }
   return {
     url,
+    dataDir, // the server's database folder (tests may open it to set up data the game cannot create)
     async api(p, body, token) {
       const r = await fetch(url + 'api/' + p, {
         method: body ? 'POST' : 'GET',

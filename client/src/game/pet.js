@@ -1,8 +1,8 @@
 // Imp pet: follows the player and flies over to pick up drops in range
 import { petSheet } from '../gfx/pet.js';
 import { drawFrame } from '../gfx/draw.js';
-import { pick, rand } from '../engine/util.js';
-import { GAME } from '../config.js';
+import { pick, rand } from '../../../shared/util.js';
+import { GAME } from '../../../shared/config.js';
 
 export const PET_NAME = 'Tiểu Quỷ';
 const PICK_RANGE = GAME.pet.pickRange; // pickup range, measured from the player

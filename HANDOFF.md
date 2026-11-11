@@ -1,0 +1,395 @@
+# HANDOFF — Quỷ Môn Quan (ghost-gate)
+
+This file lets a person or another AI pick up the project from zero: what the game is, how the code is organized, what has been built so far, the decisions behind it, the traps to avoid and what is planned next. Read it together with `README.md`, which covers setup, deployment, the env variables and the API.
+
+Last updated: 2026-11-11.
+
+---
+
+## 1. What this is
+
+- A hobby 2D side-scrolling RPG that looks like an MMO (Ghost Online / MapleStory style) and is **moving to online play**: with the Node server, real players on the same map see each other and chat, monsters are shared (run by the server), parties split EXP (G to invite), each player gets personal loot rolled and committed by the server, and players can trade (T). Fake-player bots fill empty maps. The theme is Asian wuxia mixed with ghost folklore.
+- The UI and all game text are **Vietnamese**. Code, ids and comments are **English**.
+- **One runtime dependency, `ws`** (WebSocket), plus `playwright-core` for tests. Plain Node (>= 22.13, for `node:sqlite`) and the browser canvas otherwise. Run `npm install` before `npm run dev` / `npm start`. **External libraries are allowed** (decision 6 in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)); see the dependency policy there before adding one.
+- **Why it is built this way** (stack, saving queue vs. RabbitMQ/Kafka/Redis, decisions log, multiplayer plan): [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Everything online (protocol, shared monsters, reward rules, server-side damage, parties, personal loot, item custody, trades, database load, what is still client-side): [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
+- Online and offline run the **same game code**: monster AI (`shared/rules/mobsim.js`), damage (`shared/rules/combat.js`), loot (`shared/rules/loot.js`) and physics (`shared/rules/physics.js`) are shared modules that the server imports. Offline (file:// or the Claude artifact) the browser runs them; online the server does.
+- All graphics are drawn in code (canvas curves, cached as sprite sheets). There are no image files.
+- Repo: `https://github.com/hoangtd185/ghost-gate-rpg`. Local copy on the owner's PC: `H:\Projects\quy-mon-quan`.
+- Playable web build: a Claude artifact (the `client/dist/artifact.html` build, saved through the artifact database).
+
+## 2. Run, build, test
+
+```bash
+npm run dev      # server + raw ES modules from client/src (edit and refresh)
+npm run build    # bundles to client/dist/index.html and client/dist/artifact.html
+npm start        # serves the build (production mode needs TOKEN_SECRET, see .env.example)
+npm run check    # scans files for leaked secrets
+npm run lint     # eslint no-undef: a name used without an import (the bundle hides this, dev mode does not)
+npm run hooks    # installs the pre-commit secret scan
+```
+
+You can also open `client/dist/index.html` directly in a browser. It then saves to localStorage.
+
+**Debug console** (only on file://, localhost, or with `?debug` in the URL): `__game()` returns the `GameWorld`. Useful calls:
+- `giveExp(n)` gives EXP; `loadMap(id, x)` teleports.
+- `ch` is the raw character object; `player.invuln = 9999` makes the player invulnerable.
+- `damageMonster(m, mult, 'player')` hits a monster with damage multiplier `mult` (offline / personal monsters). Shared monsters online: `net.hit({ uid, sid })`, the server computes the damage.
+- `remoteMobs` (shared monsters online), `remotes` (other players), `net` (the realtime connection), `party`.
+
+Also exposed: `__ui()` (the GameUI), `__lookFor`, `__humSheet`, `__drawFrame` and `__Monster`.
+
+**Tests** run on Node's built-in runner (`node --test`). The only dev dependency is `playwright-core` (headless Chromium driver). One-time setup: `npm install` then `npm run uat:browser`.
+
+- `npm test`: **unit tests** (`tests/unit/*.test.mjs`, a few seconds, no browser).
+  - `data.test.mjs`: every id referenced anywhere in the content exists. This covers items in drops, rewards and recipes; quest NPCs and targets; dialogue speakers; portals, spawns and NPCs on maps; named bosses; affixes; legacy id targets; world quest chains (step order, choices, branches set by earlier choices, NPCs on maps). It also checks that `config.js` agrees with the content.
+  - `character.test.mjs`: EXP curve, level-up points, `rollEquip` minimum rarity and thresholds, old-save migration, normalization.
+  - `config.test.mjs`: elite chance and smartness tier tables, aliases, rate sanity.
+  - `combat.test.mjs`: the shared damage formula (multiplier, defence, weakness/resistance, crit, minimum 1), skill level scaling, learned-skill check, skill reach.
+  - `mobs.test.mjs`: shared monsters on the server: damage computed by the server (a client number is ignored), unknown skill / out of reach / rate limit, buffs, EXP shares, party split, loot to the top group, level gap, death broadcast.
+  - `custody.test.mjs`: what an uploaded save may change (free / earned / server-only items, revisions, ownership after trades), `grantItem`, batched `grantItems`, `commitTrade`, the ledger, crafted capes, items only in their own slot.
+  - `premium.test.mjs`: offers, check-in streak and day boundary, kill / quest ingots, offline purchases; on the server: saves cannot change the balance, check-in once a day, purchases all-or-nothing and applied once, full bag, quest ingots once and only when saved as done.
+  - `cape.test.mjs`: every cape item is drawable; the cloth hangs behind the back, trails while moving, keeps its segment length, never rises over the shoulders, restarts after a teleport.
+  - `trade.test.mjs`: trade offers on the server: only the owner's unequipped items with the shown quantity, never quest items.
+  - `backup.test.mjs`: the backup is a consistent gzip snapshot that restores to the same data, later writes do not change it, old backups are pruned, a missing database or a damaged file fails clearly.
+  - `mixins.test.mjs`: the methods that `GameWorld`, `GameUI` and `GameDb` get from their feature files never share a name with each other or with the core class.
+  - `lootqueue.test.mjs`: pickup commit queue (one batch for many players, answered after the commit, no double queueing, per-player rate limit → `busy`), kill reports only for story bosses.
+  - `auth.test.mjs`: login tokens; malformed tokens are rejected without throwing.
+- `npm run uat`: **end-to-end acceptance scenarios** (`tests/e2e/*.test.mjs`, about 5 minutes). It builds the client, then drives the real game in headless Chromium, one file at a time (the scenarios are timing-sensitive). Each `it(...)` is one acceptance check, and every file ends with a "no page errors" check. Server scenarios start their own throwaway server (free port, temp database) through `startServer()` in `helpers.mjs`.
+
+| File | Covers |
+|---|---|
+| `beginner.test.mjs` | create character, prologue m1–m4, tutorial quests, forge (enhance/socket/fuse/unsocket), NPC chatter and greetings |
+| `chapter3.test.mjs` | old-save migration, chapter 3: hidden portal, story boss, Tiểu Lan absent during st18, the bell choice, final boss, ending |
+| `combat.test.mjs` | sealed portals, passives + reset, reflect, elites, poison, field boss, outfit drop and equip, story boss credit |
+| `orbs.test.mjs` | Taoist skill D: the 4 homing orbs focus the elite, retarget when it dies, no cast in safe maps |
+| `chief.test.mjs` | forced chieftain spawn (only one at a time), stats vs a normal monster, chat announcement, drops |
+| `movement.test.mjs` | walk vs double-tap sprint (and the run animation), slow double tap, Ctrl + ↓ (either order), plain ↓ sits |
+| `craft.test.mjs` | the embroiderer: tutorial recipe, fairy outfit, materials consumed |
+| `premium.test.mjs` | offline: B opens Vạn Bảo Các, check-in once, buy disabled without ingots, live try-on preview, buy and wear a cape, the merchant, a chieftain pays ingots; online: check-in through the server (ingots won elsewhere arrive with it), a console-edited balance is never saved, purchases through the server |
+| `worldquests.test.mjs` | discovery banner, the chain in the quest log (mood, progress), accept / hand in with Nguyên Bảo, the finale's choice sets a story flag and a title, the dark chain: ghost appears and leaves, the chosen branch opens and the other stays locked; online: the server grants the quest's Nguyên Bảo once, after the save |
+| `capes.test.mjs` | craft a cape, equip it in its own slot with an outfit on, a cape replaces an outfit's cape (which flows otherwise), the cloth hangs behind standing and flies out while running |
+| `server.test.mjs` | register → create → play → save through the real API |
+| `multiplayer.test.mjs` | two browsers on the server: see each other, re-entering a map, movement sync, player count, map chat + bubble (HTML shown as text), gear change visible after save, an invented outfit refused, other map hidden, world chat (`!`), leaving, malformed login, map-entry flood throttled, `saved` throttled |
+| `loot.test.mjs` | personal story-boss loot: only the killer gets drops, pickup committed before the answer, boss cooldown, kill reports for shared monsters / field bosses refused, Alt+F4 right after a pickup, invented item refused, missed changes replayed on reconnect |
+| `shared.test.mjs` | two browsers: same monsters and positions, a hit shows for both with the server's number, a real attack (Z) is reported by skill id only, a client damage number is ignored, EXP by damage + loot to the top damager, G invites to a party, party EXP split evenly + own drops each, leave party, contact damage from server monsters |
+| `trade.test.mjs` | ask with T, accept, items + gold shown to the other side, offered items locked, any change unlocks both, lock + confirm swaps (database too), an old save cannot bring traded items back, cancel, decline, too far |
+| `save-queue.test.mjs` | client-side changes (shop purchases): saved at once; upload blocked and tab closed → the outbox restores them on the next login; close right after buying (keepalive) |
+
+Run a single file with `node --test tests/e2e/orbs.test.mjs`. Screenshots go to `tests/e2e/out/` (gitignored, uploaded by CI as `uat-screenshots`). CI runs `npm test` in the `check` job and `npm run uat` in the `uat` job. Scenarios that need precise positions build a controlled arena (no spawns, no bots), because random spawns, bots and chieftains would otherwise make them flaky. Pass real functions, not strings, to `page.evaluate(fn, arg)` when you need an argument.
+
+## 3. Architecture
+
+```
+shared/              used by the browser AND the server (no DOM, no Node-only imports)
+  config.js          GAME: all tuning numbers (physics, player, monsters, loot, forge, story EXP, pet, saving,
+                     net: realtime limits, server loot, shared monsters, parties, trades)
+  util.js            clamp, rand, pick, fmtNum, escapeHtml...
+  data/              ALL CONTENT (pure data, no logic): classes, items, monsters, maps, npcs, story,
+                     chatter, affixes, recipes, elements, bots, premium, world, legacy (old id migration)
+  rules/character.js the character model (parts in rules/character/: entries, gems, crafting, passives, inventory, quests): stats (calcStats), EXP, inventory, equip, gems, crafting, passives,
+                     quest state, normalizeCharacter (runs on every load)
+  rules/mobsim.js    MobState (monster stats) + MobSim (AI, bosses, spawns, field bosses, damage,
+                     deaths); emits events, never draws
+  rules/combat.js    damage formula (hitDamage), skill multipliers, reach, learned-skill check
+  rules/loot.js      drop tables (rollDrops), killExp, what a client save may add (free / earned items)
+  rules/physics.js   gravity and one-way platforms
+  rules/premium.js   premium shop rules (offers, check-in streak, where Nguyên Bảo comes from)
+client/src/
+  main.js            boot, fixed-step loop (1/60 s), autosave, save results, debug globals
+  engine/            input (keyboard, touch, double-tap sprint)
+  game/world.js      GameWorld core (the rest is mixed in from game/world/: combat, drops, net, fx, render): map loading, player, skills, hit detection, drops, effects, rendering;
+                     turns monster events into effects and damage to our player; online glue (remote monsters,
+                     server drops, item changes)
+  game/entities.js   Player / Monster (MobState + sprite) / NPC / Drop / Projectile / RemotePlayer, lookFor
+  game/bots.js       fake players (hunt, chat, change maps, reply to the player)
+  game/chatter.js    context-aware NPC lines (no repeats) and NPC-to-NPC banter
+  game/pet.js        the imp pet that picks up drops
+  gfx/               canvas drawing: humanoid.js + humanoid/ (chibi characters: frames, parts, outfit), cape.js (flowing capes),
+                     monsters.js + monsters/ (one file per region), backgrounds.js + backgrounds/ (theme, scenery, ground),
+                     icons.js, pet.js, draw.js (toolkit)
+  ui/premium.js      Vạn Bảo Các window (premium shop, check-in, try-on preview), mixed into GameUI
+  ui/hud.js          GameUI core (windows are mixed in from ui/hud/: panels, npc, forge, trade, actions): HUD, all windows (inventory, skills, quests, shop, forge, craft, dialogue,
+                     scenes, trade), party panel, quest tracker
+  ui/screens.js      login / character select / create
+  storage/storage.js ApiStorage (server) | CloudStorage (Claude artifact db) | LocalStore; SaveQueue + outbox
+  net/realtime.js    WebSocket client: hello, position 10×/s, remote players, chat, shared monsters, hits,
+                     buffs, kill reports (story bosses), pickups, item changes, parties, trades, reconnect
+server/src/
+  index.js           HTTP, REST API, security headers, rate limits, static files
+  realtime.js        WebSocket server at /ws: auth, sessions (character cache), rooms per map, movement,
+                     chat, rate limits; wires the modules below
+  mobs.js            shared monsters: one MobSim per occupied map, server-side damage, rewards (EXP shares, loot)
+  premium.js         premium shop online: buy / check-in / quest claims, Nguyên Bảo for chieftains and field bosses
+  party.js           parties (invite, answer, leave)
+  loot.js            per-player drops, story-boss kill checks, pickup commit queue (group commit, admission control)
+  trade.js           trade sessions: ask, offer, lock, confirm → db.commitTrade
+  db.js              GameDb core: character read/write. The rest is in db/: schema + migrations, helpers,
+                     items (custody via reconcileItems, item_ledger, grantItem(s), commitTrade, changesSince), premium (ingots)
+  auth.js            scrypt passwords, HMAC tokens · config.js reads .env
+tools/               build.mjs (custom bundler), check-secrets.mjs
+tests/unit/          node --test unit tests
+tests/e2e/           node --test + playwright-core acceptance scenarios (helpers.mjs)
+```
+
+**Data flow:**
+1. Storage loads the raw character JSON.
+2. `normalizeCharacter` runs `migrateLegacy`, fills missing fields, removes retired quests, fills forward the main line and cleans up gems.
+3. `GameWorld` runs the game and `GameUI` renders the windows.
+4. The game saves through `SaveQueue` (`storage/storage.js`):
+   - **When:** autosave every 20 s; on map change, level up, death and quest or forge actions; offline, **right away when a rare drop is picked up** (`isRareDrop` in `game/world/helpers.js`, the save call in `pickupDrop` in `game/world/drops.js`); on tab hide or close (`pagehide` / `beforeunload` / `visibilitychange`). Online, monster drops do not depend on this: the server commits them at pickup.
+   - **How:** each save is written synchronously to a localStorage **outbox** (`qmq_outbox:<kind>:<user>`), then uploaded in the background. Only the newest snapshot is kept in the queue and only one upload runs at a time. An entry leaves the outbox only after the server confirms it.
+   - **Failures:** a failed upload retries with backoff (2 → 30 s) and right away on the browser `online` event. The HUD shows "Chưa gửi được: đã giữ trên máy…".
+   - **Closing the page:** also sends a `fetch(..., { keepalive: true })` upload that outlives the page (body ≤ 64 KB).
+   - **On the next character list load,** `mergeOutbox` uses any unsent copy whose `playTime` ≥ the server's copy and re-uploads it.
+   - LocalStore (file:// mode) skips the outbox, since it already writes synchronously.
+   - Items lying on the ground are never saved. Offline they exist only in the browser; online the server keeps a player's drops in memory (60 s + grace) and resends them after a reconnect.
+   - Online, the PUT answer tells the client what the server did (`{itemRev, stale, items?}`), and the WebSocket replays item and gold changes the client missed (`chg`). See docs/MULTIPLAYER.md §3.
+
+**The character is one plain JSON object.** The client keeps it as that object. The server splits it into the `characters`, `items` and `quests` tables and rebuilds it on read (`db.js`).
+
+**Server-side checks.** `sanitizeCharacter` rejects impossible values in uploaded saves (level, gold, stat/skill point totals, item ids, quantities, enhancement). On top of that, online:
+- **Items**: `reconcileItems` (item custody): a save cannot invent monster-only items, change an item's rarity or bonus stats, undo a pickup or bring back a traded item.
+- **Monsters and damage**: the server runs the shared monsters and computes every hit's damage (`combat.js`); clients only report which skill hit which monster.
+- Still decided by the client: hit detection, damage taken, EXP/level and gold totals (bounded), forging, shop purchases, quests. Details and next steps: docs/MULTIPLAYER.md §9.
+
+**Controls added later:** double-tap and hold ← / → to sprint (`Input.sprint`, `SPRINT_MULT = 1.6`, dust particles). Sprinting plays its own `run` cycle (humanoid frames 14–19): the upper body pitches forward around the hips via the `tilt` pose field, with longer strides and pumping arms. Ctrl + ↓ drops through a platform, the same as ↓ + Space.
+
+## 4. Content inventory (current)
+
+- **Classes** (`shared/data/classes.js`): `swordsman` (str, melee), `taoist` (int, talismans, chain lightning, fire dragon, homing thunder orbs `ta_orbs` that focus one target; the old heal `ta_heal` is migrated to it in `legacy.js`), `assassin` (dex, darts, dash, poison).
+  - Skills are `sw_*`, `ta_*` and `as_*`: 4 active skills plus 4 passives (`*_p1`..`p4`) per class.
+  - The passives form a tree, with a max level of 5, and share skill points with the active skills.
+- **Elements**: `fire`, `ice`, `thunder`, `poison`.
+  - Monster `res` tables; player resistance comes from `res_*` stats, capped at 75%.
+  - Element orbs `orb_*` set the element of the wielded weapon.
+- **Maps (12):**
+
+| Id | Name | Min. level |
+|---|---|---|
+| village | Làng Trúc Lâm | 1 |
+| forest | Rừng Ma Trơi | 1 |
+| field | Cánh Đồng Hoang | 4 |
+| graveyard | Nghĩa Địa Cổ | 7 |
+| swamp | Đầm Lầy Sương Mù | 8 |
+| ghost_gate | Quỷ Môn Quan | 11 |
+| snow_peak | Tuyết Sơn | 14 |
+| ice_cave | Huyền Băng Động | 17 |
+| volcano | Hỏa Diệm Sơn | 20 |
+| qilin_altar | Kỳ Lân Đài | 22 |
+| temple | Huyền Môn Cổ Tự | 24 |
+| sanctum | Chính Điện | 30 |
+
+  - Portals have `req` (hidden until a quest is done) or `lock` (visible but sealed). The hidden path graveyard→temple needs st15.
+- **NPCs**:
+
+| Id | Name | Role |
+|---|---|---|
+| elder | Trưởng Làng | |
+| healer | Thầy Lang | shop |
+| smith | Thợ Rèn | forge |
+| constable | Bộ Khoái | wanted board / dailies |
+| priest | Đạo Trưởng Huyền Cơ | becomes the final villain; gone from st13 |
+| fisherman | Ngư Ông | |
+| huntress, huntress_temple | Thợ Săn | |
+| lan | Tiểu Lan | rescued in st7, missing during st18 |
+| fire_master, fire_master_temple | Hỏa Sư | |
+| embroiderer | Thợ Thêu / Tú Nương | crafting |
+| old_master | Vong Hồn Sư Phụ | dialogue portrait only |
+
+  Map entries support `after`, `until` and `hideWhile` (quest ids).
+- **Monsters (18):**
+  - Field monsters: wisp, fox, scarecrow, jiangshi, lantern, frog, water_ghost, snowfox, yeti, icebat, golem, fire_spirit, lava, blood_jiangshi, maskghost.
+  - Bosses: `boss` (Black Ghost King, ghost_gate), `qilin` (qilin_altar), `blood_demon` (Huyết Ma Huyền Cơ, sanctum, final boss).
+- **Named monsters** (`shared/data/affixes.js` → `NAMED`):
+  - Story bosses (only spawn while their quest is active): `nb_scarecrow` (st4), `nb_lantern` (st6d), `nb_icebat` (st10c), `nb_blood_jiangshi` (st16b).
+  - Field bosses on timers: `fb_fox`, `fb_jiangshi`, `fb_yeti`, `fb_lava`, `fb_mask`.
+- **Chieftains (mini bosses, `CHIEF` in `shared/data/affixes.js`):**
+  - Each regular spawn has a 1.5% chance to become "Đầu Lĩnh <name>", at most one per map at a time. Bosses never roll it, and a chieftain is never also an elite.
+  - Stats: ×7 HP, ×1.35 attack, ×1.25 defense, ×6 EXP and gold, 1.45× size, orange glow, ♛ name tag, boss HP bar when aggroed.
+  - Drops: the species' normal drops plus stones, a gem, potions, a chance at protection charms and `mat_dew`. Equipment rolls with extra luck and is at least Common+1.
+  - It is announced in chat and with a toast, and kills count for the species' quests.
+- **Affixes**: reflect, vampire, regen, enrage, explode, blink, frost, poison, shield.
+  - A species has built-in affixes, and elites roll extra ones.
+  - Smartness tier by level (`smartTier`): 0 wander → 1 aggro/kite → 2 dodge, call allies, charge → 3 lead shots, retreat.
+- **Quests (75):**
+  - 32 main, 18 world, 12 tutorial, 7 side, 6 daily (5 wanted-board hunts + Tiểu Lan's daily gift).
+  - Main order (`MAIN_ORDER`, with the recommended level after each id):
+
+    ```
+    m1:1 m2:1 m3:3 m4:3 | st1:4 st2:4 st3:5 st4:7 st4b:8 st5:9 st6:10 st6b:11 st6c:12 st6d:13 st7:15 |
+    st8:16 st8b:16 st9:17 st10:19 st10b:20 st10c:21 st11:22 st11b:23 st11c:24 st12:26 |
+    st13:27 st14:27 st15:28 st16:28 st16b:29 st17:30 st18:32
+    ```
+
+  - Chapters: c0 prologue, c1 "Mệnh Thuần Âm", c2 "Huyết Ma Châu", c3 "Mặt Nạ Trắng".
+  - Story EXP is a share of the EXP needed for that level (`EXP_SHARE`), so players must grind between steps. The chapter finales st7/st12/st18 give 0.65.
+  - The scene `sc_altar` (entering the sanctum during st18) has a choice that sets flag `bell = ring | refuse`, which changes the ending lines.
+- **Items (100)**:
+  - 7 weapon tiers per class (`w_<cls><n>`), hats, armor and accessories, materials, quest items.
+  - Gems `gem_<kind><grade>`: 5 kinds × 3 grades, socketed at the smith and fused 3→1.
+  - Enhancement goes up to +10 (from +5 a failure drops one level; protection scrolls exist).
+- **Outfits (9, 5th equip slot)**:
+
+| Id | Name |
+|---|---|
+| out_wisp_hood | Ma Trơi Tinh Nghịch |
+| out_fox | Hồ Ly Y |
+| out_black_dragon | Hắc Long Bào |
+| out_jade_lotus | Thanh Liên Tiên Y |
+| out_rainbow_fairy | Nghê Thường Tiên Y |
+| out_peach_fairy | Đào Hoa Tiên Y |
+| out_white_fox | Bạch Hồ Cừu |
+| out_phoenix | Phượng Vũ Y |
+| out_blood_moon | Huyết Nguyệt Chiến Giáp |
+
+  - Outfits drop at about 1.5–4% from bosses and elites.
+  - Three can be crafted at the embroiderer: `r_peach_fairy`, `r_rainbow_fairy`, `r_fox`. The fairy robes need `mat_dew`, `mat_peach` and `mat_icesilk`.
+  - An outfit's `look` draws extra parts in `gfx/humanoid/outfit.js`. The fairy `ribbons` and the `aura` are animated in `game/world/render.js`.
+- **Capes (6th equip slot `cape`, worn together with an outfit)**: `cape_traveler` (lv 1), `cape_moon` (lv 12), both crafted at the embroiderer (`r_cape_traveler`, `r_cape_moon`).
+  - `ITEMS[id].cape` describes the look (colors, length, width, hem, motif, particles; see the top of `gfx/cape.js`).
+  - Drawn live, not in the sprite sheet: `CapeCloth` (`gfx/cape.js`) is a chain of points pinned at the back of the neck (`capeAnchor(frame)` in `humanoid.js`), stepped at a fixed 1/120 s (Verlet) with gravity, air drag (so it flies out while running), a backward pull (so it drapes over the back standing still), a travelling wave while moving, and constraints (fixed segment length, never in front of the body, never rising over the shoulders). Tuning: `GAME.cape`.
+  - `lookFor` sets `look.liveCape`: the cape slot wins over an outfit's own `look.cape`; without a cape item, the outfit's cape is turned into a flowing one (`outfitCape`). `Humanoid.setLook` keeps `liveCape` out of the cached sheet. Players, other players and 30% of bots (`GAME.cape.botChance`) draw it. `world.capeFx` sheds the cape's particles.
+  - Server: `cape` is in `GAME.player.equipSlots` (saved like any slot) and in the realtime appearance; `reconcileItems` only keeps an equipped item in its own slot.
+- **World quests (`shared/data/world.js`, `cat: 'world'`)**, Genshin style: 4 chains, each with a mood and an ending chosen by the player.
+
+| Chain | Mood | Where | Steps | Choice → branch |
+|---|---|---|---|---|
+| `lantern` Đêm Hội Rước Đèn | cheerful | village / forest (lv 3–5) | `wq_lan1`–`wq_lan4` (Bé Bin, Bà Tư) | `lantern = keep \| gift` (epilogue lines only) |
+| `well` Giếng Cạn Nghĩa Địa | dark | graveyard (lv 8–9, after st5) | `wq_well1`–`wq_well4`, then `wq_well5a` (free) or `wq_well5b` (seal) | `well = free \| seal` |
+| `carp` Lý Ngư Biết Nói | cheerful | swamp (lv 9–10, after st4b) | `wq_carp1`–`wq_carp3` (Ngư Ông, Lý Ngư Tinh) | `carp = wish \| kind` |
+| `bride` Tân Nương Tuyết Sơn | dark | snow peak / ice cave (lv 15–17, after st7) | `wq_bride1`–`wq_bride3`, then `wq_bride4a` (truth) or `wq_bride4b` (lie); both give the cape `cape_bride` | `bride = truth \| lie` |
+
+  - New quest fields: `chain`; `choice: { options: [{ label, flag: [k, v], lines }] }` asked after the outro, before the reward (act `qchoice`); `needFlag: 'k=v'` keeps a quest locked until a choice set that flag (a branch). `reward.ingots` on every step.
+  - New NPCs: `kid_bin` (village), `gravekeeper` + `ghost_girl` (graveyard), `golden_carp` (swamp, after `wq_carp2`), `snow_bride` (snow peak, until `wq_bride4a`). `ghost: true` NPCs are drawn translucent and shimmer. Map NPC entries also take `from` (present once that quest is accepted) and `gone` (absent once it is done).
+  - Discovery: the first time a map holds the giver of a chain's first available step, a banner and a toast announce it (flag `wq_<chain>`). The quest log has a "Nhiệm vụ thế giới" section per chain (mood, progress, where the next step starts); world quest givers show a violet `!` in a diamond.
+- **Premium shop (Vạn Bảo Các) and Nguyên Bảo (ingots)**: NPC `merchant` (Vạn Bảo Lão, village x 1085) or **B** / the "Vạn Bảo" menu button.
+  - Offers in `shared/data/premium.js` (tabs cape / outfit / util): 5 premium capes (`cape_sakura`, `cape_frost`, `cape_phoenix`, `cape_shadow`, `cape_dragon`, any level), 2 outfits, utility bundles. Cosmetics are granted Legendary.
+  - Earned only in game (`GAME.premium`): daily check-in (10, +40 on every 7th day in a row; the day starts at midnight Vietnam time), chieftains (+2) and field bosses (+5) for the top damage group, quests with `reward.ingots` (chapter finales st7/st12/st18: 30).
+  - Rules shared by both sides in `shared/rules/premium.js` (`checkinReward`, `killIngots`, `questIngots`, offers; `buyLocal` / `checkinLocal` offline). Window and try-on preview in `ui/premium.js` (mixed into `GameUI`).
+  - Online the server owns the balance: `characters.ingots` and `checkin` columns, never taken from saves; every change is an `ingots` ledger row replayed through `chg`. `server/src/premium.js` handles `prem` messages (buy / checkin / claim) and kill rewards. See docs/MULTIPLAYER.md §4b.
+- **Pet**: `imp` (Tiểu Quỷ), from side quest `q_pet`. It picks up drops.
+
+## 5. Conventions and rules
+
+- **Tuning numbers go in `shared/config.js` (`GAME`), never as magic numbers in logic.** Content goes in `shared/data/`, deployment settings in `.env`. The server imports `shared/config.js` for shared rules (classes, equip slots, level cap, points per level, enhance max), so keep that file plain data with no DOM or browser APIs. Old exported names (`INV_SIZE`, `ENHANCE_RATE`, `MAX_RES`, `CHIEF`, …) are kept as aliases that read from `GAME`.
+- **English for code, ids and comments; Vietnamese only for player-facing text** (dialogue, names, UI, error messages shown to players).
+  - Ids are lowercase snake_case.
+  - Dev-facing logs (server, build, check-secrets) are English.
+- **Renaming a stored id?** Add the old → new mapping to `shared/data/legacy.js`. `migrateLegacy` runs first inside `normalizeCharacter` and on the character list screen. It covers class, map, pet, skills, items (including `w_*`, `orb_*`, outfits), item element, `r_*` → `res_*` bonus keys and quest ids.
+  - The server also rewrites old class ids in `db.js` → `migrate()`, because `cls` is never re-saved.
+- **Content changes are data edits** in `shared/data/`.
+  - A new monster also needs a draw function in `gfx/monsters/<region>.js`, registered in `MAKERS` (`gfx/monsters.js`).
+  - A new outfit part needs a draw helper in `gfx/humanoid/outfit.js`.
+- **Story lines** are `[speaker, text, cond?]`:
+  - The speaker is an NPC id, `me`, `sys`, or a monster id (for its portrait).
+  - `cond` looks like `'bell=ring'`.
+  - Text placeholders: `{name} {cls} {main} {title} {lv} {weapon}`.
+- **Quest types**: `talk`, `kill`, `collect`, `act`.
+  - For `act`, the target is an event fired via `questEvent` / `world.event`: djump, potion, buy, stat, skillup, enhance, socket, fuse, orb, daily.
+
+## 6. Traps (read before editing)
+
+1. **Custom bundler** (`tools/build.mjs`): every module is concatenated into one scope.
+   - Two modules cannot declare the same top-level name; the build prints "Duplicate top-level name" and fails.
+   - Keep helper names unique, or make them non-exported locals inside functions.
+2. **Dev mode uses real ES modules**, so a duplicate `import` of the same name in one file is a SyntaxError in dev even though the bundle works. Test with `npm run dev` too.
+3. **`.gitignore` must use `/data/`** (with the leading slash). A plain `data/` also hides `shared/data/`, which happened once and left the GitHub repo without its game data. The same applies to `.dockerignore`.
+4. `storage.js` calls `this.col.doc(...)`, a Firestore-like artifact API. Do not "rename" `doc` there; `doc` was the old poison element id.
+5. Monster ids `boss` and `lava` double as behavior/theme words. Map ids and theme ids are separate namespaces: the `temple` map uses the `temple` theme, and `ghost_gate` uses `hell`.
+6. **Dialogue tests**: hidden dialogs stay in the DOM, so select `#win:not([hidden]) .dlg`. The character select play button is `[data-play]`. Enter must not auto-pick a scene choice (guarded by `c.big`).
+7. After accepting a quest, call `world.refreshNpcs()`, because NPCs with `until` / `hideWhile` must appear or disappear.
+8. Never commit `.env`, `data/` (game.db, secret.key), `*.db*`, `*.key` or `*.pem`.
+   - Production refuses to start without `TOKEN_SECRET` of at least 32 characters.
+   - Run `npm run check` before pushing.
+9. On the owner's PC, the bridge's file-commit tool refuses `.github/`. Write CI files through the device shell instead (e.g. copy a staged file into `.github/workflows/`).
+10. **Shared modules** (`mobsim.js`, `combat.js`, `loot.js`, `physics.js`, `character.js`, `config.js`, `data/*`) are imported by the server: no DOM, no canvas, no `window`. `Monster` in `entities.js` adds the sprite on top of `MobState`; the server only ever uses `MobState`.
+11. `world.monsters` and `world.spawnGroups` are getters/setters over `world.sim` (tests assign them). Online, shared monsters are in the same list with `m.remote = true`; the local simulation skips them.
+12. Every player hit must carry its skill id (`opts.sid` in `damageMonster`, `sid` on projectiles and zones), or it never reaches the server. Never send a damage number.
+13. A new way for the client to create an item (shop, quest reward, recipe) must be allowed in `freeItems` / `questGrants` / `craftGrants` (`shared/rules/loot.js`), or online saves will refuse the item. Any server-side item change bumps `item_rev` and writes a ledger row in the same transaction.
+14. Server hot paths (positions, hits, kills, loot rolls) never read the database: use the session cache `s.ch` / `statsOf(s)` (refreshed on `saved` and when buffs change).
+
+## 7. History: what was built, in order
+
+1. **Base game**:
+   - 3 classes, 9 maps, monsters, bosses, drops, shop, inventory/equipment, quests, bots, pet.
+   - Login and the 3 storage backends; SQLite server with REST API.
+2. **Story and tutorials**:
+   - Connected main story (prologue + chapters 1–3).
+   - Tutorial quests for movement, potions, shop, stats, skills, dailies, forge (enhance/socket/fuse), crafting and orbs.
+   - Context-aware NPC chatter plus NPC-to-NPC banter instead of random lines.
+3. **Depth**:
+   - Passive skill tree and reset.
+   - Monsters scale with level and get smarter (AI tiers).
+   - Elites with affixes such as damage reflect; story bosses and field bosses.
+   - Main quests gated by level and EXP so the player must grind.
+   - Portals sealed by story progress.
+4. **Outfits**:
+   - Ghost Online-style outfits as rare boss drops.
+   - Fairy robes in white and pink with animated silk ribbons; fairy drop rates lowered to about 1–2%.
+   - Fairy robes made craftable at the embroiderer from farmed materials.
+5. **Security for GitHub**:
+   - `.env` support (`config.js`), with a strong `TOKEN_SECRET` required in production.
+   - Security headers/CSP, rate limits, a JSON-only API, a static file traversal guard, server-side save sanity checks.
+   - Non-root Docker, the secret scanner + pre-commit hook, GitHub Actions CI.
+6. **Repo decisions**:
+   - Repo name `ghost-gate`.
+   - Stay a **single monorepo** (client + server + tools); no split and no microservices at this size.
+   - README rewritten in English.
+7. **English pass**:
+   - All ids renamed to English, with `legacy.js` migration (verified on old DB rows and on localStorage saves).
+   - About 640 comments, the dev logs, `.env.example`, the Dockerfile and CI translated.
+   - Fixed the `.gitignore` / `.dockerignore` `data/` bug.
+   - Added `tests/e2e/` and this handoff.
+8. **Gameplay and save updates (2026-10-22):**
+   - Taoist skill D is now `ta_orbs` (homing thunder orbs).
+   - Durable save queue with a local outbox, keepalive uploads and immediate saves on rare drops.
+   - Double-tap sprint (with a forward-leaning run animation) and Ctrl + ↓ drop.
+   - Chieftain mini bosses.
+   - Central tuning config `shared/config.js`, shared with the server.
+   - Tests moved from Python to Node: `node --test` unit tests plus `playwright-core` e2e scenarios, both in CI.
+9. **Online play (2026-10-23 → 2026-10-28):**
+   1. *Stage 1*: WebSocket (`ws`) presence, movement sync, map/world chat (`!` prefix), real player count; SQLite `synchronous = FULL`. CI installs runtime deps (`npm ci --omit=dev`).
+   2. *Hardening (review fixes, committed)*: malformed tokens never crash the server; map-entry frames have their own rate limit; `saved` refreshes throttled to 1/s and read only the session's character.
+   3. *Personal loot*: drops rolled by the server, only their owner sees them; pickups committed (item + ledger row) before the answer; `item_ledger`, `item_rev`, change replay (`chg`, `GET /changes`).
+   4. *Item custody*: uploaded saves keep the server's item identity; free / earned / server-only rules; stale saves skip items, gold and quests.
+   5. *Trades* (T), Võ Lâm style: shared window, any change unlocks both, lock + confirm, one transaction.
+   6. *Shared monsters*: monster AI extracted from `world.js` into `shared/rules/mobsim.js`, run by the server per occupied map; clients render and interpolate them.
+   7. *Parties* (G) and reward rules: EXP by damage share between groups, a party splits evenly, loot to the top group (each party member gets their own roll).
+   8. *Database load*: pickup commit queue (group commit ≤ 25 ms / 200 pickups), admission control (`busy`), per-player rate limits, session cache (no DB reads on hot paths).
+   9. *Server-side damage*: `shared/rules/combat.js` shared formulas; clients send `hit {uid, sid}`, buffs via `cast {sid}`; results broadcast as `mhit`.
+
+10. **Capes (2026-11-01, branch `feature/capes`)**: a 6th equipment slot worn with an outfit, simulated cloth drawn live behind every humanoid, two craftable capes, outfit capes now flowing.
+
+11. **Premium shop (2026-11-01, branch `feature/premium-shop`)**: Nguyên Bảo earned in game (check-in, chieftains, field bosses, chapter finales), owned by the server online, Vạn Bảo Các with 5 premium capes, outfits and utilities, live try-on preview.
+
+12. **World quests (2026-11-01, branch `feature/world-quests`)**: four Genshin-style chains (two cheerful, two dark) with discovery, choices that set story flags and open different epilogues, ghost NPCs, Nguyên Bảo rewards and a quest cape.
+
+## 8. Status: done, not done, open items
+
+**Git state (2026-11-11):** every feature branch (capes, premium shop, world quests) and the two refactors (`shared/` folder, files split by feature) are merged into `main`. New work goes on a branch off `main` and into a PR.
+
+**Done (gameplay, 2026-11-01):** flowing capes (own slot) · Vạn Bảo Các premium shop and Nguyên Bảo · four world quest chains.
+
+**Done (online):** presence and chat · shared monsters run by the server · server-side damage · parties and reward rules · personal loot committed at pickup · item ledger, revisions, change replay · item custody on saves · trades · pickup commit queue, admission control, rate limits · hardening of the realtime server.
+
+**Not done yet** (in rough priority order; details in docs/MULTIPLAYER.md §9):
+1. **EXP, level and gold owned by the server.** The server already tells each client its EXP share, but the client still uploads level and gold (only bounded by `sanitizeCharacter`).
+2. **Damage to players on the server.** Contact damage, monster projectiles and slams are still applied by each client to itself.
+3. **Server-side hit detection.** Clients decide which skill touched which monster (the server checks skill, reach and rate). Doing it on the server needs player projectiles there and lag compensation.
+4. **Forge, shop and quests as server actions** (enhance success, sockets, fusing, purchases, quest rewards are client-decided, bounded by the custody rules).
+5. **Write-behind** for position/HP/EXP and a grace period on disconnect.
+6. **Backups**: the nightly backup to S3 is written (`tools/backup.mjs`, `infra/backup.sh`, Terraform bucket; README > Backups) but needs `terraform apply` + a deploy to start. Still open: a restore tried on a spare machine, an alert when a backup fails, optionally Litestream.
+7. Online gaps that are accepted for now: smart monsters do not dodge projectiles online (the server does not see them); bots never hurt shared monsters; story bosses are personal (each player's own client runs them).
+8. **Social**: friends, guilds, party loot options (round robin, leader decides), PvP, a real leaderboard page.
+9. **Scaling past one process** (only when needed): maps as shards in separate processes, Redis for chat/parties/trades across them, PostgreSQL instead of SQLite.
+
+**Other ideas, not started:**
+- Gameplay: more chapters after st18, more outfits and recipes, sound (none yet).
+- Maintainability: a `saveVersion` field so migrations run by version instead of by detection; JSDoc or TypeScript types for the character object and network messages; message validation (`zod`/`valibot`); Vite instead of the custom bundler.
+- The owner's pushes to GitHub were slow once: the repo is small, so it was network, auth or drive related (Git Credential Manager prompt, H: being a network/sync drive, proxy).
+
+## 9. Recovering if the source is lost
+
+- The GitHub repo is the source of truth (once `shared/data/` has been pushed).
+- The playable artifact contains the full bundled client (all data and logic in one file), but not the server.
+- To rebuild from nothing, this file plus `README.md` describe every system, id and decision. The data files in `shared/data/` are the most valuable part, since they hold the story, dialogue, balance numbers and content.

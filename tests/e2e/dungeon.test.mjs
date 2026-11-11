@@ -6,7 +6,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { launch, newPage, openGame, startServer, register, createCharacter, uniqueName, until, shot } from './helpers.mjs';
 
-const KEEPER_X = 1080;
+const KEEPER_X = 1255;
 // put the trap clock of the current floor at `t` seconds (traps are pure functions of it)
 const setClock = (page, t) => page.evaluate((t) => { __game().dg.t0 = Date.now() - t * 1000; }, t);
 const stand = (page, x, y) => page.evaluate(([x, y]) => { const p = __game().player; p.x = x - 7; p.y = y - p.h - 1; p.vy = 0; p.vx = 0; }, [x, y]);
@@ -152,14 +152,14 @@ describe('event (online, whole server)', { timeout: 240_000 }, () => {
 
   it('clients learn the event is open; the keeper offers to join', async () => {
     assert.ok(await until(A.page, "__game().net.connected"));
-    await E(A, () => { const p = __game().player; p.x = 1080 - 7; });
+    await E(A, () => { const p = __game().player; p.x = 1255 - 7; });
     await A.page.waitForTimeout(300); await A.page.keyboard.press('KeyE'); await A.page.waitForTimeout(300);
     assert.match(await A.page.locator('[data-act="dungeon"]').textContent(), /Tham chiến.*Đang mở/s);
     await A.page.keyboard.press('Escape');
   });
 
   it('players who are not in a party join the same run and see each other', async () => {
-    for (const p of [A, B]) { await E(p, () => { __game().player.x = 1080 - 7; }); }
+    for (const p of [A, B]) { await E(p, () => { __game().player.x = 1255 - 7; }); }
     await A.page.waitForTimeout(400);
     for (const p of [A, B]) await E(p, () => __game().enterDungeon('yangak'));
     for (const p of [A, B]) assert.ok(await until(p.page, "__game().mapId === 'yg_jump' && __game().net.ready", 6000), 'on the first floor');

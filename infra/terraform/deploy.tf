@@ -40,6 +40,56 @@ resource "aws_s3_bucket_lifecycle_configuration" "releases" {
   }
 }
 
+# --- Database backups: private, versioned, kept 30 days ---
+
+resource "aws_s3_bucket" "backups" {
+  bucket_prefix = "${var.name}-backups-"
+  # Player data copies: "terraform destroy" must not delete them.
+  force_destroy = false
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "backups" {
+  bucket                  = aws_s3_bucket.backups.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "backups" {
+  bucket = aws_s3_bucket.backups.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "backups" {
+  bucket     = aws_s3_bucket.backups.id
+  depends_on = [aws_s3_bucket_versioning.backups]
+
+  rule {
+    id     = "expire-old-backups"
+    status = "Enabled"
+
+    filter {
+      prefix = "backups/"
+    }
+
+    expiration {
+      days = 30
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
 # --- The instance: SSM agent access and read-only access to releases ---
 
 data "aws_iam_policy_document" "instance_assume" {
@@ -74,6 +124,20 @@ resource "aws_iam_role_policy" "instance_releases" {
   name_prefix = "read-releases-"
   role        = aws_iam_role.instance.id
   policy      = data.aws_iam_policy_document.instance_releases.json
+}
+
+# The instance may only ADD backups: no read, overwrite or delete, so a hacked server cannot wipe them.
+data "aws_iam_policy_document" "instance_backups" {
+  statement {
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.backups.arn}/backups/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "instance_backups" {
+  name_prefix = "write-backups-"
+  role        = aws_iam_role.instance.id
+  policy      = data.aws_iam_policy_document.instance_backups.json
 }
 
 resource "aws_iam_instance_profile" "instance" {
@@ -112,7 +176,7 @@ resource "aws_ssm_document" "deploy" {
           "mkdir -p /opt/quymonquan/release",
           "tar -xzf /tmp/quymonquan-release.tar.gz -C /opt/quymonquan/release",
           "rm -f /tmp/quymonquan-release.tar.gz",
-          "DOMAIN='${var.domain}' bash /opt/quymonquan/release/infra/server-deploy.sh",
+          "DOMAIN='${var.domain}' BACKUP_BUCKET='${aws_s3_bucket.backups.id}' AWS_REGION='${var.region}' bash /opt/quymonquan/release/infra/server-deploy.sh",
         ]
       }
     }]

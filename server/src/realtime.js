@@ -6,22 +6,25 @@
 //                     hit {uid, sid} · cast {sid} · kill {k, map, mob, x, y, named} (personal story bosses) · pick {id}
 //                     party_invite {to} · party_answer {from, yes} · party_leave
 //                     trade_ask {to} · trade_answer {from, yes} · trade_offer {items, gold} · trade_lock {on} · trade_confirm · trade_cancel
-//                     dg_enter {d} · dg_next {} (party dungeons, dungeon.js)
+//                     dg_enter {d} · dg_next {} (server event, dungeon.js)
+//                     prem {op: buy {offer, req} | checkin | claim {quest}}
 //   server -> client  welcome {id, online} · snap {map, players} · join · leave · st · look · chat · online · kicked · error
 //                     dg_go {inst, d, map, floor, t0, now} | {map, x, done | lost} · dg_err {why}
 //                     mobs {map, list} · mspawn {map, m} · ms {map, s} · mev {map, list} · mhit {map, uid, by, dmg, ab, crit, em, el} · mdie {map, uid, by} · mkill {map, uid, exp, gold?, drops?}
 //                     chg {list, rev} · loot {k, drops} · drops {map, drops} · pick {id, ok, why?}
 //                     party_ask · party_state · party_err · trade_ask · trade_open · trade_state · trade_end · trade_err
+//                     prem {op, ok, why?, req?, got?, streak?, quest?}
 import { WebSocketServer } from 'ws';
 import { verifyToken } from './auth.js';
-import { MAPS } from '../../client/src/data/maps.js';
-import { ITEMS } from '../../client/src/data/items.js';
-import { GAME } from '../../client/src/config.js';
+import { MAPS } from '../../shared/data/maps.js';
+import { ITEMS } from '../../shared/data/items.js';
+import { GAME } from '../../shared/config.js';
 import { createLoot } from './loot.js';
 import { createTrades } from './trade.js';
 import { createMobs } from './mobs.js';
 import { createParties } from './party.js';
 import { createDungeons } from './dungeon.js';
+import { createPremium } from './premium.js';
 
 const NET = GAME.net;
 const ANIMS = new Set(['idle', 'walk', 'run', 'jump', 'atk', 'hurt', 'sit']);
@@ -31,7 +34,7 @@ const num = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
 // What other players need to draw someone: class, level, title and the ids of visible gear (from the saved character)
 function appearanceOf(ch) {
   const look = {};
-  for (const slot of ['weapon', 'hat', 'armor', 'outfit']) {
+  for (const slot of ['weapon', 'hat', 'armor', 'outfit', 'cape']) {
     const id = ch.equip?.[slot]?.id;
     if (id && ITEMS[id]) look[slot] = id;
   }
@@ -64,7 +67,8 @@ export function attachRealtime(server, { db, secret, event = {} }) {
   const loot = createLoot({ db });
   const trades = createTrades({ db, players, send, pushChanges });
   const parties = createParties({ players, send });
-  const mobs = createMobs({ players, send, loot, parties, onDamage: (s, n) => dungeons.onDamage(s, n), onDie: (room, m) => dungeons.onDie(room, m) });
+  const premium = createPremium({ db, send, pushChanges });
+  const mobs = createMobs({ players, send, loot, parties, premium, onDamage: (s, n) => dungeons.onDamage(s, n), onDie: (room, m) => dungeons.onDie(room, m) });
   const dungeons = createDungeons({ players, send, toAll, db, pushChanges, cleared: (room, targets) => mobs.cleared(room, targets), alwaysOpen: !!event.alwaysOpen, runSec: event.runSec || 0 });
 
   function enterMap(s, map) {
@@ -196,6 +200,8 @@ export function attachRealtime(server, { db, secret, event = {} }) {
         mobs.cast(s, m);
       } else if (m.t === 'pick') {
         loot.pick(s, m, (res) => { if (res.ok) pushChanges(s); send(s, res); });
+      } else if (m.t === 'prem') {
+        premium.handle(s, m);
       } else if (typeof m.t === 'string' && m.t.startsWith('party_')) {
         parties.handle(s, m);
       } else if (typeof m.t === 'string' && m.t.startsWith('trade_')) {

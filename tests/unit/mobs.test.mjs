@@ -4,9 +4,9 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createMobs, statsOf } from '../../server/src/mobs.js';
-import { newCharacter } from '../../client/src/game/character.js';
-import { killExp } from '../../client/src/game/loot.js';
-import { hitDamage, skillMult, skillElement } from '../../client/src/game/combat.js';
+import { newCharacter } from '../../shared/rules/character.js';
+import { killExp } from '../../shared/rules/loot.js';
+import { hitDamage, skillMult, skillElement } from '../../shared/rules/combat.js';
 
 const sent = [];
 const players = new Map();
@@ -22,6 +22,8 @@ function session(id, lv = 5) {
 const send = (s, msg) => sent.push({ to: s.id, ...msg });
 const loot = { give: (s) => [{ id: 'd-' + s.id, it: { id: 'stone', qty: 1, r: 0, b: {} }, x: 0, y: 0 }] };
 const parties = { partyOf: (id) => partyOf.get(id) || null };
+const ingotCalls = []; // premium.kill(players, monster): Nguyên Bảo for the top group
+const premium = { kill: (members, m) => ingotCalls.push({ to: members.map((s) => s.id).sort(), chief: !!m.chief }) };
 let mobs, A, B, C;
 
 // a fresh, plain monster at a known spot, with enough HP for the shares to be measurable
@@ -43,7 +45,7 @@ const oneHit = (s, m, sid = 'sw_combo') => { fixed(); const st = statsOf(s); ret
 const hit = (s, m, n = 1, sid = 'sw_combo') => { fixed(); for (let i = 0; i < n; i++) mobs.hit(s, { uid: m.uid, sid }); };
 
 before(() => {
-  mobs = createMobs({ players, send, loot, parties });
+  mobs = createMobs({ players, send, loot, parties, premium });
   A = session('a', 5); B = session('b', 5); C = session('c', 5);
   mobs.enter(A, 'forest');
 });
@@ -165,6 +167,15 @@ describe('shared monsters', () => {
     const k = Object.fromEntries(kills(m.uid).map((x) => [x.to, x]));
     assert.ok(k.c.exp < k.a.exp);
     C.ch.level = 5;
+  });
+
+  it('a dead monster asks for Nguyên Bảo for the top group only', () => {
+    const m = target(1);
+    m.chief = true;
+    m.hp = m.maxHp = oneHit(A, m) * 3;
+    hit(B, m, 1); hit(A, m, 2);
+    const last = ingotCalls.at(-1);
+    assert.deepEqual(last, { to: ['a'], chief: true });
   });
 
   it('everyone on the map is told the monster died', () => {

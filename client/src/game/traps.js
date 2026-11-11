@@ -15,9 +15,9 @@
 //   drop     { x, w, period, fall, offset? }         a rock falls from the ceiling during `fall` seconds of each cycle
 //   fireball { x, y, w, period, offset? }            a fireball rolls along y from x to x + w once per cycle
 //   pit      { x, w }                                sinking ground: always on, sends you back to the floor's start
-import { GROUND_Y } from '../data/maps.js';
-import { overlap } from '../engine/util.js';
-import { GAME } from '../config.js';
+import { GROUND_Y } from '../../../shared/data/maps.js';
+import { overlap } from '../../../shared/util.js';
+import { GAME } from '../../../shared/config.js';
 
 const TRAP_CFG = GAME.dungeon.trap;
 // kinds that strike on the "up" part of their cycle

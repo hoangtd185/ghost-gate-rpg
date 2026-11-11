@@ -12,11 +12,11 @@
 //   -> ev_end { win, top, rank, dmg, items, exp } then dg_go { map: from, x, closed: true } for those still inside
 //   errors dg_err { why: far | level | closed | not_clear | exit | none | unknown }
 import crypto from 'node:crypto';
-import { DUNGEONS, rollFloors, rankTier, eventWindow } from '../../client/src/data/dungeons.js';
-import { MAPS } from '../../client/src/data/maps.js';
-import { GAME } from '../../client/src/config.js';
-import { expToNext } from '../../client/src/game/character.js';
-import { rewardEntries } from '../../client/src/game/loot.js';
+import { DUNGEONS, rollFloors, rankTier, eventWindow } from '../../shared/data/dungeons.js';
+import { MAPS } from '../../shared/data/maps.js';
+import { GAME } from '../../shared/config.js';
+import { expToNext } from '../../shared/rules/character.js';
+import { rewardEntries } from '../../shared/rules/loot.js';
 
 const D = GAME.dungeon;
 const keeperX = (d) => (MAPS[d.from].npcs || []).find((n) => n.id === d.npc)?.x ?? MAPS[d.from].spawnX;

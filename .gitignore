@@ -3,7 +3,7 @@ node_modules/
 client/dist/
 
 # Player data and secret keys (data/game.db, data/secret.key) - never commit.
-# The leading slash matters: only the top-level data/ folder, not client/src/data/.
+# The leading slash matters: only the top-level data/ folder, not shared/data/.
 /data/
 *.db
 *.db-shm
@@ -33,3 +33,6 @@ tests/e2e/out/
 *.tfstate
 *.tfstate.*
 *.tfvars
+
+# Local tool state
+/.nodeterm/

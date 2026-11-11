@@ -5,10 +5,10 @@ import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDungeons } from '../../server/src/dungeon.js';
 import { createMobs } from '../../server/src/mobs.js';
-import { DUNGEONS, rollFloors, rankTier, eventWindow, dungeonFloors } from '../../client/src/data/dungeons.js';
-import { MAPS, GROUND_Y } from '../../client/src/data/maps.js';
-import { MONSTERS } from '../../client/src/data/monsters.js';
-import { GAME } from '../../client/src/config.js';
+import { DUNGEONS, rollFloors, rankTier, eventWindow, dungeonFloors } from '../../shared/data/dungeons.js';
+import { MAPS, GROUND_Y } from '../../shared/data/maps.js';
+import { MONSTERS } from '../../shared/data/monsters.js';
+import { GAME } from '../../shared/config.js';
 
 const D = DUNGEONS.yangak, S = GAME.dungeon.schedule;
 const KEEPER_X = MAPS[D.from].npcs.find((n) => n.id === D.npc).x;

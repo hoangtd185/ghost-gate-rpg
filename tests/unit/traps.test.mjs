@@ -2,9 +2,9 @@
 // per-trap damage, and that every event floor's traps, exit and goal are valid.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GAME } from '../../client/src/config.js';
-import { MAPS, GROUND_Y } from '../../client/src/data/maps.js';
-import { MONSTERS } from '../../client/src/data/monsters.js';
+import { GAME } from '../../shared/config.js';
+import { MAPS, GROUND_Y } from '../../shared/data/maps.js';
+import { MONSTERS } from '../../shared/data/monsters.js';
 import { cyclePos, trapState, trapBox, solidCrumbles, trapHit, trapDamage, isCycledTrap } from '../../client/src/game/traps.js';
 
 const T = GAME.dungeon.trap, W = T.warn, CW = T.crumbleWarn;

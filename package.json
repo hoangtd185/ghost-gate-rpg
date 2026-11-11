@@ -12,15 +12,18 @@
     "build": "node tools/build.mjs",
     "start": "node server/src/index.js",
     "test": "node --test --test-reporter=spec \"tests/unit/*.test.mjs\"",
+    "lint": "eslint client/src shared server/src tools tests",
     "uat": "node tools/build.mjs && node --test --test-reporter=spec --test-concurrency=1 \"tests/e2e/*.test.mjs\"",
     "uat:browser": "playwright-core install chromium",
     "check": "node tools/check-secrets.mjs",
     "hooks": "node tools/check-secrets.mjs --install-hook"
   },
   "dependencies": {
-    "ws": "8.18.0"
+    "ws": "8.22.2"
   },
   "devDependencies": {
+    "eslint": "9.13.0",
+    "globals": "15.11.0",
     "playwright-core": "1.56.1"
   }
 }

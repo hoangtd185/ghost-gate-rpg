@@ -3,7 +3,7 @@
 // a party), loot goes to the top damager (or to every party member, each their own).
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { killExp } from '../../client/src/game/loot.js';
+import { killExp } from '../../shared/rules/loot.js';
 import { launch, newPage, startServer, register, createCharacter, uniqueName, until, shot } from './helpers.mjs';
 
 describe('shared monsters and parties (online)', { timeout: 240_000 }, () => {

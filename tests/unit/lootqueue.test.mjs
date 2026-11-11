@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLoot } from '../../server/src/loot.js';
-import { GAME } from '../../client/src/config.js';
+import { GAME } from '../../shared/config.js';
 
 function setup() {
   const calls = [];

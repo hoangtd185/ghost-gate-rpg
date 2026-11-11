@@ -1,9 +1,9 @@
 // Shared damage formulas (used by the browser offline and by the server online)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hitDamage, skillMult, knowsSkill, skillReach } from '../../client/src/game/combat.js';
-import { newCharacter, calcStats } from '../../client/src/game/character.js';
-import { GAME } from '../../client/src/config.js';
+import { hitDamage, skillMult, knowsSkill, skillReach } from '../../shared/rules/combat.js';
+import { newCharacter, calcStats } from '../../shared/rules/character.js';
+import { GAME } from '../../shared/config.js';
 
 const withRandom = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
 const ch = newCharacter('Test', 'taoist');

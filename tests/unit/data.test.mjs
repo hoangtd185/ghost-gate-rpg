@@ -2,18 +2,18 @@
 // Catches typos and half-done renames before they reach the game.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GAME } from '../../client/src/config.js';
-import { CLASSES, SKILLS, PASSIVES } from '../../client/src/data/classes.js';
-import { ITEMS, SLOT_NAMES } from '../../client/src/data/items.js';
-import { MONSTERS } from '../../client/src/data/monsters.js';
-import { MAPS } from '../../client/src/data/maps.js';
-import { NPCS, QUESTS } from '../../client/src/data/npcs.js';
-import { NAMED, AFFIXES, ELITE_POOL } from '../../client/src/data/affixes.js';
-import { RECIPES } from '../../client/src/data/recipes.js';
-import { MAIN_ORDER, SCENES, SPEAKERS } from '../../client/src/data/story.js';
-import { CHATTER, BANTER } from '../../client/src/data/chatter.js';
-import { LEGACY_CLS, LEGACY_MAP, LEGACY_PET, LEGACY_QUEST, legacyItem, legacySkill } from '../../client/src/data/legacy.js';
-import { DUNGEONS, dungeonFloors } from '../../client/src/data/dungeons.js';
+import { GAME } from '../../shared/config.js';
+import { CLASSES, SKILLS, PASSIVES } from '../../shared/data/classes.js';
+import { ITEMS, SLOT_NAMES } from '../../shared/data/items.js';
+import { MONSTERS } from '../../shared/data/monsters.js';
+import { MAPS } from '../../shared/data/maps.js';
+import { NPCS, QUESTS } from '../../shared/data/npcs.js';
+import { NAMED, AFFIXES, ELITE_POOL } from '../../shared/data/affixes.js';
+import { RECIPES } from '../../shared/data/recipes.js';
+import { MAIN_ORDER, SCENES, SPEAKERS } from '../../shared/data/story.js';
+import { CHATTER, BANTER } from '../../shared/data/chatter.js';
+import { LEGACY_CLS, LEGACY_MAP, LEGACY_PET, LEGACY_QUEST, legacyItem, legacySkill } from '../../shared/data/legacy.js';
+import { DUNGEONS, dungeonFloors } from '../../shared/data/dungeons.js';
 
 test('events: keepers, phases, floors, the final boss and rewards point at things that exist', () => {
   for (const [id, d] of Object.entries(DUNGEONS)) {
@@ -145,4 +145,32 @@ test('legacy ids migrate to ids that exist', () => {
   assert.deepEqual(Object.values(LEGACY_PET), ['imp']);
   for (const old of ['out_daohoa', 'hat_huyetsat', 'w_kiem3', 'w_dao7', 'orb_hoa', 'acc_wuxing']) assert.ok(ITEMS[legacyItem(old)], old);
   for (const old of ['k_basic', 'd_heal', 't_p4']) assert.ok(SKILLS[legacySkill(old)] || PASSIVES[legacySkill(old)], old);
+});
+
+test('world quest chains: steps, branches, choices and NPCs fit together', async () => {
+  const { WORLD_CHAINS } = await import('../../shared/data/world.js');
+  const tones = Object.values(WORLD_CHAINS).map((c) => c.tone);
+  assert.ok(tones.filter((t) => t === 'light').length >= 2 && tones.filter((t) => t === 'dark').length >= 2, 'cheerful and dark stories');
+  const onMap = new Map(); // npc id -> map entry
+  for (const m of Object.values(MAPS)) for (const n of m.npcs || []) onMap.set(n.id, n);
+  for (const [id, c] of Object.entries(WORLD_CHAINS)) {
+    assert.ok(['light', 'dark'].includes(c.tone) && c.name && c.blurb && MAPS[c.region], `${id}: chain info`);
+    const flags = new Set(); // flags set by choices earlier in the chain
+    c.steps.forEach((qid, i) => {
+      const q = QUESTS[qid];
+      assert.ok(q && q.cat === 'world' && q.chain === id, `${id}: ${qid} is a world quest of this chain`);
+      if (i > 0) assert.ok(c.steps.slice(0, i).includes(q.requires), `${qid} requires an earlier step`);
+      if (q.needFlag) assert.ok(flags.has(q.needFlag), `${qid}: needFlag ${q.needFlag} is set by an earlier choice`);
+      for (const o of q.choice?.options || []) {
+        assert.ok(o.label && o.lines.length && o.flag.length === 2 && o.flag.every((x) => x.length <= 20), `${qid}: choice option`);
+        flags.add(o.flag.join('='));
+      }
+      if (q.choice) assert.ok(q.choice.options.length >= 2, `${qid}: a real choice`);
+      for (const who of [q.npc, q.turnIn, q.type === 'talk' ? q.target : null].filter(Boolean)) assert.ok(onMap.has(who), `${qid}: ${who} stands on a map`);
+      assert.ok(q.reward.ingots > 0, `${qid}: Nguyên Bảo reward`);
+    });
+    const branches = c.steps.filter((qid) => QUESTS[qid].needFlag);
+    if (branches.length) assert.ok(branches.length >= 2, `${id}: every choice leads somewhere`);
+  }
+  for (const n of onMap.values()) for (const k of ['from', 'gone', 'after', 'until', 'hideWhile']) if (n[k]) assert.ok(QUESTS[n[k]], `map npc ${n.id}.${k}`);
 });

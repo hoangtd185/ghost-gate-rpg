@@ -21,7 +21,7 @@ Players on the same map see each other move, see each other's gear, and chat (`!
 | WebSocket server (`ws`) at `/ws`, on the same HTTP server | `server/src/realtime.js` |
 | Client connection, reconnect with backoff | `client/src/net/realtime.js` |
 | Other players: buffered snapshots, drawn 120 ms in the past (interpolation) | `RemotePlayer` in `client/src/game/entities.js` |
-| Tuning (send rate, limits, timeouts, loot and trade rules) | `GAME.net` in `client/src/config.js` |
+| Tuning (send rate, limits, timeouts, loot and trade rules) | `GAME.net` in `shared/config.js` |
 
 Safety rules:
 
@@ -38,7 +38,7 @@ Safety rules:
 
 ### Who runs the monsters
 
-`server/src/mobs.js` runs one simulation per map that has players on it, using `client/src/game/mobsim.js`: the **same AI code** the offline game runs in the browser (smartness tiers, affixes, bosses, summons, field-boss timers). It ticks at 20 Hz (3 sub-steps each) and sends positions at 10 Hz, only for monsters that changed. Clients draw the server's monsters and interpolate them. A map nobody is on stops after 30 s.
+`server/src/mobs.js` runs one simulation per map that has players on it, using `shared/rules/mobsim.js`: the **same AI code** the offline game runs in the browser (smartness tiers, affixes, bosses, summons, field-boss timers). It ticks at 20 Hz (3 sub-steps each) and sends positions at 10 Hz, only for monsters that changed. Clients draw the server's monsters and interpolate them. A map nobody is on stops after 30 s.
 
 | Who | Does what |
 |---|---|
@@ -47,7 +47,7 @@ Safety rules:
 
 ### Damage is computed by the server
 
-The formula lives in `client/src/game/combat.js` and is shared: the offline game and personal story bosses use it in the browser, the server uses it for shared monsters. The client never sends a number:
+The formula lives in `shared/rules/combat.js` and is shared: the offline game and personal story bosses use it in the browser, the server uses it for shared monsters. The client never sends a number:
 
 ```text
 client: "skill sw_combo hit monster 42"   ──▶  hit {uid: 42, sid: 'sw_combo'}
@@ -105,11 +105,11 @@ The client still uploads the whole character (EXP, position, quests, shop purcha
 2. **Identity.** An item the server already has keeps its id, rarity and bonus stats. The client may change quantity, enhancement, element, gems and where it sits (bag or equipment).
 3. **Ownership.** An item that now belongs to another character (traded away) is dropped from the upload.
 4. **What the client may add:**
-   - *free items*: anything sold in a shop, gems (fusing, unsocketing), quest-only items (`freeItems()` in `client/src/game/loot.js`);
-   - *earned items*: quest gifts and rewards for quests accepted or completed **in that save**, crafting results whose **materials were used up in that save**, the starter kit of a new character (`questGrants`, `craftGrants`, `starterKit`);
+   - *free items*: anything sold in a shop, gems (fusing, unsocketing), quest-only items (`freeItems()` in `shared/rules/loot.js`);
+   - *earned items*: quest gifts and rewards for quests accepted or completed **in that save**, crafting results whose **materials were used up in that save** (each material counts for one recipe only), the starter kit of a new character (`questGrants`, `craftGrants`, `starterKit`);
    - nothing else: monster materials, outfits and rolled equipment only come from the server.
-5. **Quantities.** For items that are not free, the total may not grow beyond what the save earned. Stacks may be merged or used up. Items stored under an id from before a rename (`data/legacy.js`) count as the new id.
-6. **Bonus stats** of an item the save adds: none at rarity 0; above that only stats `rollEquip` can roll, each within what the rarity can reach (`bonusLimits` in `game/character.js`). Anything else is dropped and logged (`bonus`).
+5. **Quantities.** For items that are not free, the total may not grow beyond what the save earned. Stacks may be merged or used up. Items stored under an id from before a rename (`shared/data/legacy.js`) count as the new id.
+6. **Bonus stats** of an item the save adds: none at rarity 0; above that only stats `rollEquip` can roll, each within what the rarity can reach (`bonusLimits` in `shared/rules/character.js`). Anything else is dropped and logged (`bonus`).
 7. **Quests.** A quest the server has as done stays done: a save cannot remove or downgrade it, except a daily quest taken again on a later day. A daily completion is stored with the server's date, not the client's.
 
 Refused items are written to the ledger as `rejected` (with the reason), and the answer includes `items` so the client replaces its bag with what the server kept.
@@ -131,7 +131,7 @@ Like Võ Lâm Truyền Kỳ: both players put items into a shared window, lock, 
 
 Items in your offer cannot be used, equipped, sold, dropped or forged while the trade is open. Closing the window, Esc, changing map or disconnecting cancels it; nothing moves. Offers are checked against the **saved** bag, so the client saves when the window opens; a mismatch answers `trade_err {why: 'sync'}`, the client saves and offers again.
 
-### Server event: Xâm Lăng Dương Ác ("vượt ải")
+## 4a. Server event: Xâm Lăng Dương Ác ("vượt ải")
 
 In the style of Ghost Online's *Invasion of Yangak*. At set times (`GAME.dungeon.schedule`: **Saturday and Sunday 15:00, Vietnam time (UTC+7), 30 minutes**) the event opens for the **whole server**: one run, and every player who joins at the keeper in the village (Thủ Ải, level 12+) is in it, floor after floor, up to the final boss (`server/src/dungeon.js`, data in `data/dungeons.js`).
 
@@ -143,6 +143,22 @@ In the style of Ghost Online's *Invasion of Yangak*. At set times (`GAME.dungeon
 - **Damage ranking.** `mobs.hit` reports every hit's damage (computed by the server) to the event (`onDamage`); only players in the run count. Every `GAME.dungeon.rankEverySec` each player inside gets the live top 10 and their own place (`ev_rank`).
 - **The end.** The Silver Guard (`final: true`) dying ends the run as a win; the window running out ends it as a loss. **Everyone who took part** is rewarded, online or not (`rewards.all`, plus `rewards.win` on a win, plus the tier of their damage rank for the top 10: `rewards.top`). Items go through `db.grantItems` (ledger rows, `item_rev`, request ids `ev:<run>:<char>:<i>` so a retry never doubles them) and reach online players as `chg`; the EXP (a share of the player's next level) is in `ev_end`, which also carries the top 10, the player's rank, damage and items. Players still inside are sent back to the keeper (`dg_go {closed}`) and the server announces the result in world chat.
 - **Offline** the keeper offers a practice run of the same floors (no ranking, no rewards).
+
+## 4b. Premium shop and Nguyên Bảo
+
+Nguyên Bảo (ingots) is the premium shop's currency (Vạn Bảo Các, merchant in the village or **B**). It is never bought with money; it is earned in game:
+
+| Source | Amount (`GAME.premium`) | Who decides online |
+|---|---|---|
+| Daily check-in (the day starts at midnight Vietnam time), +bonus every 7th day in a row | 10, +40 | Server (`checkin` column, one per day) |
+| A chieftain / a field boss: every member of the group that did the most damage | 2 / 5 | Server (`mobs.js` → `premium.kill`) |
+| Quests with `reward.ingots` (chapter finales, world quests), once each | per quest | Server, once the quest is **done in the saved character** (`claim`, ledger request id `quest:<char>:<quest>`) |
+
+Online the balance is a column the server owns: an uploaded save never changes `ingots` or `checkin`. Every change is a ledger row (`kind: 'ingots'`) at a new `item_rev`, so it reaches the client through the same change replay as pickups. A purchase is one transaction: bag room checked, items granted (cosmetics Legendary), ingots taken; `req` makes a repeated click harmless. Offline the save holds the balance and `shared/rules/premium.js` applies the same rules locally.
+
+The balance never goes below zero: `addIngotsTx` only applies a change that leaves it at 0 or more and throws otherwise (the transaction is undone, no ledger row, no revision bump). Kill rewards use the request id `kill:<map>:<time>:<uid>:<char>` (monster uids restart on each map). If an answer to `buy` or `checkin` is lost (the connection drops), the client's button waits `GAME.premium.replyTimeoutSec`, then works again; a retry of the same purchase reuses its `req`, so the server applies it once.
+
+Quest Nguyên Bảo online: the client queues the completion, sends `claim` after the next successful save, keeps it on `not_done` (the save was stale), and claims every finished ingot quest again on each (re)connect; the ledger gives each one once.
 
 ## 5. Protocol
 
@@ -161,6 +177,7 @@ JSON text frames, `t` is the message type.
 | C → S | `pick {id}` | Pick up one of our server drops. |
 | C → S | `trade_ask {to}` · `trade_answer {from, yes}` · `trade_offer {items: [{uid, qty}], gold}` · `trade_lock {on}` · `trade_confirm` · `trade_cancel` | Trade. |
 | C → S | `dg_enter {d}` · `dg_next {}` | Server event: join at the keeper; go on at a floor's exit. At most one every `GAME.dungeon.minMsgMs`. |
+| C → S | `prem {op: 'buy', offer, req}` · `prem {op: 'checkin'}` · `prem {op: 'claim', quest}` | Premium shop: buy an offer (`req`: our request id, a repeat is applied once), the daily check-in, Nguyên Bảo for a completed quest. 30 per minute. See §4b. |
 | S → C | `welcome {id, online}` · `online {n}` | Connected; player count. |
 | S → C | `snap {map, players}` · `join {p}` · `leave {id}` | Who is on our map. |
 | S → C | `st {s: [[id, x, y, vx, f, a], …]}` | Batched movement, one message per map per tick (10 Hz). |
@@ -175,7 +192,8 @@ JSON text frames, `t` is the message type.
 | S → C | `loot {k, map, drops: [{id, it, rare, x, y}], why?}` | Drops for story-boss kill `k` (empty with `why` if refused). |
 | S → C | `drops {map, drops}` | Our unpicked drops on this map (after a reconnect or coming back). |
 | S → C | `pick {id, ok, why?}` | Pickup result, after the commit; `why`: `gone`, `far`, `full`, `busy` (rate limit or queue full: try again). The item itself arrives in `chg`. |
-| S → C | `chg {list: [{rev, kind, uid, id, qty, entry}], rev}` | Item/gold changes to apply, oldest first. `kind`: `gain` (add `entry`), `loss` (remove `uid`), `gold` (add `qty`). |
+| S → C | `chg {list: [{rev, kind, uid, id, qty, entry}], rev}` | Item/gold changes to apply, oldest first. `kind`: `gain` (add `entry`), `loss` (remove `uid`), `gold` (add `qty`), `ingots` (add `qty` Nguyên Bảo). |
+| S → C | `prem {op, ok, why?, req?, offer?, got?, streak?, quest?}` | Premium answer (`why`: `ingots`, `full`, `offer`, `done`, `dup`, `not_done`, `none`, `rate`); `op: 'kill'` tells us a chieftain / field boss paid Nguyên Bảo. Balance and items arrive in `chg`. |
 | S → C | `trade_ask {from, name}` · `trade_open {id, with}` · `trade_state {id, me, them}` · `trade_end {id, why, by?}` · `trade_err {why}` | Trade. |
 | S → C | `dg_go {inst, d, floors, map, floor, t0, now}` · `dg_go {map, x, closed \| lost}` · `dg_err {why}` | Go to an event floor (`floors` = the run's floors, `t0` = the floor clock start, `now` = server time, for the traps), or back to the keeper when the run is over (`closed`) or from a floor the player may not be on (`lost`). `why`: `far`, `level`, `closed`, `not_clear`, `exit`, `none`, `unknown`. |
 | S → C | `ev_state {d, open, start, end, now}` · `ev_rank {d, top, rank, dmg, end, now}` · `ev_end {d, win, top, rank, dmg, items, exp}` | Server event: open or not and its window (on connect and on change); the live top 10 by damage and our place (every `rankEverySec`, players inside only); the result and our reward (items arrive as `chg`, EXP is added by the client). Announcements come as `chat {ch: 'world', id: 'sys'}`. |
@@ -240,7 +258,7 @@ Stage 2 closes the biggest holes (inventing drops, editing item stats, duplicati
 | 3a | EXP and level owned by the server; damage to players computed on the server too |
 | 3b | Forge, shop and quest rewards as server actions |
 | 3c | Write-behind for position/HP/EXP; grace period on disconnect |
-| 3d | Nightly `VACUUM INTO` backups, tested restores; optional [Litestream](https://litestream.io/) |
+| 3d | Nightly `VACUUM INTO` backups to S3 (done: `tools/backup.mjs`, `infra/backup.sh`, README > Backups); a tested restore on a spare machine; optional [Litestream](https://litestream.io/) for seconds-level recovery |
 | 3e | Friends, guilds, party loot options, PvP |
 
 ## 10. Message queue, RabbitMQ: do we need it?

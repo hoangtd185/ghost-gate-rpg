@@ -4,7 +4,7 @@
 //   party_invite {to} · party_answer {from, yes} · party_leave
 //   -> party_ask {from, name} · party_state {id, leader, members: [{id, name, lv, map}]} (null when not in a party) · party_err {why}
 import crypto from 'node:crypto';
-import { GAME } from '../../client/src/config.js';
+import { GAME } from '../../shared/config.js';
 
 const P = GAME.net.party;
 

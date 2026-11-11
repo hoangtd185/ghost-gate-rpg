@@ -1,11 +1,12 @@
 // Bots pretending to be players: hunt monsters, rest, chat, change maps
-import { MAPS, GROUND_Y } from '../data/maps.js';
-import { CLASSES } from '../data/classes.js';
-import { BOT_NAMES, BOT_CHAT, BOT_LOOKS } from '../data/bots.js';
+import { MAPS, GROUND_Y } from '../../../shared/data/maps.js';
+import { CLASSES } from '../../../shared/data/classes.js';
+import { ITEMS } from '../../../shared/data/items.js';
+import { BOT_NAMES, BOT_CHAT, BOT_LOOKS } from '../../../shared/data/bots.js';
 import { Humanoid, Projectile, MOVE_SPEED, JUMP_V } from './entities.js';
-import { stepBody } from './physics.js';
-import { pick, rand, randInt, chance, clamp } from '../engine/util.js';
-import { GAME } from '../config.js';
+import { stepBody } from '../../../shared/rules/physics.js';
+import { pick, rand, randInt, chance, clamp } from '../../../shared/util.js';
+import { GAME } from '../../../shared/config.js';
 
 const MAP_ORDER = ['village', 'forest', 'field', 'graveyard', 'ghost_gate', 'snow_peak', 'ice_cave', 'volcano', 'qilin_altar'];
 
@@ -32,6 +33,9 @@ function makePersona(name) {
     weaponColor: pick(['#c9ced6', '#7aa0c8', '#e8c35a', '#8fd06a', '#e04848', '#b06aff']),
   };
   if (chance(0.35)) { look.hat = pick(['band', 'conical', 'helm', 'daoist']); look.hatColor = pick(['#d9c27a', '#8b95a3', '#2a2a3a', '#7c5a3a']); }
+  // some bots show off a cape they could have earned at their level
+  const capes = Object.values(ITEMS).filter((it) => it.slot === 'cape' && it.lv <= level);
+  if (capes.length && chance(GAME.cape.botChance)) look.liveCape = pick(capes).cape;
   const title = level >= 14 && chance(0.4) ? pick(['Trấn Quỷ Sư', 'Kiếm Khách Giang Hồ', 'Đệ Nhất Cày Thuê', 'Vua Nhặt Đồ', 'Lãng Tử']) : null;
   return { name, cls, level, look, title, map: mapForLevel(level), exp: 0 };
 }

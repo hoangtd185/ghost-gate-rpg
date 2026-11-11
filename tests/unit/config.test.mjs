@@ -1,9 +1,9 @@
 // Tuning tables in config.js drive the helpers that read them.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GAME } from '../../client/src/config.js';
-import { eliteChance, smartTier, CHIEF } from '../../client/src/data/affixes.js';
-import { ENHANCE_MAX, ENHANCE_RATE } from '../../client/src/data/items.js';
+import { GAME } from '../../shared/config.js';
+import { eliteChance, smartTier, CHIEF } from '../../shared/data/affixes.js';
+import { ENHANCE_MAX, ENHANCE_RATE } from '../../shared/data/items.js';
 
 test('elite chance follows the config table', () => {
   assert.equal(eliteChance(1), 0);
