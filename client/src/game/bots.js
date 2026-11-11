@@ -1,12 +1,12 @@
 // Bots pretending to be players: hunt monsters, rest, chat, change maps
-import { MAPS, GROUND_Y } from '../data/maps.js';
-import { CLASSES } from '../data/classes.js';
-import { ITEMS } from '../data/items.js';
-import { BOT_NAMES, BOT_CHAT, BOT_LOOKS } from '../data/bots.js';
+import { MAPS, GROUND_Y } from '../../../shared/data/maps.js';
+import { CLASSES } from '../../../shared/data/classes.js';
+import { ITEMS } from '../../../shared/data/items.js';
+import { BOT_NAMES, BOT_CHAT, BOT_LOOKS } from '../../../shared/data/bots.js';
 import { Humanoid, Projectile, MOVE_SPEED, JUMP_V } from './entities.js';
-import { stepBody } from './physics.js';
-import { pick, rand, randInt, chance, clamp } from '../engine/util.js';
-import { GAME } from '../config.js';
+import { stepBody } from '../../../shared/rules/physics.js';
+import { pick, rand, randInt, chance, clamp } from '../../../shared/util.js';
+import { GAME } from '../../../shared/config.js';
 
 const MAP_ORDER = ['village', 'forest', 'field', 'graveyard', 'ghost_gate', 'snow_peak', 'ice_cave', 'volcano', 'qilin_altar'];
 

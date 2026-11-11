@@ -68,7 +68,7 @@ The line `ExperimentalWarning: SQLite is an experimental feature` is a normal No
 
 **Step 4. Edit the game**
 
-- Edit files in `client/src/` → save → press **F5** in the browser.
+- Edit files in `client/src/` or `shared/` → save → press **F5** in the browser.
 - Edit files in `server/src/` → the server restarts by itself.
 
 **Step 5. Production build**
@@ -93,7 +93,7 @@ npm start
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Development mode: serves `client/src` directly, restarts the server when `server/src` changes |
+| `npm run dev` | Development mode: serves `client/src` and `shared/` directly, restarts the server when `server/src` changes |
 | `npm run build` | Bundles the whole client into `client/dist/index.html` |
 | `npm start` | Runs the server in production mode, serving the built file |
 | `npm run check` | Scans the files that would be committed for leaked secrets |
@@ -326,20 +326,29 @@ git commit -m "Quỷ Môn Quan"
 ## Project structure
 
 ```
+shared/                 code and data used by BOTH the browser and the Node server (plain JS, no DOM, no Node-only imports)
+  config.js             GAME: every balance / tuning number in one place
+  util.js               small helpers (clamp, rand, pick, fmtNum, escapeHtml...)
+  data/                 GAME DATA: classes, skills, items, monsters, maps, NPCs, quests, bots
+    premium.js          Vạn Bảo Các offers and tabs
+    world.js            world quest chains (choices, flags)
+    story.js            main story, tutorial quests, scenes with choices
+    chatter.js          everyday NPC lines and NPC-to-NPC conversations
+    affixes.js          monster affixes, intelligence tiers, elites, story and field bosses
+    recipes.js          crafting recipes
+    legacy.js           old (pre-English) id map, migrates saves made before the rename
+  rules/                game rules that run offline in the browser and online on the server
+    character.js        stats, EXP, inventory, equipment, gems, crafting, passives, quest state
+    mobsim.js           monster AI, spawns, bosses
+    physics.js          gravity and platforms
+    combat.js           damage formulas
+    loot.js             drop tables and what a client save may add
+    premium.js          Nguyên Bảo rules: check-in, kill and quest rewards, offline purchases
 client/
   index.html            dev page (loads src/main.js as an ES module)
   src/
     main.js             startup, game loop, wires the UI to the game world
-    config.js           GAME: every balance / tuning number in one place (also read by the server)
-    engine/             keyboard / touch input, utilities
-    data/               GAME DATA: classes, skills, items, monsters, maps, NPCs, quests, bots
-      premium.js        Vạn Bảo Các offers and tabs
-      world.js          world quest chains (choices, flags)
-      story.js          main story, tutorial quests, scenes with choices
-      chatter.js        everyday NPC lines and NPC-to-NPC conversations
-      affixes.js        monster affixes, intelligence tiers, elites, story and field bosses
-      recipes.js        crafting recipes
-      legacy.js         old (pre-English) id map, migrates saves made before the rename
+    engine/             keyboard / touch input
     gfx/
       draw.js           drawing toolkit: hi-res canvases, outlines, shading, gradients
       humanoid.js       chibi characters (hair, eyes, robes, hats, weapons, outfit parts, 14 frames)
@@ -348,15 +357,10 @@ client/
       icons.js          item icons and projectiles
       backgrounds.js    layered backgrounds for every map
     game/
-      character.js      stats, EXP, inventory, equipment, gems, crafting, passives, quest state
-      entities.js       player, monster sprites (their state lives in mobsim.js), drops, projectiles
+      entities.js       player, monster sprites (their state lives in rules/mobsim.js), drops, projectiles
       world.js          core logic: combat, drops, rendering
-      mobsim.js         monster AI, spawns, bosses (shared with the server)
-      physics.js        gravity and platforms (shared with the server)
-      combat.js         damage formulas (shared with the server)
       bots.js           fake-player bot AI and chat
       chatter.js        picks context-aware NPC lines without repeating
-      premium.js        Nguyên Bảo rules shared with the server: check-in, kill and quest rewards, offline purchases
     ui/                 HUD, inventory / skills / quests / shop / forge / crafting windows, login screens
       premium.js        Vạn Bảo Các window: balance, check-in, offers, try-on preview
     storage/            the 3 storage backends (API / Claude / browser)
@@ -421,24 +425,24 @@ Send the token in the `Authorization: Bearer <token>` header. Request bodies mus
 
 | What | File |
 |---|---|
-| Balance and feel: speeds, jump, sprint, regen, EXP curve, points per level, monster scaling, elite and chieftain rates, drop rarity, enhancement rates, autosave and retry timing | `client/src/config.js` (`GAME`) |
-| Content: classes, skills, items, monsters, maps, NPCs, quests, dialogue, recipes, named bosses | `client/src/data/*.js` |
+| Balance and feel: speeds, jump, sprint, regen, EXP curve, points per level, monster scaling, elite and chieftain rates, drop rarity, enhancement rates, autosave and retry timing | `shared/config.js` (`GAME`) |
+| Content: classes, skills, items, monsters, maps, NPCs, quests, dialogue, recipes, named bosses | `shared/data/*.js` |
 | Server deployment: port, secrets, registration, rate limits, CORS | `.env` (see `.env.example`), read by `server/src/config.js` |
 
-The server imports `client/src/config.js` too, so values both sides must agree on (class ids, equipment slots, level cap, points per level, max enhancement) come from one place.
+The server imports `shared/config.js` too, so values both sides must agree on (class ids, equipment slots, level cap, points per level, max enhancement) come from one place.
 
-**Conventions.** Code, ids and comments are in English. Only player-facing text (dialogue, item and map names, UI labels, error messages shown on screen) is Vietnamese. Ids are lowercase snake_case: classes `swordsman` / `taoist` / `assassin`, elements `fire` / `ice` / `thunder` / `poison`, maps such as `village` or `ghost_gate`. If you rename an id that can be stored in a save, add the old name to `client/src/data/legacy.js` so existing characters keep loading.
+**Conventions.** Code, ids and comments are in English. Only player-facing text (dialogue, item and map names, UI labels, error messages shown on screen) is Vietnamese. Ids are lowercase snake_case: classes `swordsman` / `taoist` / `assassin`, elements `fire` / `ice` / `thunder` / `poison`, maps such as `village` or `ghost_gate`. If you rename an id that can be stored in a save, add the old name to `shared/data/legacy.js` so existing characters keep loading.
 
-Almost all content lives in `client/src/data/`, so most changes are data edits:
+Almost all content lives in `shared/data/`, so most changes are data edits:
 
-- **New monster**: add it to `data/monsters.js`, draw it in `gfx/monsters.js` (register the draw function in `MAKERS`), then place it in a map's `spawns`.
+- **New monster**: add it to `shared/data/monsters.js`, draw it in `gfx/monsters.js` (register the draw function in `MAKERS`), then place it in a map's `spawns`.
 - **New map**: add it to `maps.js` (platforms, portals, spawns, NPCs) and pick an existing `theme` (`village`, `forest`, `field`, `graveyard`, `hell`, `swamp`, `snow`, `icecave`, `volcano`, `temple`) or add a theme in `gfx/backgrounds.js`. Remember to add portals in both directions. Weather per theme lives in `updateWeather` (`game/world.js`).
-- **New boss**: set `behavior: 'boss'`, `proj` (projectile), `summon` (summoned minion) and `lines` (dialogue) in `data/monsters.js`.
-- **New named / field boss**: add an entry to `NAMED` in `data/affixes.js` based on an existing monster, with multipliers, affixes, drops and either a `quest` (story boss) or an `every` respawn timer (field boss).
+- **New boss**: set `behavior: 'boss'`, `proj` (projectile), `summon` (summoned minion) and `lines` (dialogue) in `shared/data/monsters.js`.
+- **New named / field boss**: add an entry to `NAMED` in `shared/data/affixes.js` based on an existing monster, with multipliers, affixes, drops and either a `quest` (story boss) or an `every` respawn timer (field boss).
 - **New item**: add it to `items.js`, then to a monster's drop table, an NPC shop in `npcs.js`, or a recipe in `recipes.js`.
 - **New quest**: add it to `QUESTS` in `npcs.js` (side quests), to `story.js` (story, tutorials) or to `world.js` (world quest chains: `chain`, `choice`, `needFlag`), then add its id to the NPC's `quests` list.
-- **New NPC line**: add it to `data/chatter.js`. Conditional lines are written as `['line', { a: 'st7' }]` (only said after quest st7 is done).
-- **Balancing**: stat formulas in `calcStats`, EXP curve in `expToNext` (`game/character.js`), damage in `hitDamage` (`game/combat.js`, used by the browser and the server).
+- **New NPC line**: add it to `shared/data/chatter.js`. Conditional lines are written as `['line', { a: 'st7' }]` (only said after quest st7 is done).
+- **Balancing**: stat formulas in `calcStats`, EXP curve in `expToNext` (`shared/rules/character.js`), damage in `hitDamage` (`shared/rules/combat.js`, used by the browser and the server).
 
 While testing, open DevTools (F12) and type:
 
@@ -472,14 +476,14 @@ On phones, touch buttons appear automatically the first time you touch the scree
 
 ## Game systems
 
-**Elements** (`data/elements.js`)
+**Elements** (`shared/data/elements.js`)
 
 - Monsters have a `res` table: positive values resist, negative values are weaknesses. For example the scarecrow's `res: { fire: -0.5 }` takes 50% extra fire damage.
 - An attack takes its element from the skill (Lôi Phù = lightning, Hỏa Long Phù = fire, Độc Vụ = poison). Skills without an element use the weapon's element.
 - Weapons get an element from a socketed orb (fire / ice / lightning / poison orb, used from the inventory) or have one built in (tier 5 weapons are ice, tier 6 are fire).
 - Players get resistances from gear (`res_fire`, `res_ice`…), capped at 75%. See the Character window (C).
 
-**Enhancement** (`data/items.js` → `ENHANCE_*`, `game/character.js` → `enhanceEntry`)
+**Enhancement** (`shared/data/items.js` → `ENHANCE_*`, `shared/rules/character.js` → `enhanceEntry`)
 
 - Each level adds 10% of the item's base stats.
 - Success rate drops with level: +1 is 100%, +10 is 22%. From +5 upwards a failure drops the item one level unless a protection charm is used.
@@ -489,28 +493,28 @@ On phones, touch buttons appear automatically the first time you touch the scree
 
 **Titles**: a quest reward `title`, shown above the character's head.
 
-**Passive skills** (`data/classes.js` → `PASSIVES`)
+**Passive skills** (`shared/data/classes.js` → `PASSIVES`)
 
 - Each class has 4 passives in a tree, unlocking at levels 5 / 10 / 16 / 22. Each node requires the previous one at a certain level. Max level 5.
 - Passives share skill points with active skills (+1 point per level), so you have to choose a build.
 - Swordsman: HP/defense → attack/crit damage → life steal → bonus when low on HP. Taoist: MP → elemental damage → lower MP cost → all resistances. Assassin: dodge/move speed → crit chance → crit damage → heal on kill.
 - Respec from the Skills window costs `level × 150` gold.
 
-**Monster scaling** (`data/affixes.js`, `game/entities.js` → `Monster`)
+**Monster scaling** (`shared/data/affixes.js`, `game/entities.js` → `Monster`)
 
 - Every monster rolls its own level, 0–3 above its species level. Per level: HP +12%, attack +7%, defense +5%, EXP +15%.
 - Intelligence tiers by level: 1–5 only chase after being hit · 6–12 aggro on sight, ranged monsters keep their distance · 13–20 dodge projectiles, call nearby allies, wind up and charge · 21+ lead their shots, attack faster, retreat to heal when low.
 - **Elites** (★, gold name, glow): 3–7% depending on zone level. HP ×4, attack ×1.4, 1–2 random affixes, better drops.
 - **Affixes**: Reflect (bounces 18% of your damage back), Life Steal, Regeneration, Enrage, Self-Destruct (red warning circle, then explodes), Teleport, Frost (slows you), Poison, Shield. Some species always have one: ice golems reflect, poison frogs poison, lava beasts explode, ice bats slow…
 
-**Chieftains** (`CHIEF` in `data/affixes.js`): now and then (1.5% per spawn, max one per map) a regular monster spawns as a bigger "Đầu Lĩnh" with ×7 HP, harder hits and better drops.
+**Chieftains** (`CHIEF` in `shared/data/affixes.js`): now and then (1.5% per spawn, max one per map) a regular monster spawns as a bigger "Đầu Lĩnh" with ×7 HP, harder hits and better drops.
 
-**Named bosses** (`NAMED` in `data/affixes.js`)
+**Named bosses** (`NAMED` in `shared/data/affixes.js`)
 
 - Story bosses: Bù Nhìn Đầu Đàn, Lão Đăng Quỷ, Băng Dực Vương, Huyết Thi Tướng. They only appear while the matching quest is active.
 - Field bosses: Cửu Vĩ Hồ Vương (Rừng Ma Trơi), Cương Thi Vương (Nghĩa Địa Cổ), Tuyết Sơn Ma Vương (Tuyết Sơn), Nham Ma Hỏa Thú (Hỏa Diệm Sơn), Bạch Diện Quỷ Chủ (Cổ Tự). They respawn every 4–10 minutes while you are on that map, with an announcement in chat.
 
-**Outfits** (5th equipment slot, `slot: 'outfit'` in `data/items.js`)
+**Outfits** (5th equipment slot, `slot: 'outfit'` in `shared/data/items.js`)
 
 | Outfit | Level | Source |
 |---|---|---|
@@ -541,7 +545,7 @@ A cape is a small cloth simulation (`gfx/cape.js`, tuned in `GAME.cape`): it han
 - Portals to new zones are **sealed** until the matching story step is done (`lock` in `maps.js`), e.g. the swamp needs the fog-clearing incense and the snow mountain needs the first chapter boss.
 - Level requirements are spread out and story EXP rewards are only 12–65% of a level (`main()` in `story.js`), so you have to grind between steps. The quest tracker suggests a map to level up on.
 
-**Crafting** (`data/recipes.js`, NPC Tú Nương in the village)
+**Crafting** (`shared/data/recipes.js`, NPC Tú Nương in the village)
 
 | Item | Materials |
 |---|---|
@@ -552,7 +556,7 @@ A cape is a small cloth simulation (`gfx/cape.js`, tuned in `GAME.cape`): it han
 
 Materials: **Cánh Đào Ma** (ghost peach petal: fox spirits 6%, scarecrows 5%, wisps 3%), **Tơ Băng Tằm** (ice silk: ice bats 8%, snow foxes 5%, yetis 4%), **Tiên Lộ** (fairy dew: guaranteed from field and chapter bosses, 50% from story bosses, 8% from elites). A new recipe is one more line in `RECIPES`.
 
-**Gem sockets** (`data/items.js` → `GEM_*`, `game/character.js` → `socketGem`, `fuseGems`)
+**Gem sockets** (`shared/data/items.js` → `GEM_*`, `shared/rules/character.js` → `socketGem`, `fuseGems`)
 
 - 5 gem types: Hồng (attack), Hoàng (crit), Lục (HP), Tử (defense), Lam (MP); each in 3 grades: Sơ / Trung / Thượng.
 - Sockets: 1, +1 for Quý (epic) rarity or better, +1 from enhancement +7 (max 3).
@@ -560,7 +564,7 @@ Materials: **Cánh Đào Ma** (ghost peach petal: fox spirits 6%, scarecrows 5%,
 - Fusing: 3 identical gems → 1 gem of the next grade. Sơ → Trung always succeeds, Trung → Thượng 75% (a failure destroys one gem).
 - Unsocketing costs a small fee and returns the gem intact. In drop tables, `GEM1` / `GEM2` / `GEM3` mean a random gem of that grade.
 
-**Story** (`data/story.js`)
+**Story** (`shared/data/story.js`)
 
 The main line is a prologue plus 3 chapters (32 quests, level 1 → 32):
 
@@ -580,7 +584,7 @@ How quests are written:
 
 **Tutorial quests**: the village chief (double jump, stat points, pet), the healer (potions, shopping), the taoist (skills, elements), the blacksmith (enhancement, gem sockets, gem fusing), the bounty officer (daily bounties) and the embroiderer (crafting). Marked with a blue **!** above the NPC.
 
-**NPC dialogue** (`data/chatter.js`): each NPC has `lines` (spoken when you stand nearby), `greet` (opening line when you talk to them) and `hi` (said as you walk up). Lines change with story progress, time of day, level, class, pet, title and weapon. `BANTER` holds NPC-to-NPC conversations.
+**NPC dialogue** (`shared/data/chatter.js`): each NPC has `lines` (spoken when you stand nearby), `greet` (opening line when you talk to them) and `hi` (said as you walk up). Lines change with story progress, time of day, level, class, pet, title and weapon. `BANTER` holds NPC-to-NPC conversations.
 
 ## How the graphics are drawn
 
@@ -588,8 +592,8 @@ The game uses no image files. At startup every character and monster is drawn wi
 gradients, dark outlines) at 3× resolution into an in-memory sprite sheet; during play the game just copies
 frames from the sheet to the screen. Drawing large and scaling down keeps everything smooth instead of pixelated.
 
-To change a class's robe colors, hair style or eye color, edit `look` in `data/classes.js`
-(`robe`, `trim`, `hair`, `hairStyle` 0–5, `eye`, `skin`). NPC looks are in `data/npcs.js`.
+To change a class's robe colors, hair style or eye color, edit `look` in `shared/data/classes.js`
+(`robe`, `trim`, `hair`, `hairStyle` 0–5, `eye`, `skin`). NPC looks are in `shared/data/npcs.js`.
 
 If you later want hand-drawn PNG art instead of code-drawn sprites, create sheets with the same shape
 `{ img, fw, fh, s, frames }` in `gfx/` and the rest of the game keeps working unchanged.

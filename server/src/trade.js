@@ -5,8 +5,8 @@
 //   4. Both confirmed: the server swaps everything in one database transaction (db.commitTrade) and tells both.
 // Leaving the map, disconnecting or cancelling ends the trade; nothing moves until step 4 commits.
 import crypto from 'node:crypto';
-import { GAME } from '../../client/src/config.js';
-import { ITEMS } from '../../client/src/data/items.js';
+import { GAME } from '../../shared/config.js';
+import { ITEMS } from '../../shared/data/items.js';
 
 const T = GAME.net.trade;
 const int = (v) => (Number.isFinite(+v) ? Math.floor(+v) : 0);

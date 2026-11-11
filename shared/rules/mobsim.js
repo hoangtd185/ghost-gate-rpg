@@ -9,7 +9,7 @@ import { MAPS, GROUND_Y } from '../data/maps.js';
 import { MONSTERS, BOSS_RESPAWN } from '../data/monsters.js';
 import { NAMED, ELITE_POOL, CHIEF, smartTier, eliteChance } from '../data/affixes.js';
 import { GAME } from '../config.js';
-import { clamp, rand, randInt, chance, pick } from '../engine/util.js';
+import { clamp, rand, randInt, chance, pick } from '../util.js';
 import { platformAt } from './physics.js';
 import { ELITE_DROPS } from './loot.js';
 

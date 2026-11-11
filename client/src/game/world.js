@@ -1,28 +1,28 @@
 // Game world: logic updates, combat, monsters, drops, and drawing everything on the canvas
-import { MAPS, GROUND_Y } from '../data/maps.js';
-import { MONSTERS } from '../data/monsters.js';
-import { CLASSES, SKILLS } from '../data/classes.js';
-import { ITEMS, isLookSlot } from '../data/items.js';
-import { killIngots, questIngots } from './premium.js';
-import { NPCS, QUESTS } from '../data/npcs.js';
-import { AFFIXES, NAMED } from '../data/affixes.js';
-import { ELEMENTS } from '../data/elements.js';
+import { MAPS, GROUND_Y } from '../../../shared/data/maps.js';
+import { MONSTERS } from '../../../shared/data/monsters.js';
+import { CLASSES, SKILLS } from '../../../shared/data/classes.js';
+import { ITEMS, isLookSlot } from '../../../shared/data/items.js';
+import { killIngots, questIngots } from '../../../shared/rules/premium.js';
+import { NPCS, QUESTS } from '../../../shared/data/npcs.js';
+import { AFFIXES, NAMED } from '../../../shared/data/affixes.js';
+import { ELEMENTS } from '../../../shared/data/elements.js';
 import { buildMapGraphics, drawPortal, drawLayer, VIEW_W, VIEW_H } from '../gfx/backgrounds.js';
 import { projSprite, itemIcon, iconForItem } from '../gfx/icons.js';
 import { Player, Monster, Drop, Projectile, NPC, MOVE_SPEED, JUMP_V, lookFor } from './entities.js';
-import { stepBody } from './physics.js';
+import { stepBody } from '../../../shared/rules/physics.js';
 import { Pet } from './pet.js';
-import { rollDrops, killExp } from './loot.js';
-import { hitDamage, botDamage } from './combat.js';
-import { MobSim } from './mobsim.js';
+import { rollDrops, killExp } from '../../../shared/rules/loot.js';
+import { hitDamage, botDamage } from '../../../shared/rules/combat.js';
+import { MobSim } from '../../../shared/rules/mobsim.js';
 import {
   calcStats, gainExp, addItem, onKillForQuests, expToNext, countItem, INV_SIZE,
   questDropsFor, npcMarker, questStatus, npcPresent, questEvent, questProgress,
-} from './character.js';
+} from '../../../shared/rules/character.js';
 import { npcLine, pickBanter } from './chatter.js';
 import { BotManager } from './bots.js';
-import { clamp, rand, randInt, chance, overlap, centerDist, pick } from '../engine/util.js';
-import { GAME } from '../config.js';
+import { clamp, rand, randInt, chance, overlap, centerDist, pick } from '../../../shared/util.js';
+import { GAME } from '../../../shared/config.js';
 
 const dist2 = (a, b) => Math.abs(a.cx - b.cx);
 // '#rrggbb' + alpha

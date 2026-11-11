@@ -8,7 +8,7 @@ import path from 'node:path';
 import { config, ROOT } from './config.js';
 import { openDb } from './db.js';
 import { hashPassword, verifyPassword, signToken, verifyToken, loadSecret } from './auth.js';
-import { GAME } from '../../client/src/config.js'; // game rules shared with the client
+import { GAME } from '../../shared/config.js'; // game rules shared with the client
 import { attachRealtime } from './realtime.js';
 
 const DEV = process.argv.includes('--dev');
@@ -208,9 +208,11 @@ function serveStatic(req, res, urlPath) {
   let p;
   try { p = decodeURIComponent(urlPath.split('?')[0]); } catch { res.writeHead(400, baseHeaders(req)); return res.end(); }
   if (p.endsWith('/')) p += 'index.html';
-  const file = path.normalize(path.join(STATIC_DIR, p));
-  // block escaping the client folder (../), hidden files (.env, .git) and null bytes
-  if (!file.startsWith(STATIC_DIR + path.sep) || p.includes('\0') || p.split('/').some((seg) => seg.startsWith('.'))) {
+  // dev mode loads real ES modules, and the client imports the code it shares with the server from /shared/
+  const base = DEV && p.startsWith('/shared/') ? ROOT : STATIC_DIR;
+  const file = path.normalize(path.join(base, p));
+  // block escaping the served folder (../), hidden files (.env, .git) and null bytes
+  if (!file.startsWith(base + path.sep) || p.includes('\0') || p.split('/').some((seg) => seg.startsWith('.'))) {
     res.writeHead(404, baseHeaders(req)); return res.end();
   }
   fs.stat(file, (err, st) => {

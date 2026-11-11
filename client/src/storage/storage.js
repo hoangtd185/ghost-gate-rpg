@@ -3,7 +3,7 @@
 //  2. CloudStorage – running inside a Claude artifact link: saved to the artifact database
 //  3. LocalStore   – file opened directly: saved in the browser (localStorage)
 // All three share one interface: list(), create(ch), save(ch), remove(id)
-import { GAME } from '../config.js';
+import { GAME } from '../../../shared/config.js';
 
 function withTimeout(promise, ms, fallback) {
   return Promise.race([promise, new Promise((r) => setTimeout(() => r(fallback), ms))]);

@@ -5,8 +5,8 @@ import { makeHi, shade } from './draw.js';
 export const BG_S = 2;
 const bgCanvas = (w, h) => makeHi(w, h, BG_S);
 export function drawLayer(ctx, img, x) { ctx.drawImage(img, x, 0, img.width / BG_S, img.height / BG_S); }
-import { seeded } from '../engine/util.js';
-import { GROUND_Y } from '../data/maps.js';
+import { seeded } from '../../../shared/util.js';
+import { GROUND_Y } from '../../../shared/data/maps.js';
 
 export const VIEW_W = 640, VIEW_H = 360;
 

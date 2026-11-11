@@ -1,8 +1,8 @@
 // Picks NPC lines by context, without repeating the line just said
-import { CHATTER, BANTER } from '../data/chatter.js';
-import { CLASSES } from '../data/classes.js';
-import { STAT_NAMES } from '../data/items.js';
-import { questStatus, entryName, lineVisible } from './character.js';
+import { CHATTER, BANTER } from '../../../shared/data/chatter.js';
+import { CLASSES } from '../../../shared/data/classes.js';
+import { STAT_NAMES } from '../../../shared/data/items.js';
+import { questStatus, entryName, lineVisible } from '../../../shared/rules/character.js';
 
 export function isNight() {
   const h = new Date().getHours();

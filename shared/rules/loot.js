@@ -8,7 +8,7 @@ import { RECIPES } from '../data/recipes.js';
 import { CLASSES } from '../data/classes.js';
 import { GAME } from '../config.js';
 import { rollEquip, resolveItemId } from './character.js';
-import { chance } from '../engine/util.js';
+import { chance } from '../util.js';
 
 // Extra drops that every elite carries on top of its species' table
 export const ELITE_DROPS = [['GEM1', 0.6], ['stone', 0.7], ['stone', 0.3], ['protect', 0.06], ['out_jade_lotus', 0.004], ['out_wisp_hood', 0.004], ['out_peach_fairy', 0.002], ['mat_dew', 0.08]];

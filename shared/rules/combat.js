@@ -4,7 +4,7 @@
 import { SKILLS, CLASSES } from '../data/classes.js';
 import { elementMult } from '../data/elements.js';
 import { GAME } from '../config.js';
-import { rand } from '../engine/util.js';
+import { rand } from '../util.js';
 
 // Damage multiplier of a skill at the character's level of it
 export function skillMult(ch, sid) {

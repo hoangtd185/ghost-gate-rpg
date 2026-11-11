@@ -1,7 +1,7 @@
 // Realtime connection: our position, other players and chat (stage 1); kill reports, server drops, pickups,
 // item changes and trades (stage 2). Only used with the Node server backend (ApiStorage).
 // Reconnects automatically with backoff; on reconnect the server replays item changes we missed.
-import { GAME } from '../config.js';
+import { GAME } from '../../../shared/config.js';
 import { RemotePlayer } from '../game/entities.js';
 
 const NET = GAME.net;

@@ -11,7 +11,7 @@
 //   alpha      opacity (ghostly capes)
 //   lining     inner color, visible where the cape folds over
 //   fx         particles shed while moving: { c, shape: 'petal' | 'star' | 'ember' | 'snow' | 'wisp' } (spawned by world.js)
-import { GAME } from '../config.js';
+import { GAME } from '../../../shared/config.js';
 import { shade, rgba, OUTLINE } from './draw.js';
 
 const C = GAME.cape;

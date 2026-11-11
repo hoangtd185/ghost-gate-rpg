@@ -110,7 +110,7 @@ describe('multiplayer presence and chat', { timeout: 180_000 }, () => {
 
   it('a flood of map entries is throttled, and the last one still gets its snapshot', async () => {
     const { WebSocket } = await import('ws');
-    const { newCharacter } = await import('../../client/src/game/character.js');
+    const { newCharacter } = await import('../../shared/rules/character.js');
     const { token } = await server.api('auth/register', { username: uniqueName('flood'), password: 'matkhau99' });
     const ch = (await server.api('characters', { character: newCharacter('Flood' + (Date.now() % 1e4), 'swordsman') }, token)).character;
     const ws = new WebSocket(server.url.replace('http', 'ws') + 'ws');
@@ -128,7 +128,7 @@ describe('multiplayer presence and chat', { timeout: 180_000 }, () => {
 
   it('"saved" is throttled to one database read per second, and a later one is not lost', async () => {
     const { WebSocket } = await import('ws');
-    const { newCharacter } = await import('../../client/src/game/character.js');
+    const { newCharacter } = await import('../../shared/rules/character.js');
     const open = async (tag) => {
       const { token } = await server.api('auth/register', { username: uniqueName(tag), password: 'matkhau99' });
       const ch = (await server.api('characters', { character: newCharacter(tag + (Date.now() % 1e4), 'swordsman') }, token)).character;

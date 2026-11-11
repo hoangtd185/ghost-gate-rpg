@@ -2,8 +2,8 @@
 // moving, never flips over the head, restarts after a teleport).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GAME } from '../../client/src/config.js';
-import { ITEMS, GEM_SLOTS, isLookSlot } from '../../client/src/data/items.js';
+import { GAME } from '../../shared/config.js';
+import { ITEMS, GEM_SLOTS, isLookSlot } from '../../shared/data/items.js';
 import { CapeCloth } from '../../client/src/gfx/cape.js';
 
 const CAPES = Object.entries(ITEMS).filter(([, it]) => it.slot === 'cape');

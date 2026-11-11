@@ -7,10 +7,10 @@ import { GameUI } from './ui/hud.js';
 import { Screens } from './ui/screens.js';
 import { createStorage, SaveQueue } from './storage/storage.js';
 import { buildMapGraphics, drawLayer, VIEW_W, VIEW_H } from './gfx/backgrounds.js';
-import { MAPS } from './data/maps.js';
+import { MAPS } from '../../shared/data/maps.js';
 import { monsterSheet } from './gfx/monsters.js';
 import { drawFrame } from './gfx/draw.js';
-import { GAME } from './config.js';
+import { GAME } from '../../shared/config.js';
 import { Realtime } from './net/realtime.js';
 
 const stage = document.getElementById('stage');

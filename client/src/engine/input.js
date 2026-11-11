@@ -1,5 +1,5 @@
 // Keyboard + virtual touch buttons
-import { GAME } from '../config.js';
+import { GAME } from '../../../shared/config.js';
 const KEY_ACTIONS = {
   ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
   Space: 'jump', KeyX: 'jump',

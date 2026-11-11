@@ -2,17 +2,17 @@
 // Catches typos and half-done renames before they reach the game.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GAME } from '../../client/src/config.js';
-import { CLASSES, SKILLS, PASSIVES } from '../../client/src/data/classes.js';
-import { ITEMS, SLOT_NAMES } from '../../client/src/data/items.js';
-import { MONSTERS } from '../../client/src/data/monsters.js';
-import { MAPS } from '../../client/src/data/maps.js';
-import { NPCS, QUESTS } from '../../client/src/data/npcs.js';
-import { NAMED, AFFIXES, ELITE_POOL } from '../../client/src/data/affixes.js';
-import { RECIPES } from '../../client/src/data/recipes.js';
-import { MAIN_ORDER, SCENES, SPEAKERS } from '../../client/src/data/story.js';
-import { CHATTER, BANTER } from '../../client/src/data/chatter.js';
-import { LEGACY_CLS, LEGACY_MAP, LEGACY_PET, LEGACY_QUEST, legacyItem, legacySkill } from '../../client/src/data/legacy.js';
+import { GAME } from '../../shared/config.js';
+import { CLASSES, SKILLS, PASSIVES } from '../../shared/data/classes.js';
+import { ITEMS, SLOT_NAMES } from '../../shared/data/items.js';
+import { MONSTERS } from '../../shared/data/monsters.js';
+import { MAPS } from '../../shared/data/maps.js';
+import { NPCS, QUESTS } from '../../shared/data/npcs.js';
+import { NAMED, AFFIXES, ELITE_POOL } from '../../shared/data/affixes.js';
+import { RECIPES } from '../../shared/data/recipes.js';
+import { MAIN_ORDER, SCENES, SPEAKERS } from '../../shared/data/story.js';
+import { CHATTER, BANTER } from '../../shared/data/chatter.js';
+import { LEGACY_CLS, LEGACY_MAP, LEGACY_PET, LEGACY_QUEST, legacyItem, legacySkill } from '../../shared/data/legacy.js';
 
 // Drop/reward tokens: 'W2' = class weapon tier 2, 'GEM1' = random gem grade 1
 const itemExists = (id) => !!ITEMS[id] || /^W[1-7]$/.test(id) || /^GEM[1-3]$/.test(id);
@@ -119,7 +119,7 @@ test('legacy ids migrate to ids that exist', () => {
 });
 
 test('world quest chains: steps, branches, choices and NPCs fit together', async () => {
-  const { WORLD_CHAINS } = await import('../../client/src/data/world.js');
+  const { WORLD_CHAINS } = await import('../../shared/data/world.js');
   const tones = Object.values(WORLD_CHAINS).map((c) => c.tone);
   assert.ok(tones.filter((t) => t === 'light').length >= 2 && tones.filter((t) => t === 'dark').length >= 2, 'cheerful and dark stories');
   const onMap = new Map(); // npc id -> map entry

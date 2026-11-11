@@ -1,9 +1,9 @@
 // Character model: EXP curve, level-up points, equipment rolls, save migration.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GAME } from '../../client/src/config.js';
-import { ITEMS } from '../../client/src/data/items.js';
-import { newCharacter, normalizeCharacter, expToNext, gainExp, rollEquip, calcStats } from '../../client/src/game/character.js';
+import { GAME } from '../../shared/config.js';
+import { ITEMS } from '../../shared/data/items.js';
+import { newCharacter, normalizeCharacter, expToNext, gainExp, rollEquip, calcStats } from '../../shared/rules/character.js';
 
 // Run fn with Math.random returning a fixed value (deterministic rolls)
 function withRandom(value, fn) {

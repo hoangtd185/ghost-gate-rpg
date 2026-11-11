@@ -1,13 +1,13 @@
 // Out-of-game screens: login, character select, character creation
-import { CLASSES, SKILLS } from '../data/classes.js';
-import { MAPS } from '../data/maps.js';
-import { STAT_NAMES } from '../data/items.js';
+import { CLASSES, SKILLS } from '../../../shared/data/classes.js';
+import { MAPS } from '../../../shared/data/maps.js';
+import { STAT_NAMES } from '../../../shared/data/items.js';
 import { humanoidSheet, HUM_W, HUM_H } from '../gfx/humanoid.js';
 import { drawFrame } from '../gfx/draw.js';
-import { newCharacter, normalizeCharacter } from '../game/character.js';
+import { newCharacter, normalizeCharacter } from '../../../shared/rules/character.js';
 import { mergeOutbox } from '../storage/storage.js';
 import { lookFor } from '../game/entities.js';
-import { escapeHtml } from '../engine/util.js';
+import { escapeHtml } from '../../../shared/util.js';
 
 export class Screens {
   constructor(root, storage, onPlay) {
