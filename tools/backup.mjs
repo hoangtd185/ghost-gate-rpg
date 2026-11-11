@@ -4,6 +4,7 @@
 // `VACUUM INTO` copies a consistent snapshot while the game keeps running (WAL mode); the copy is checked with
 // `PRAGMA integrity_check` before it is compressed, so a corrupt snapshot is never kept as a backup.
 import { DatabaseSync } from 'node:sqlite';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,7 +12,8 @@ import zlib from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
-const NAME_RE = /^game-\d{8}T\d{6}Z\.db\.gz$/;
+// game-<UTC time>-<4 random hex>.db.gz: the suffix keeps two backups taken in the same second apart
+const NAME_RE = /^game-\d{8}T\d{6}Z(?:-[0-9a-f]{4})?\.db\.gz$/;
 const TABLES = ['users', 'characters', 'items', 'quests'];
 
 // Opens a database file read-only and returns { integrity: 'ok' | message, counts: { table: rows } }
@@ -33,28 +35,36 @@ const stamp = (d = new Date()) => d.toISOString().replace(/[-:]/g, '').replace(/
 export async function createBackup(dbFile, outDir, { keep = 7, now = new Date() } = {}) {
   if (!fs.existsSync(dbFile)) throw new Error(`No database at ${dbFile}`);
   fs.mkdirSync(outDir, { recursive: true });
-  const plain = path.join(outDir, `.tmp-${process.pid}.db`);
-  const target = path.join(outDir, `game-${stamp(now)}.db.gz`);
-  fs.rmSync(plain, { force: true });
-  const db = new DatabaseSync(dbFile);
+  // a private work folder per call, so two backups running at once never share a snapshot file
+  const work = fs.mkdtempSync(path.join(outDir, '.tmp-'));
+  const plain = path.join(work, 'game.db');
+  const target = path.join(outDir, `game-${stamp(now)}-${crypto.randomBytes(2).toString('hex')}.db.gz`);
   try {
-    db.exec('PRAGMA busy_timeout = 10000');
-    db.prepare('VACUUM INTO ?').run(plain);
-  } finally { db.close(); }
-  try {
+    const db = new DatabaseSync(dbFile);
+    try {
+      db.exec('PRAGMA busy_timeout = 10000');
+      db.prepare('VACUUM INTO ?').run(plain);
+    } finally { db.close(); }
     const { integrity, counts } = inspect(plain);
     if (integrity !== 'ok') throw new Error(`The snapshot failed its integrity check: ${integrity}`);
     await pipeline(fs.createReadStream(plain), zlib.createGzip({ level: 9 }), fs.createWriteStream(target + '.part', { mode: 0o600 }));
     fs.renameSync(target + '.part', target); // a half-written file never has the final name
-    const removed = prune(outDir, keep);
-    return { file: target, bytes: fs.statSync(target).size, counts, removed };
-  } finally { fs.rmSync(plain, { force: true }); }
+    const bytes = fs.statSync(target).size;
+    const removed = prune(outDir, keep, path.basename(target));
+    return { file: target, bytes, counts, removed };
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+    fs.rmSync(target + '.part', { force: true });
+  }
 }
 
-// Keeps the newest `keep` backups in `dir` (by file name), returns the names removed
-export function prune(dir, keep) {
+// Keeps the newest `keep` backups in `dir` (by file name), returns the names removed. `protect` is a file that was just
+// written: it always stays and counts as one of the `keep` (names made in the same second are not in time order).
+export function prune(dir, keep, protect = null) {
   const all = fs.readdirSync(dir).filter((f) => NAME_RE.test(f)).sort();
-  const old = all.slice(0, Math.max(0, all.length - Math.max(1, keep)));
+  const others = all.filter((f) => f !== protect);
+  const room = Math.max(1, keep) - (protect && all.includes(protect) ? 1 : 0);
+  const old = others.slice(0, Math.max(0, others.length - room));
   for (const f of old) fs.rmSync(path.join(dir, f), { force: true });
   return old;
 }
@@ -80,7 +90,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     }
     const keepAt = args.indexOf('--keep');
     const keep = keepAt >= 0 ? Math.floor(+args[keepAt + 1]) : 7;
-    const [dbFile, outDir] = args.filter((a, i) => !a.startsWith('--') && i !== keepAt + 1);
+    // positional arguments; the number after --keep is not one of them (and without --keep nothing is skipped)
+    const [dbFile, outDir] = args.filter((a, i) => !a.startsWith('--') && !(keepAt >= 0 && i === keepAt + 1));
     if (!dbFile || !outDir || !(keep >= 1)) { console.error('Usage: node tools/backup.mjs <game.db> <backup dir> [--keep N]  |  --verify <file.db.gz>'); process.exit(2); }
     const r = await createBackup(dbFile, outDir, { keep });
     console.log(`backup: ${r.file} (${(r.bytes / 1024).toFixed(0)} KB)`, r.counts, r.removed.length ? `removed ${r.removed.length} old` : '');

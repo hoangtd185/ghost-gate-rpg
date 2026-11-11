@@ -6,9 +6,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../../server/src/db.js';
 import { createBackup, verifyBackup, prune } from '../../tools/backup.mjs';
+
+const CLI = fileURLToPath(new URL('../../tools/backup.mjs', import.meta.url));
+const NAME = /^game-\d{8}T\d{6}Z-[0-9a-f]{4}\.db\.gz$/;
 
 describe('database backup', () => {
   let dir, dbFile, db;
@@ -24,7 +29,7 @@ describe('database backup', () => {
   it('writes a gzip snapshot that has the same data and passes the integrity check', async () => {
     const out = path.join(dir, 'backups');
     const r = await createBackup(dbFile, out, { keep: 3 });
-    assert.match(path.basename(r.file), /^game-\d{8}T\d{6}Z\.db\.gz$/);
+    assert.match(path.basename(r.file), NAME);
     assert.equal(r.counts.users, 2);
     assert.ok(r.bytes > 0);
     assert.deepEqual(fs.readdirSync(out), [path.basename(r.file)], 'no temp files left behind');
@@ -50,10 +55,31 @@ describe('database backup', () => {
   it('keeps only the newest N backups', async () => {
     const out = path.join(dir, 'rotate');
     for (let i = 0; i < 4; i++) await createBackup(dbFile, out, { keep: 2, now: new Date(Date.UTC(2026, 10, 1 + i, 3, 0, 0)) });
-    assert.deepEqual(fs.readdirSync(out).sort(), ['game-20261103T030000Z.db.gz', 'game-20261104T030000Z.db.gz']);
+    const days = () => fs.readdirSync(out).filter((f) => NAME.test(f)).map((f) => f.slice(5, 13)).sort();
+    assert.deepEqual(days(), ['20261103', '20261104']);
     fs.writeFileSync(path.join(out, 'notes.txt'), 'not a backup');
-    assert.deepEqual(prune(out, 1), ['game-20261103T030000Z.db.gz']);
+    assert.equal(prune(out, 1).length, 1);
+    assert.deepEqual(days(), ['20261104']);
     assert.ok(fs.existsSync(path.join(out, 'notes.txt')), 'other files are left alone');
+  });
+
+  it('two backups at once, even in the same second, get their own files and both are valid', async () => {
+    const out = path.join(dir, 'parallel');
+    const now = new Date(Date.UTC(2026, 10, 5, 3, 0, 0));
+    const [a, b] = await Promise.all([createBackup(dbFile, out, { now }), createBackup(dbFile, out, { now })]);
+    assert.notEqual(a.file, b.file);
+    assert.equal((await verifyBackup(a.file)).integrity, 'ok');
+    assert.equal((await verifyBackup(b.file)).integrity, 'ok');
+    assert.equal(fs.readdirSync(out).filter((f) => f.startsWith('.tmp-')).length, 0, 'work folders are removed');
+  });
+
+  it('the command line works without --keep (default retention) and with it', () => {
+    const out = path.join(dir, 'cli');
+    const run = (...args) => execFileSync(process.execPath, [CLI, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    assert.match(run(dbFile, out), /^backup: /);
+    assert.match(run(dbFile, out, '--keep', '1'), /removed 1 old/);
+    assert.equal(fs.readdirSync(out).filter((f) => NAME.test(f)).length, 1);
+    assert.throws(() => run(), /./, 'no arguments is an error');
   });
 
   it('fails clearly when the database is missing or the backup file is damaged', async () => {
