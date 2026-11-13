@@ -56,11 +56,16 @@ describe('event schedule', () => {
 // A test server: a fake clock, players, a database that records grants
 function setup(opts = {}) {
   let t = opts.t ?? SAT - 10 * MIN;
-  const sent = [], all = [], grants = [], pushed = [], players = new Map();
+  const sent = [], all = [], grants = [], exps = [], marked = [], closed = [], pushed = [], players = new Map();
   let clear = () => false;
-  const db = { grantItems: (reqs) => grants.push(...reqs), getCharacter: () => ({ cls: 'swordsman' }) };
+  // a fake database: records what the event grants, remembers the windows that ran
+  const db = {
+    eventWindows: () => opts.windows || [], markEventWindow: (d, start) => marked.push([d, start]),
+    grantEventRewards: ({ items, exp }) => { grants.push(...items); exps.push(...exp); return items.map(() => 'ok'); },
+    getCharacter: () => ({ cls: 'swordsman', level: 20 }), pendingCount: () => 0, claimPending: () => ({ delivered: [], left: 0 }),
+  };
   const dg = createDungeons({ players, send: (s, m) => sent.push({ to: s.id, ...m }), toAll: (m) => all.push(m), cleared: (room, targets) => clear(room, targets),
-    db, pushChanges: (s) => pushed.push(s.id), now: () => t, ...opts });
+    closeRooms: (id) => closed.push(id), db, pushChanges: (s) => pushed.push(s.id), now: () => t, ...opts });
   const session = (id, lv = 20) => {
     const s = { id, name: id, ch: { level: lv, cls: 'swordsman' }, map: D.from, room: D.from, x: KEEPER_X - 7, sy: GROUND_Y, dungeon: null };
     players.set(id, s);
@@ -70,7 +75,7 @@ function setup(opts = {}) {
   const call = (s, type, m = {}) => { s.dgAt = 0; dg.handle(s, { t: type, ...m }); return last(s.id); };
   const arrive = (s, map) => { s.map = map; s.room = dg.room(s, map); };
   const atExit = (s) => { const ex = MAPS[s.map].exit; s.x = ex.x - 7; s.sy = ex.y; };
-  return { dg, sent, all, grants, pushed, players, session, last, call, arrive, atExit,
+  return { dg, sent, all, grants, exps, marked, closed, pushed, players, session, last, call, arrive, atExit,
     set: (x) => { t = x; }, at: () => t, setClear: (f) => { clear = f; } };
 }
 
@@ -187,6 +192,10 @@ describe('the event on the server', () => {
     const end = T.sent.find((m) => m.to === 'a' && m.t === 'ev_end');
     assert.deepEqual([end.win, end.rank, end.dmg], [true, 1, 1100]);
     assert.ok(end.exp > 0 && end.items.length === per('a').length);
+    assert.equal(end.queued, 0);
+    assert.ok(T.exps.some((x) => x.charId === 'a' && x.n === end.exp && x.reqId === `ev:${run.id}:a:exp`), 'EXP is a ledger row with its own request id');
+    assert.deepEqual(T.marked, [['yangak', SAT]], 'the window is saved as used');
+    assert.deepEqual(T.closed, [run.id], 'the run’s floors are released');
     assert.ok(T.pushed.includes('a') && !T.pushed.includes('late'));
     assert.deepEqual([T.last('a').t, T.last('a').closed, T.last('a').map], ['dg_go', true, D.from], 'sent back to the keeper');
     assert.equal(T.players.get('a').dungeon, null);
@@ -199,6 +208,19 @@ describe('the event on the server', () => {
     const a = T.players.get('a');
     T.arrive(a, D.from); a.x = KEEPER_X - 7;
     assert.equal(T.call(a, 'dg_enter', { d: 'yangak' }).why, 'closed');
+  });
+});
+
+describe('a restart in the same window', () => {
+  it('does not start another run once the window was used (the database remembers it)', () => {
+    const T = setup({ t: SAT + 5 * MIN, windows: [SAT] });
+    after(() => T.dg.close());
+    T.dg.tick();
+    assert.equal(T.dg.run('yangak'), null, 'the window already ran');
+    const T2 = setup({ t: SAT + 5 * MIN, windows: [] });
+    after(() => T2.dg.close());
+    T2.dg.tick();
+    assert.ok(T2.dg.run('yangak'), 'a window that did not run still opens');
   });
 });
 

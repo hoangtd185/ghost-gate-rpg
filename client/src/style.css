@@ -516,3 +516,4 @@ button.sock.full:hover { outline: 2px solid #ff9a8a; }
 .evitem.exp { color: #8fe8a0; }
 .evend button { margin-top: 1em; padding: .45em 1.4em; border-radius: 999px; border: 1px solid #e8b05a; background: linear-gradient(#d89a3a, #a3661f); font-weight: 700; }
 @media (max-width: 760px) { .hud-event { top: 6.5em; width: 12em; font-size: .75em; } }
+.evend .evnote { margin: .7em 0 0; color: #ffb27a; font-size: .85em; }

@@ -135,6 +135,7 @@ export const GAME = {
     exitRange: 50, // and this close to a floor's exit gate to go up
     minMsgMs: 400, // event requests (enter, next) accepted at most this often per player
     lostRetryMs: 3000, // a client stuck on a floor it may not be on is sent home at most this often
+    resumeMs: 10000, // a reconnecting player may stay in the village this long while the server puts them back on their floor
     reviveHp: 0.5, // dying in the event: back on your feet at the floor's start with this share of HP/MP, no EXP lost
     reviveInvuln: 3, // seconds of invulnerability after that
     summonMax: 4, // a summoning object (pillar) keeps at most this many minions alive

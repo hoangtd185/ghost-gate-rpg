@@ -9,6 +9,7 @@ import { SCHEMA, migrate } from './db/schema.js';
 
 import { ItemsDb } from './db/items.js';
 import { PremiumDb } from './db/premium.js';
+import { EventsDb } from './db/events.js';
 
 export class GameDb {
   constructor(db) {
@@ -37,7 +38,13 @@ export class GameDb {
       moveItem: db.prepare('UPDATE items SET character_id = ?, equip_slot = NULL, position = ? WHERE uid = ?'),
       ledgerAdd: db.prepare('INSERT INTO item_ledger (at, character_id, rev, kind, item_uid, item_id, qty, entry, reason, ref, req_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
       ledgerByReq: db.prepare('SELECT * FROM item_ledger WHERE req_id = ?'),
-      ledgerSince: db.prepare("SELECT rev, kind, item_uid, item_id, qty, entry FROM item_ledger WHERE character_id = ? AND rev > ? AND kind IN ('gain', 'loss', 'gold', 'ingots') ORDER BY rev, id"),
+      ledgerSince: db.prepare("SELECT rev, kind, item_uid, item_id, qty, entry FROM item_ledger WHERE character_id = ? AND rev > ? AND kind IN ('gain', 'loss', 'gold', 'ingots', 'exp') ORDER BY rev, id"),
+      windowsOf: db.prepare('SELECT start FROM event_windows WHERE dungeon = ?'),
+      windowAdd: db.prepare('INSERT OR IGNORE INTO event_windows (dungeon, start) VALUES (?, ?)'),
+      pendingAdd: db.prepare('INSERT OR IGNORE INTO event_pending (req_id, character_id, item, ref, at) VALUES (?, ?, ?, ?, ?)'),
+      pendingOf: db.prepare('SELECT * FROM event_pending WHERE character_id = ? ORDER BY at, req_id'),
+      pendingDel: db.prepare('DELETE FROM event_pending WHERE req_id = ?'),
+      pendingCount: db.prepare('SELECT COUNT(*) AS n FROM event_pending WHERE character_id = ?'),
       ledgerOf: db.prepare('SELECT * FROM item_ledger WHERE character_id = ? ORDER BY id'),
       deleteChar: db.prepare('DELETE FROM characters WHERE id = ? AND user_id = ?'),
       itemsOf: db.prepare('SELECT * FROM items WHERE character_id = ? ORDER BY position'),
@@ -175,4 +182,4 @@ export function openDb(file) {
   return new GameDb(db);
 }
 
-Object.assign(GameDb.prototype, ItemsDb, PremiumDb);
+Object.assign(GameDb.prototype, ItemsDb, PremiumDb, EventsDb);

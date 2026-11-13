@@ -20,11 +20,12 @@ import { EventUI } from '../../client/src/ui/hud/event.js';
 import { PremiumUI } from '../../client/src/ui/premium.js';
 import { ItemsDb } from '../../server/src/db/items.js';
 import { PremiumDb } from '../../server/src/db/premium.js';
+import { EventsDb } from '../../server/src/db/events.js';
 
 const CLASSES = {
   GameWorld: { file: 'client/src/game/world.js', parts: { NetWorld, CombatWorld, DropsWorld, FxWorld, RenderWorld, EventWorld, EventGfxWorld } },
   GameUI: { file: 'client/src/ui/hud.js', parts: { PanelsUI, NpcUI, ForgeUI, TradeUI, ActionsUI, PremiumUI, EventUI } },
-  GameDb: { file: 'server/src/db.js', parts: { ItemsDb, PremiumDb } },
+  GameDb: { file: 'server/src/db.js', parts: { ItemsDb, PremiumDb, EventsDb } },
 };
 
 // method names declared directly in `class Name { ... }` (two-space indent), read from the source

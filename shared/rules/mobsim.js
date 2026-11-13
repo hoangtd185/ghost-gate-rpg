@@ -86,12 +86,14 @@ const mobRoomAbove = (m) => m.y > 90;
 
 // ===== The monsters of one map =====
 // opts: { make(id, x, standY, range, group, opt) -> monster (default MobState), spawn: spawn the map's groups (default true),
-//         fieldBosses: run field-boss timers (default true), poisonTick(m): host-side poison damage (default: absolute) }
+//         fieldBosses: run field-boss timers (default true), poisonTick(m): host-side poison damage (default: absolute),
+//         onDamage(by, dealt, m): a player's damage was applied (hits and poison ticks; the same number that goes to dmgBy) }
 export class MobSim {
   constructor(mapId, opts = {}) {
     this.mapId = mapId; this.map = MAPS[mapId];
     this.make = opts.make || ((...a) => new MobState(...a));
     this.poisonTick = opts.poisonTick || ((m) => this.damage(m, m.poisonDmg, m.poisonBy, { poison: true }));
+    this.onDamage = opts.onDamage || null;
     this.fieldBosses = opts.fieldBosses !== false;
     this.time = 0; this.nextUid = 1;
     this.monsters = []; this.timers = []; this.events = [];
@@ -203,6 +205,7 @@ export class MobSim {
     m.lastHitT = this.time;
     if (by && by.player) {
       m.dmgBy.set(by.id, (m.dmgBy.get(by.id) || 0) + dmg);
+      this.onDamage?.(by, dmg, m);
       const first = !m.aggro;
       m.hitByPlayer = true;
       if (!opts.poison || !m.aggro) { m.aggro = by.id; m.aggroT = 8; }

@@ -69,10 +69,12 @@ export function attachRealtime(server, { db, secret, event = {} }) {
   const parties = createParties({ players, send });
   const premium = createPremium({ db, send, pushChanges });
   const mobs = createMobs({ players, send, loot, parties, premium, onDamage: (s, n) => dungeons.onDamage(s, n), onDie: (room, m) => dungeons.onDie(room, m) });
-  const dungeons = createDungeons({ players, send, toAll, db, pushChanges, cleared: (room, targets) => mobs.cleared(room, targets), alwaysOpen: !!event.alwaysOpen, runSec: event.runSec || 0 });
+  const dungeons = createDungeons({ players, send, toAll, db, pushChanges, cleared: (room, targets) => mobs.cleared(room, targets), closeRooms: (runId) => mobs.closeRun(runId), alwaysOpen: !!event.alwaysOpen, runSec: event.runSec || 0 });
 
   function enterMap(s, map) {
-    if (!MAPS[map].dungeon) dungeons.left(s);
+    // a character that just reconnected starts in the village (its save never keeps an event floor): that first position
+    // is not an exit, the server is about to send it back to its floor (dungeons.onConnect). Later ones are.
+    if (!MAPS[map].dungeon && !(s.dgResumeUntil > Date.now())) dungeons.left(s);
     const room = dungeons.room(s, map);
     const same = s.room === room; // re-entering the same room: only the client itself needs the snapshot
     if (s.room && !same) toRoom(s.room, { t: 'leave', id: s.id }, s);
@@ -92,6 +94,7 @@ export function attachRealtime(server, { db, secret, event = {} }) {
     if (!MAPS[map]) return;
     // a dungeon floor the player may not be on (skipping ahead, an instance that closed): ignored, sent home
     if (!dungeons.allows(s, map)) return dungeons.sendHome(s, map);
+    if (MAPS[map].dungeon) s.dgResumeUntil = 0; // back on its floor: the resume is over
     s.x = clamp(num(m.x), 0, MAPS[map].width); s.y = clamp(num(m.y), -200, 400);
     s.vx = clamp(num(m.vx), -1000, 1000); s.f = m.f < 0 ? -1 : 1; s.a = ANIMS.has(m.a) ? m.a : 'idle';
     s.g = m.g ? 1 : 0; s.sy = clamp(num(m.sy, s.y + 32), 0, 400); s.dead = !!m.d; // for the monsters' AI
@@ -111,6 +114,7 @@ export function attachRealtime(server, { db, secret, event = {} }) {
     if (ch.level !== lvBefore) parties.touch(s.id);
     const app = appearanceOf(ch);
     if (JSON.stringify(app) !== JSON.stringify(s.app)) { s.app = app; if (s.room) toRoom(s.room, { t: 'look', id: s.id, ...app }, s); }
+    dungeons.claim(s); // the client may have made room in its bag: deliver queued event rewards
   }
 
   function leave(s) {
@@ -154,6 +158,8 @@ export function attachRealtime(server, { db, secret, event = {} }) {
         for (const st of dungeons.stateFor()) send(s, st); // is a server event open?
         // items or gold changed on the server while this client was away (a pickup whose answer was lost, a trade)
         pushChanges(s);
+        s.dgResumeUntil = s.dungeon ? Date.now() + GAME.dungeon.resumeMs : 0;
+        dungeons.onConnect(s); // back into its event run, and queued event rewards
         broadcastOnline();
         return;
       }

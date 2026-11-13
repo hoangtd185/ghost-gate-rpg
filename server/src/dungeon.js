@@ -9,7 +9,9 @@
 //   dg_enter { d }  at the keeper -> dg_go { inst, d, floors, map, floor, t0, now } (the highest floor reached)
 //   dg_next {}      at a floor's exit -> dg_go for the next floor
 //   -> ev_state { open, start, end, now } (on connect, when it opens/closes) · ev_rank { top, rank, dmg, end, now }
-//   -> ev_end { win, top, rank, dmg, items, exp } then dg_go { map: from, x, closed: true } for those still inside
+//   -> ev_end { win, top, rank, dmg, items, queued, exp } then dg_go { map: from, x, closed: true } for those still inside
+//      (items: what was delivered; queued: rewards kept for later because the bag was full; exp: shown only, it arrives as
+//      a ledger row through `chg`) · ev_claim { items, left } when queued rewards are delivered later
 //   errors dg_err { why: far | level | closed | not_clear | exit | none | unknown }
 import crypto from 'node:crypto';
 import { DUNGEONS, rollFloors, rankTier, eventWindow } from '../../shared/data/dungeons.js';
@@ -25,11 +27,13 @@ const sys = (text) => ({ t: 'chat', ch: 'world', id: 'sys', from: 'Hệ thống'
 // opts.alwaysOpen: the event is open all the time, a run starts when someone enters (tests, local play) ·
 // opts.runSec: a run lasts this long instead
 // of until the window closes (tests)
-export function createDungeons({ players, send, toAll, cleared, db, pushChanges, alwaysOpen = false, runSec = 0, now = () => Date.now() }) {
+export function createDungeons({ players, send, toAll, cleared, closeRooms = () => {}, db, pushChanges, alwaysOpen = false, runSec = 0, now = () => Date.now() }) {
   const runs = new Map(); // dungeon id -> the current run
   const byId = new Map(); // run id -> run
   const announced = new Set(); // `${window start}:${minutes}` warnings already sent
-  const finishedAt = new Map(); // dungeon id -> the window start of the last finished run (no second run in it)
+  // windows that already ran (`${dungeon id}:${window start}`): no second run in one, also after a restart (saved in the database)
+  const done = new Set();
+  if (!alwaysOpen) for (const id of Object.keys(DUNGEONS)) for (const start of db.eventWindows(id)) done.add(`${id}:${start}`);
   const err = (s, why) => send(s, { t: 'dg_err', why });
   const inside = (run) => [...players.values()].filter((s) => s.dungeon === run.id);
 
@@ -42,7 +46,7 @@ export function createDungeons({ players, send, toAll, cleared, db, pushChanges,
   function startRun(id, win, t) {
     const d = DUNGEONS[id];
     const run = { id: crypto.randomBytes(5).toString('hex'), d: id, floors: rollFloors(d), reached: 0, t0: {}, members: new Set(),
-      joined: new Map(), dmg: new Map(), start: t, end: runSec ? t + runSec * 1000 : win.end, done: false, winStart: win.start };
+      joined: new Map(), at: new Map(), dmg: new Map(), start: t, end: runSec ? t + runSec * 1000 : win.end, done: false, winStart: win.start };
     runs.set(id, run); byId.set(run.id, run);
     toAll(sys(`${d.name} đã mở! Gặp Thủ Ải ở ${MAPS[d.from].name} để tham gia (cấp ${d.lv}+).`));
     toAll({ t: 'ev_state', d: id, open: true, start: run.start, end: run.end, now: t });
@@ -55,6 +59,7 @@ export function createDungeons({ players, send, toAll, cleared, db, pushChanges,
     run.reached = Math.max(run.reached, i);
     run.t0[map] ??= now();
     run.members.add(s.id);
+    run.at.set(s.id, i);
     if (!run.joined.has(s.id)) run.joined.set(s.id, { name: s.name });
     s.dungeon = run.id;
     send(s, { t: 'dg_go', inst: run.id, d: run.d, floors: run.floors, map, floor: i, t0: run.t0[map], now: now() });
@@ -64,33 +69,48 @@ export function createDungeons({ players, send, toAll, cleared, db, pushChanges,
     return [...run.dmg.entries()].sort((a, b) => b[1] - a[1]).map(([id, dmg]) => ({ id, name: run.joined.get(id)?.name || '?', dmg }));
   }
 
-  // The run is over: everyone who took part gets a reward (win or lose), the top N by damage get more
+  // The run is over: everyone who took part gets a reward (win or lose), the top N by damage get more.
+  // Items and EXP are committed in one transaction (ledger rows, so they reach the client exactly once, online through
+  // `chg` and offline at the next login). An item that does not fit the bag is kept (event_pending) and delivered later.
   function finish(run, win) {
     if (run.done) return;
     run.done = true;
     runs.delete(run.d); byId.delete(run.id);
-    finishedAt.set(run.d, run.winStart);
+    if (!alwaysOpen) { // the window is used up, before anything else can start a second run in it
+      done.add(`${run.d}:${run.winStart}`);
+      try { db.markEventWindow(run.d, run.winStart); } catch (e) { console.error('event window not saved', e); }
+    }
     const d = DUNGEONS[run.d], R = d.rewards, rank = ranking(run), top = rank.slice(0, D.topN);
-    const reqs = [], per = new Map();
+    const reqs = [], exps = [], per = new Map();
     for (const [charId] of run.joined) {
       const s = players.get(charId);
       const place = rank.findIndex((r) => r.id === charId) + 1; // 0 = dealt no damage
       const tier = place > 0 && place <= D.topN ? rankTier(d, place) : null;
       const list = [...R.all.items, ...(win ? R.win.items : []), ...(tier ? tier.items : [])];
-      const cls = s?.ch?.cls || db.getCharacter(charId)?.cls || 'swordsman';
-      const items = rewardEntries(list, cls);
+      const saved = s?.ch || db.getCharacter(charId); // no live session: the stored character (class, level)
+      const items = rewardEntries(list, saved?.cls || 'swordsman');
+      const exp = Math.round(expToNext(saved?.level || 1) * (R.all.expShare + (win ? R.win.expShare : 0)));
+      const p = { place, exp, got: [], queued: 0 };
+      per.set(charId, p);
       items.forEach((item, i) => reqs.push({ charId, item, opts: { reason: 'event', ref: run.id, reqId: `ev:${run.id}:${charId}:${i}` } }));
-      per.set(charId, { place, items, share: R.all.expShare + (win ? R.win.expShare : 0) });
+      if (exp > 0) exps.push({ charId, n: exp, ref: run.id, reqId: `ev:${run.id}:${charId}:exp` });
     }
-    try { if (reqs.length) db.grantItems(reqs); } catch (e) { console.error('event rewards failed', e); }
+    let status;
+    try { status = db.grantEventRewards({ items: reqs, exp: exps }); } catch (e) { console.error('event rewards failed', e); status = reqs.map(() => 'lost'); }
+    reqs.forEach((r, i) => {
+      const p = per.get(r.charId);
+      if (status[i] === 'ok') p.got.push([r.item.id, r.item.qty]); else if (status[i] === 'queued') p.queued++;
+    });
     const topView = top.map(({ name, dmg }) => ({ name, dmg }));
-    for (const [charId, r] of per) {
+    for (const [charId, p] of per) {
       const s = players.get(charId);
-      if (!s) continue; // offline: the items are in their bag, the change replay brings them on the next login
+      if (!s) continue; // offline: items and EXP are in the ledger, the change replay brings them on the next login
+      if (p.queued) s.evPending = true;
       pushChanges(s);
-      send(s, { t: 'ev_end', d: run.d, win, top: topView, rank: r.place, dmg: run.dmg.get(charId) || 0, items: r.items.map((e) => [e.id, e.qty]), exp: Math.round(expToNext(s.ch?.level || 1) * r.share) });
+      send(s, { t: 'ev_end', d: run.d, win, top: topView, rank: p.place, dmg: run.dmg.get(charId) || 0, items: p.got, queued: p.queued, exp: p.exp });
       if (s.dungeon === run.id) { s.dungeon = null; send(s, { t: 'dg_go', map: d.from, x: keeperX(d), closed: true }); }
     }
+    closeRooms(run.id); // the floors' monsters are no longer needed (they were kept for the whole run)
     toAll(sys(win ? `${d.name}: Ngân Vệ Tướng đã bị đánh bại!${top[0] ? ` Sát thương cao nhất: ${top[0].name}.` : ''}` : `${d.name} đã kết thúc. Quỷ Thành vẫn đứng vững…`));
     toAll({ t: 'ev_state', d: run.d, open: false, now: now() });
   }
@@ -108,7 +128,7 @@ export function createDungeons({ players, send, toAll, cleared, db, pushChanges,
           if (win.start - t <= m * 60e3 && !announced.has(key)) { announced.add(key); toAll(sys(`${DUNGEONS[id].name} sẽ mở sau ${m} phút! Gặp Thủ Ải ở ${MAPS[DUNGEONS[id].from].name}.`)); }
         }
       }
-      if (win.open && !run && !alwaysOpen && finishedAt.get(id) !== win.start) run = startRun(id, win, t);
+      if (win.open && !run && !alwaysOpen && !done.has(`${id}:${win.start}`)) run = startRun(id, win, t);
       if (run && t >= run.end) finish(run, false);
     }
     if (t - rankT >= D.rankEverySec * 1000) {
@@ -193,6 +213,24 @@ export function createDungeons({ players, send, toAll, cleared, db, pushChanges,
       if (!m.def.final) return;
       const run = byId.get(String(room).split('#')[1]);
       if (run) finish(run, true);
+    },
+
+    // A character connected (hello): put it back on its floor if its run is still going (the client starts in the
+    // village, its saves never keep an event floor), and try to deliver event rewards that were queued for later.
+    onConnect(s) {
+      const run = byId.get(s.dungeon);
+      if (run) go(s, run, run.at.get(s.id) ?? run.reached);
+      else s.dungeon = null;
+      s.evPending = db.pendingCount(s.id) > 0;
+      this.claim(s);
+    },
+
+    // Deliver queued event rewards now that there may be bag space (called after a save, and on connect)
+    claim(s) {
+      if (!s.evPending) return;
+      const r = db.claimPending(s.id);
+      s.evPending = r.left > 0;
+      if (r.delivered.length) { pushChanges(s); send(s, { t: 'ev_claim', items: r.delivered, left: r.left }); }
     },
 
     // What a client that just connected needs to know

@@ -160,7 +160,7 @@ export class Realtime {
         break;
       case 'dg_go': w.dungeonGo(m); break;
       case 'dg_err': w.dungeonErr(m.why); break;
-      case 'ev_state': case 'ev_rank': case 'ev_end':
+      case 'ev_state': case 'ev_rank': case 'ev_end': case 'ev_claim':
         if (this.hooks.event) this.hooks.event(m);
         break;
       case 'kicked': this.hooks.toast('Nhân vật này vừa được mở ở nơi khác', 'warn'); break;

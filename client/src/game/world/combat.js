@@ -278,6 +278,9 @@ export const CombatWorld = {
       const k = this.stats.pas.killHeal / 100;
       ch.hp = Math.min(this.stats.maxHp, ch.hp + this.stats.maxHp * k); ch.mp = Math.min(this.stats.maxMp, ch.mp + this.stats.maxMp * k);
     }
+    // an offline practice run of a server event gives no EXP, gold, drops, Nguyên Bảo or quest credit (the death
+    // effects above and the floor state, which the simulation keeps, are already done)
+    if (this.dg && !this.net) { this.hooks.changed('bars'); return; }
     const exp = killExp(m.def.exp, ch.level, m.def.lv);
     this.giveExp(exp);
     // gold

@@ -37,10 +37,12 @@ export const EventUI = {
       if (this.open === 'npc') this.renderWin();
     } else if (m.t === 'ev_rank') {
       this.evRank = m;
+    } else if (m.t === 'ev_claim') {
+      // rewards that did not fit the bag at the end were kept and have just been delivered
+      this.toast(`Đã nhận ${m.items.length} phần thưởng sự kiện còn thiếu${m.left ? ` (còn ${m.left} chưa nhận được)` : ''}`, 'quest');
     } else if (m.t === 'ev_end') {
       this.evRank = null;
-      if (m.exp > 0) this.world?.giveExp(m.exp);
-      this.evEnd = m;
+      this.evEnd = m; // the EXP and items are applied from the server's item changes (chg), not from this message
       this.open = 'evend'; this.renderWin();
     }
     this.renderEvent();
@@ -66,12 +68,14 @@ export const EventUI = {
 
   winEvEnd() {
     const m = this.evEnd, d = DUNGEONS[m.d];
+    const dead = !!this.world?.player?.dead; // this window replaced the death window: keep a way to get up
     const rows = m.top.map((x, k) => `<li class="${k < 3 ? 'p' + (k + 1) : ''}${x.name === this.ch.name ? ' me' : ''}"><i>${k + 1}</i><b>${escapeHtml(x.name)}</b><span>${fmtNum(x.dmg)}</span></li>`).join('');
     const items = m.items.map(([id, q]) => `<span class="evitem">${escapeHtml(ITEMS[id]?.name || id)}${q > 1 ? ' ×' + q : ''}</span>`).join('');
     return `<div class="evend ${m.win ? 'win' : 'lose'}"><small>${escapeHtml(d?.name || '')}</small><h2>${m.win ? 'Chiến thắng!' : 'Sự kiện kết thúc'}</h2>
       <p>${m.win ? 'Ngân Vệ Tướng đã bị đánh bại.' : 'Quỷ Thành vẫn đứng vững… hẹn lần sau.'} Hạng của bạn: <b>${m.rank || '—'}</b> · ${fmtNum(m.dmg)} sát thương</p>
       <h3>Top ${GAME.dungeon.topN} sát thương</h3><ol class="evtop">${rows || '<li class="none">Không ai gây sát thương</li>'}</ol>
       <h3>Phần thưởng</h3><div class="evitems">${items}${m.exp ? `<span class="evitem exp">+${fmtNum(m.exp)} EXP</span>` : ''}</div>
-      <button data-act="close">Nhận thưởng</button></div>`;
+      ${m.queued ? `<p class="evnote">Túi đồ đầy: ${m.queued} phần thưởng được giữ lại, dọn chỗ trong túi rồi bạn sẽ nhận được.</p>` : ''}
+      ${dead ? '<button data-act="respawn">Hồi sinh tại làng</button>' : '<button data-act="close">Nhận thưởng</button>'}</div>`;
   },
 };

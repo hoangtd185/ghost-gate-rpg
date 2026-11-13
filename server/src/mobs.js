@@ -63,7 +63,9 @@ export function createMobs({ players, send, loot, parties, premium, onDamage, on
   function ensure(room, map) {
     let e = rooms.get(room);
     if (!e) {
-      e = { map, sim: new MobSim(map, { namedT: {} }), empty: 0, snapT: 0, last: new Map() };
+      // every credited player damage (hits and poison ticks) goes to the event ranking, the same number as dmgBy
+      const onHurt = (by, dealt) => { const s = players.get(by.id); if (s) onDamage?.(s, dealt); };
+      e = { map, sim: new MobSim(map, { namedT: {}, onDamage: onHurt }), empty: 0, snapT: 0, last: new Map() };
       e.sim.drain(); // initial spawns are sent with the room's monster list
       rooms.set(room, e);
     }
@@ -133,7 +135,8 @@ export function createMobs({ players, send, loot, parties, premium, onDamage, on
       const here = inRoom(room);
       if (!here.length) {
         e.empty = e.empty || now;
-        if (now - e.empty > MB.idleSec * 1000) rooms.delete(room);
+        // an event floor (`<map>#<run>`) keeps its monsters and what was cleared until its run ends (closeRun)
+        if (now - e.empty > MB.idleSec * 1000 && !room.includes('#')) rooms.delete(room);
         continue;
       }
       e.empty = 0;
@@ -187,7 +190,6 @@ export function createMobs({ players, send, loot, parties, premium, onDamage, on
       const { dmg, crit, em } = hitDamage(st, mult, mob.def, el, low);
       const by = { id: s.id, player: true, cx: s.x + 7 };
       const r = e.sim.damage(mob, dmg, by);
-      onDamage?.(s, r.dealt);
       // a poison cloud also poisons: 2 s of ticks at 30% of the skill
       if (sk.type === 'cloud' && !mob.dead) e.sim.poisonFor(mob, 2, hitDamage(st, mult * 0.3, mob.def, 'poison', low).dmg, by);
       toRoom(roomOf(s), { t: 'mhit', map: s.map, uid: mob.uid, by: s.id, dmg: r.dealt, ab: r.absorbed, crit, em, el });
@@ -206,6 +208,9 @@ export function createMobs({ players, send, loot, parties, premium, onDamage, on
       s.buffs.push({ sid, ...sk.buff, until: now + sk.dur * 1000 });
       s.stats = null;
     },
+
+    // The run is over: forget its floors
+    closeRun(runId) { for (const room of [...rooms.keys()]) if (room.endsWith('#' + runId)) rooms.delete(room); },
 
     // test helpers
     sim: (room) => rooms.get(room)?.sim || null,

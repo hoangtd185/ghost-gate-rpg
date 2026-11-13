@@ -67,7 +67,10 @@ describe('event (offline practice)', { timeout: 180_000 }, () => {
     const ex = await exit(page);
     await stand(page, ex.x, ex.y); await up();
     assert.equal(await E(() => __game().mapId), 'yg_white', 'sealed');
+    const before = await E(() => [__game().ch.level, __game().ch.exp, __game().ch.gold]);
     await killAll(page); await page.waitForTimeout(600);
+    assert.deepEqual(await E(() => [__game().ch.level, __game().ch.exp, __game().ch.gold]), before, 'a practice run gives no EXP or gold');
+    assert.equal(await E(() => __game().drops.length), 0, 'and no drops');
     assert.equal(await E(() => __game().monsters.filter((m) => !m.dead).length), 0, 'no respawn');
     await stand(page, ex.x, ex.y); await up();
     assert.notEqual(await E(() => __game().mapId), 'yg_white');
@@ -111,6 +114,19 @@ describe('event (offline practice)', { timeout: 180_000 }, () => {
     await stand(page, ex.x, ex.y); await up();
     assert.equal(await E(() => __game().mapId), 'village');
     assert.ok(Math.abs((await E(() => __game().player.cx)) - KEEPER_X) < 40, 'next to the keeper');
+  });
+
+  it('the results window keeps a way to get up when you died: a respawn button, otherwise the close button', async () => {
+    const end = { t: 'ev_end', d: 'yangak', win: false, top: [], rank: 0, dmg: 0, items: [], queued: 2, exp: 0 };
+    await E((m) => { __game().player.dead = true; __ui().onEvent(m); }, end);
+    assert.ok(await page.locator('.evend [data-act="respawn"]').count(), 'dead: respawn');
+    assert.equal(await page.locator('.evend [data-act="close"]').count(), 0);
+    assert.match(await page.locator('.evend').textContent(), /Túi đồ đầy: 2 phần thưởng/, 'queued rewards are explained');
+    await page.click('.evend [data-act="respawn"]'); await page.waitForTimeout(300);
+    assert.equal(await E(() => __game().player.dead), false, 'on your feet again');
+    await E((m) => { __game().player.dead = false; __ui().onEvent(m); }, end);
+    assert.ok(await page.locator('.evend [data-act="close"]').count(), 'alive: close');
+    await page.click('.evend [data-act="close"]'); await page.waitForTimeout(200);
   });
 
   it('a save made on an event floor starts in the village', async () => {
@@ -169,6 +185,15 @@ describe('event (online, whole server)', { timeout: 240_000 }, () => {
     assert.equal(fa, fb, 'same floors');
     const [ta, tb] = await Promise.all([A, B].map((p) => E(p, () => __game().dg.t0)));
     assert.equal(ta, tb, 'one trap clock');
+  });
+
+  it('a reconnecting player (a reloaded page starts in the village) is put back on its floor', async () => {
+    const floor = await E(A, () => __game().mapId), inst = await E(A, () => __game().dg.id);
+    // the connection drops and the page comes back in the village, as after a reload
+    await E(A, () => { const w = __game(); w.net.ws.close(3001); w.loadMap('village', 1255); });
+    assert.ok(await until(A.page, `__game().mapId === '${floor}' && __game().net.ready && __game().dg && __game().dg.id === '${inst}'`, 12000), 'back on the floor');
+    assert.equal(await E(A, () => __game().dgErrs.length), 0);
+    assert.ok(await until(B.page, `__game().remotes.has('${A.id}')`, 6000), 'and B sees A again');
   });
 
   it('skipping a floor is refused: the client is sent back to the village', async () => {
