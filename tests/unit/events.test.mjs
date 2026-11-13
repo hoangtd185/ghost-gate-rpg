@@ -21,7 +21,8 @@ const SAT = Date.UTC(2026, 10, 14, 8); // Saturday 14 Nov 2026, 15:00 in Vietnam
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qmq-events-'));
 const db = openDb(path.join(dir, 'game.db'));
-after(() => { db.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+const servers = []; // every event server a test created: closed at the end, also when an assertion failed first
+after(() => { for (const dg of servers) dg.close(); db.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
 let n = 0;
 function character(level = 15) {
@@ -35,6 +36,7 @@ function server(opts = {}) {
   const sent = [], players = new Map(), closed = [];
   const dg = createDungeons({ players, send: (s, m) => sent.push({ to: s.id, ...m }), toAll: () => {}, cleared: () => true, closeRooms: (id) => closed.push(id),
     db, pushChanges: (s) => sent.push({ to: s.id, t: 'pushed' }), now: () => t, ...opts });
+  servers.push(dg); // its timer must never outlive the tests
   const join = (ch) => {
     const s = { id: ch.id, name: ch.name, ch, map: D.from, room: D.from, x: KEEPER_X - 7, sy: GROUND_Y, dungeon: null };
     players.set(ch.id, s); s.dgAt = 0;
@@ -203,5 +205,11 @@ describe('monsters of an event run', () => {
     const sum = dealt.reduce((t, [, x]) => t + x, 0);
     assert.ok(dealt.length >= 2 && dealt.every(([id, x]) => id === 'rp' && x === 7), 'each tick was reported');
     assert.equal(sum, m.dmgBy.get('rp'), 'the ranking got exactly what dmgBy credited');
+    // the player moved on to another floor: poison that keeps ticking here no longer counts for the ranking
+    s.room = 'yg_white#r2';
+    const counted = dealt.length;
+    sim.poisonFor(m, 2, 7, { id: 'rp', player: true, cx: 0 });
+    sim.update(0.6, []); sim.update(0.6, []);
+    assert.equal(dealt.length, counted, 'not counted once the attacker left the room');
   });
 });

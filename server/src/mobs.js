@@ -63,8 +63,9 @@ export function createMobs({ players, send, loot, parties, premium, onDamage, on
   function ensure(room, map) {
     let e = rooms.get(room);
     if (!e) {
-      // every credited player damage (hits and poison ticks) goes to the event ranking, the same number as dmgBy
-      const onHurt = (by, dealt) => { const s = players.get(by.id); if (s) onDamage?.(s, dealt); };
+      // every credited player damage (hits and poison ticks) goes to the event ranking, the same number as dmgBy, while
+      // the attacker is still in this room (a poison tick after they went elsewhere does not count, as with reward shares)
+      const onHurt = (by, dealt) => { const s = players.get(by.id); if (s && roomOf(s) === room) onDamage?.(s, dealt); };
       e = { map, sim: new MobSim(map, { namedT: {}, onDamage: onHurt }), empty: 0, snapT: 0, last: new Map() };
       e.sim.drain(); // initial spawns are sent with the room's monster list
       rooms.set(room, e);
