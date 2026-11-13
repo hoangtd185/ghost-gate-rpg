@@ -109,6 +109,7 @@ function enterGame(ch, isNew) {
   };
   world = new GameWorld(ch, hooks);
   ui.attach(world);
+  world.takeEventExp(ch.eventExp); // EXP from server events that ended while this character was offline
   if (storage.kind === 'api') {
     net = new Realtime(storage, {
       chat: (name, text, type) => ui.addChat(name, text, type),

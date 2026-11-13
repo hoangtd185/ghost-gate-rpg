@@ -107,6 +107,10 @@ export function migrate(db) {
   // Nguyên Bảo (premium currency) and the last daily check-in ({ day, streak } JSON): only the server changes them
   if (!cols.includes('ingots')) db.exec('ALTER TABLE characters ADD COLUMN ingots INTEGER NOT NULL DEFAULT 0');
   if (!cols.includes('checkin')) db.exec('ALTER TABLE characters ADD COLUMN checkin TEXT');
+  // EXP from server events: event_exp is a running total only the server raises; event_exp_taken is how much of it the
+  // character already took (saved by the client together with its EXP and level), see server/src/db/events.js
+  if (!cols.includes('event_exp')) db.exec('ALTER TABLE characters ADD COLUMN event_exp INTEGER NOT NULL DEFAULT 0');
+  if (!cols.includes('event_exp_taken')) db.exec('ALTER TABLE characters ADD COLUMN event_exp_taken INTEGER NOT NULL DEFAULT 0');
   const icols = db.prepare('PRAGMA table_info(items)').all().map((c) => c.name);
   if (!icols.includes('enhance')) db.exec('ALTER TABLE items ADD COLUMN enhance INTEGER NOT NULL DEFAULT 0');
   if (!icols.includes('el')) db.exec('ALTER TABLE items ADD COLUMN el TEXT');

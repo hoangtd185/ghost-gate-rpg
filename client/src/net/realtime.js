@@ -112,6 +112,7 @@ export class Realtime {
         this.connected = true; this.retry = 0; this.last = ''; this.sendT = 0; this.enter = true;
         this.setOnline(m.online);
         w.claimAllQuests(); // Nguyên Bảo of quests completed while the answer was lost (the server gives each once)
+        w.takeEventExp(m.eventExp); // event EXP granted while we were away
         break;
       case 'online': this.setOnline(m.n); break;
       case 'snap':

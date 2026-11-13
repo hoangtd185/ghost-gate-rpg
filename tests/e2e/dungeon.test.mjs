@@ -139,7 +139,7 @@ describe('event (offline practice)', { timeout: 180_000 }, () => {
 
 describe('event (online, whole server)', { timeout: 240_000 }, () => {
   const RUN_SEC = 40;
-  let browser, server, A, B;
+  let browser, server, A, B, C;
   const errors = [];
 
   async function player(tag) {
@@ -162,7 +162,7 @@ describe('event (online, whole server)', { timeout: 240_000 }, () => {
   before(async () => {
     server = await startServer({ EVENT_ALWAYS_OPEN: 'true', EVENT_RUN_SEC: String(RUN_SEC) });
     browser = await launch();
-    A = await player('Alpha'); B = await player('Beta');
+    A = await player('Alpha'); B = await player('Beta'); C = await player('Gamma');
   });
   after(async () => { await browser?.close(); await server?.stop(); });
 
@@ -175,9 +175,12 @@ describe('event (online, whole server)', { timeout: 240_000 }, () => {
   });
 
   it('players who are not in a party join the same run and see each other', async () => {
-    for (const p of [A, B]) { await E(p, () => { __game().player.x = 1255 - 7; }); }
+    for (const p of [A, B, C]) { await E(p, () => { __game().player.x = 1255 - 7; }); }
     await A.page.waitForTimeout(400);
-    for (const p of [A, B]) await E(p, () => __game().enterDungeon('yangak'));
+    for (const p of [A, B, C]) await E(p, () => __game().enterDungeon('yangak'));
+    assert.ok(await until(C.page, "__game().mapId === 'yg_jump'", 6000), 'C is in the run');
+    // C leaves the game: the page goes back to the character screen, so C is offline when the run ends
+    await C.page.reload(); await C.page.waitForTimeout(800);
     for (const p of [A, B]) assert.ok(await until(p.page, "__game().mapId === 'yg_jump' && __game().net.ready", 6000), 'on the first floor');
     assert.ok(await until(A.page, `__game().remotes.has('${B.id}')`), 'A sees B');
     assert.ok(await until(B.page, `__game().remotes.has('${A.id}')`), 'B sees A');
@@ -236,6 +239,40 @@ describe('event (online, whole server)', { timeout: 240_000 }, () => {
     }
     assert.ok(await until(A.page, "__game().ch.inventory.some((e) => e.id === 'out_black_dragon')", 4000), 'the top damage dealer gets the outfit');
     assert.ok(await until(A.page, "[...document.querySelectorAll('#chatLog .cl.system')].some((e) => e.textContent.includes('kết thúc'))", 4000), 'a server-wide message');
+  });
+
+  it('a character that was offline when the event ended takes its EXP once at login', async () => {
+    // C is on the character screen; the character the server loads now already has the item revision of the reward,
+    // so only the total and the counter in it can tell the client that EXP is owed
+    await C.page.click('[data-play]'); await C.page.waitForTimeout(1500);
+    assert.ok(await until(C.page, '!!window.__game && __game().ch.eventExp > 0', 6000), 'the character came with the total');
+    assert.ok(await until(C.page, '__game().ch.eventExpTaken === __game().ch.eventExp', 4000), 'and took it at once');
+    const state = () => E(C, () => [__game().ch.level, __game().ch.exp]);
+    const first = await state();
+    await E(C, () => { const w = __game(); w.takeEventExp(w.ch.eventExp); });
+    assert.deepEqual(await state(), first, 'nothing more the second time');
+    assert.ok(first[0] > 1 || first[1] > 0, 'it did gain EXP');
+  });
+
+  it('the EXP of the event is applied once, however many times the total reaches the client', async () => {
+    for (const p of [A, B]) {
+      assert.ok(await until(p.page, '__game().ch.eventExp > 0 && __game().ch.eventExpTaken === __game().ch.eventExp', 4000), 'the event EXP was taken');
+    }
+    const state = (p) => E(p, () => [__game().ch.level, __game().ch.exp, __game().ch.eventExpTaken]);
+    const [a0, b0] = await Promise.all([state(A), state(B)]);
+    // the same total again (ev_end repeated, a login, a welcome): nothing more
+    await E(A, () => { const w = __game(); w.takeEventExp(w.ch.eventExp); w.takeEventExp(w.ch.eventExp); });
+    assert.deepEqual(await state(A), a0, 'taking the same total again changes nothing');
+    // a dropped connection: the reconnect's welcome carries the total again
+    await E(B, () => __game().net.ws.close(3001));
+    assert.ok(await until(B.page, '__game().net.connected', 12000), 'reconnected');
+    await B.page.waitForTimeout(500);
+    assert.deepEqual(await state(B), b0, 'a reconnect does not give the EXP twice');
+    // what the server holds: the total, and what was taken (saved with the EXP)
+    await E(A, () => __game().hooks.save());
+    await A.page.waitForTimeout(1500);
+    const [total, taken] = await E(A, async () => { const r = await fetch('/api/characters', { headers: { Authorization: 'Bearer ' + localStorage.getItem('qmq_token') } }); const list = await r.json(); const c = (list.characters || list).find((x) => x.id === __game().ch.id); return [c.eventExp, c.eventExpTaken]; });
+    assert.ok(total > 0 && taken === total, `saved on the server (total ${total}, taken ${taken})`);
   });
 
   it('no page errors', () => assert.deepEqual(errors, []));

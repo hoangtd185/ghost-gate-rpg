@@ -8,7 +8,7 @@
 //                     trade_ask {to} · trade_answer {from, yes} · trade_offer {items, gold} · trade_lock {on} · trade_confirm · trade_cancel
 //                     dg_enter {d} · dg_next {} (server event, dungeon.js)
 //                     prem {op: buy {offer, req} | checkin | claim {quest}}
-//   server -> client  welcome {id, online} · snap {map, players} · join · leave · st · look · chat · online · kicked · error
+//   server -> client  welcome {id, online, eventExp} · snap {map, players} · join · leave · st · look · chat · online · kicked · error
 //                     dg_go {inst, d, map, floor, t0, now} | {map, x, done | lost} · dg_err {why}
 //                     mobs {map, list} · mspawn {map, m} · ms {map, s} · mev {map, list} · mhit {map, uid, by, dmg, ab, crit, em, el} · mdie {map, uid, by} · mkill {map, uid, exp, gold?, drops?}
 //                     chg {list, rev} · loot {k, drops} · drops {map, drops} · pick {id, ok, why?}
@@ -154,7 +154,7 @@ export function attachRealtime(server, { db, secret, event = {} }) {
         s = { ws, id: ch.id, uid: user.uid, name: ch.name, ch, buffs: [], stats: null, app: appearanceOf(ch), map: null, room: null, dungeon: dungeons.instanceOf(ch.id), x: 0, y: 0, vx: 0, f: 1, a: 'idle',
           dirty: false, posAt: 0, savedAt: 0, savedTimer: null, enterAt: 0, enterTimer: null, pendingEnter: null, chatTokens: NET.chatBurst, chatAt: Date.now(), rev: Math.max(0, Math.floor(num(m.rev))) };
         players.set(s.id, s);
-        send(s, { t: 'welcome', id: s.id, online: players.size });
+        send(s, { t: 'welcome', id: s.id, online: players.size, eventExp: ch.eventExp || 0 }); // event EXP total: the client takes what it has not yet
         for (const st of dungeons.stateFor()) send(s, st); // is a server event open?
         // items or gold changed on the server while this client was away (a pickup whose answer was lost, a trade)
         pushChanges(s);

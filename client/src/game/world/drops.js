@@ -48,7 +48,6 @@ export const DropsWorld = {
   // Apply item and gold changes made by the server (pickups, trades), oldest first. rev = the server's revision.
   applyChanges(list, rev) {
     const ch = this.ch, got = [];
-    let exp = 0;
     for (const c of list || []) {
       if (c.rev <= (ch.itemRev || 0)) continue;
       if (c.kind === 'gain' && c.entry) {
@@ -64,13 +63,11 @@ export const DropsWorld = {
         for (const [slot, e] of Object.entries(ch.equip)) if (e && e.uid === c.uid) ch.equip[slot] = null;
       } else if (c.kind === 'gold') ch.gold = Math.max(0, ch.gold + c.qty);
       else if (c.kind === 'ingots') ch.ingots = Math.max(0, (ch.ingots || 0) + c.qty);
-      else if (c.kind === 'exp' && c.qty > 0) exp += c.qty; // a server event's reward (once: the revision filters repeats)
     }
     ch.itemRev = Math.max(ch.itemRev || 0, rev || 0);
     for (const e of got) this.hooks.gotItem(e);
     this.recalc();
     this.hooks.changed('inv');
-    if (exp > 0) this.giveExp(exp);
     this.hooks.save(); // write the merged state back soon
   },
 

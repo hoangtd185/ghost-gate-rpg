@@ -406,7 +406,7 @@ server/src/
   trade.js              player-to-player trades
   config.js             reads environment variables and .env
   db.js                 SQLite schema, migrations, character read / write
-  db/                   the rest of the database: schema, helpers, items (custody, trades, ledger), premium (ingots), events (server event windows, EXP, queued rewards)
+  db/                   the rest of the database: schema, helpers, items (custody, trades, ledger), premium (ingots), events (server event windows, EXP counters, queued rewards)
   auth.js               password hashing (scrypt), login tokens (HMAC)
 tools/
   build.mjs             bundles the client into one HTML file

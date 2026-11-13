@@ -138,6 +138,7 @@ export function mergeOutbox(storage, chars) {
     // The server changed items or gold since this copy was made (a pickup, a trade): its items, gold and
     // quests win, the rest (EXP, position, skills…) comes from the local copy. The server applies the same rule.
     if ((o.itemRev || 0) < (c.itemRev || 0)) o = { ...o, inventory: c.inventory, equip: c.equip, gold: c.gold, quests: c.quests, itemRev: c.itemRev };
+    o = { ...o, eventExp: c.eventExp || 0 }; // the server's total always wins; the local copy keeps what it already took
     storage.save(o).then(() => clearOutboxEntry(storage, o)).catch(() => { /* stays in the outbox */ });
     return o;
   });

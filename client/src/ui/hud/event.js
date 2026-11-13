@@ -42,7 +42,8 @@ export const EventUI = {
       this.toast(`Đã nhận ${m.items.length} phần thưởng sự kiện còn thiếu${m.left ? ` (còn ${m.left} chưa nhận được)` : ''}`, 'quest');
     } else if (m.t === 'ev_end') {
       this.evRank = null;
-      this.evEnd = m; // the EXP and items are applied from the server's item changes (chg), not from this message
+      this.evEnd = m; // items arrive as item changes (chg); the EXP is taken once from the server's running total
+      this.world?.takeEventExp(m.expTotal);
       this.open = 'evend'; this.renderWin();
     }
     this.renderEvent();

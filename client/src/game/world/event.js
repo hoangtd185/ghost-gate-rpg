@@ -92,6 +92,20 @@ export const EventWorld = {
     this.hooks.save();
   },
 
+  // EXP rewarded by server events. The server keeps a running total (ch.eventExp, never taken from a save); the
+  // character keeps how much of it it already took (ch.eventExpTaken, saved together with EXP and level). The
+  // difference is applied once, whichever way it arrives: with the character at login, in `welcome` after a
+  // reconnect, or in `ev_end`; calling it again with the same total does nothing.
+  takeEventExp(total) {
+    const ch = this.ch;
+    ch.eventExp = Math.max(ch.eventExp || 0, Math.floor(+total || 0));
+    const owed = ch.eventExp - (ch.eventExpTaken || 0);
+    if (owed <= 0) return;
+    ch.eventExpTaken = ch.eventExp;
+    this.giveExp(owed);
+    this.hooks.save();
+  },
+
   dungeonErr(why) {
     const msg = {
       far: 'Đứng gần Thủ Ải hơn', level: 'Chưa đủ cấp để vào', closed: 'Sự kiện chưa mở. Lịch: thứ Bảy và Chủ nhật',

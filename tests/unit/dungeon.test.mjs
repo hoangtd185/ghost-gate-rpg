@@ -61,7 +61,10 @@ function setup(opts = {}) {
   // a fake database: records what the event grants, remembers the windows that ran
   const db = {
     eventWindows: () => opts.windows || [], markEventWindow: (d, start) => marked.push([d, start]),
-    grantEventRewards: ({ items, exp }) => { grants.push(...items); exps.push(...exp); return items.map(() => 'ok'); },
+    grantEventRewards: ({ items, exp }) => {
+      grants.push(...items); exps.push(...exp);
+      return { status: items.map(() => 'ok'), expTotal: Object.fromEntries(exp.map((x) => [x.charId, x.n])) };
+    },
     getCharacter: () => ({ cls: 'swordsman', level: 20 }), pendingCount: () => 0, claimPending: () => ({ delivered: [], left: 0 }),
   };
   const dg = createDungeons({ players, send: (s, m) => sent.push({ to: s.id, ...m }), toAll: (m) => all.push(m), cleared: (room, targets) => clear(room, targets),
@@ -193,6 +196,7 @@ describe('the event on the server', () => {
     assert.deepEqual([end.win, end.rank, end.dmg], [true, 1, 1100]);
     assert.ok(end.exp > 0 && end.items.length === per('a').length);
     assert.equal(end.queued, 0);
+    assert.equal(end.expTotal, end.exp, 'the running total the client takes from (here the first event)');
     assert.ok(T.exps.some((x) => x.charId === 'a' && x.n === end.exp && x.reqId === `ev:${run.id}:a:exp`), 'EXP is a ledger row with its own request id');
     assert.deepEqual(T.marked, [['yangak', SAT]], 'the window is saved as used');
     assert.deepEqual(T.closed, [run.id], 'the run’s floors are released');

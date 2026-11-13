@@ -38,7 +38,9 @@ export class GameDb {
       moveItem: db.prepare('UPDATE items SET character_id = ?, equip_slot = NULL, position = ? WHERE uid = ?'),
       ledgerAdd: db.prepare('INSERT INTO item_ledger (at, character_id, rev, kind, item_uid, item_id, qty, entry, reason, ref, req_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
       ledgerByReq: db.prepare('SELECT * FROM item_ledger WHERE req_id = ?'),
-      ledgerSince: db.prepare("SELECT rev, kind, item_uid, item_id, qty, entry FROM item_ledger WHERE character_id = ? AND rev > ? AND kind IN ('gain', 'loss', 'gold', 'ingots', 'exp') ORDER BY rev, id"),
+      ledgerSince: db.prepare("SELECT rev, kind, item_uid, item_id, qty, entry FROM item_ledger WHERE character_id = ? AND rev > ? AND kind IN ('gain', 'loss', 'gold', 'ingots') ORDER BY rev, id"),
+      addEventExp: db.prepare('UPDATE characters SET event_exp = event_exp + ? WHERE id = ? RETURNING event_exp'),
+      setExpTaken: db.prepare('UPDATE characters SET event_exp_taken = MAX(0, MIN(?, event_exp)) WHERE id = ?'),
       windowsOf: db.prepare('SELECT start FROM event_windows WHERE dungeon = ?'),
       windowAdd: db.prepare('INSERT OR IGNORE INTO event_windows (dungeon, start) VALUES (?, ?)'),
       pendingAdd: db.prepare('INSERT OR IGNORE INTO event_pending (req_id, character_id, item, ref, at) VALUES (?, ?, ?, ?, ?)'),
@@ -86,6 +88,7 @@ export class GameDb {
       inventory: [], equip: { weapon: null, hat: null, armor: null, acc: null, outfit: null, cape: null }, quests: {},
       createdAt: row.created_at, itemRev: row.item_rev || 0,
       ingots: row.ingots || 0, checkin: row.checkin ? JSON.parse(row.checkin) : null,
+      eventExp: row.event_exp || 0, eventExpTaken: row.event_exp_taken || 0,
     };
     for (const it of this.q.itemsOf.all(row.id)) {
       const e = rowToEntry(it);
@@ -132,6 +135,9 @@ export class GameDb {
       JSON.stringify(cleanFlags(ch.flags)),
       num(ch.playTime), Date.now(), id, userId,
     );
+    // How much event EXP this character took goes with its EXP and level (a save always writes both, stale or not);
+    // it can never pass what the server granted, and the total itself is never taken from a save
+    this.q.setExpTaken.run(int(ch.eventExpTaken), id);
     // Items, gold and quests: a save made before the client applied the server's latest item changes (a pickup
     // or a trade it had not received yet, an old outbox copy) must not overwrite them. Quests go with the items
     // because quest rewards are checked against quest changes (see reconcileItems).

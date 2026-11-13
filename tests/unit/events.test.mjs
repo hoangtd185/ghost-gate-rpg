@@ -48,8 +48,8 @@ function server(opts = {}) {
 }
 const last = (T, id, type) => T.sent.filter((m) => m.to === id && m.t === type).at(-1);
 
-describe('rewards: items and EXP as ledger rows', () => {
-  it('everyone gets them once, an offline participant at the next replay; a second finish changes nothing', () => {
+describe('rewards: items as ledger rows, EXP as a running total', () => {
+  it('everyone gets them once, an offline participant too; a second finish changes nothing', () => {
     const T = server({ alwaysOpen: true });
     const a = character(15), b = character(20);
     T.join(a); const sb = T.join(b);
@@ -58,15 +58,63 @@ describe('rewards: items and EXP as ledger rows', () => {
     const expA = Math.round(expToNext(15) * (R.all.expShare + R.win.expShare));
     const expB = Math.round(expToNext(20) * (R.all.expShare + R.win.expShare));
     for (const [ch, exp] of [[a, expA], [b, expB]]) {
+      assert.equal(db.getCharacter(ch.id).eventExp, exp, 'the running total, from the stored level');
       const changes = db.changesSince(ch.id, 0);
-      const rows = changes.filter((c) => c.kind === 'exp');
-      assert.deepEqual(rows.map((c) => c.qty), [exp], 'one EXP row, from the stored level');
-      assert.ok(changes.some((c) => c.kind === 'gain' && c.id === 'stone'), 'the items too');
+      assert.ok(changes.some((c) => c.kind === 'gain' && c.id === 'stone'), 'the items are item changes');
+      assert.ok(!changes.some((c) => c.kind === 'exp'), 'EXP is not an item change: a client loaded at the current revision would never see it');
+      assert.equal(db.ledger(ch.id).filter((r) => r.kind === 'exp').length, 1, 'one audit row');
     }
-    assert.equal(last(T, a.id, 'ev_end').exp, expA);
+    const end = last(T, a.id, 'ev_end');
+    assert.deepEqual([end.exp, end.expTotal], [expA, expA]);
     const before = db.ledger(a.id).length;
     T.dg.onDie(`yg_silver#${run.id}`, { def: MONSTERS.yg_silver }); // the run is over: nothing is granted again
     assert.equal(db.ledger(a.id).length, before);
+    T.dg.close();
+  });
+});
+
+describe('event EXP: the pair of counters', () => {
+  // The client owns EXP and level (its save overwrites them, an old outbox copy wins), and the item revision only covers
+  // items, gold and quests. So the reward is a total the server raises and a "taken" counter saved with the EXP.
+  const owner = (id) => db.q.charById.get(id).user_id;
+
+  it('a save that does not know the reward changes nothing; taking it is saved with the EXP, never above the total', () => {
+    const a = character(15);
+    db.transaction(() => db.addExpTx(a.id, 500, 'event', 'r9', 'ev:r9:' + a.id + ':exp'));
+    assert.equal(db.getCharacter(a.id).eventExp, 500);
+    // a client that did not see the reward saves its own state: the total stays, nothing is taken
+    let ch = db.getCharacter(a.id);
+    ch.exp = 40; ch.eventExp = 0; ch.eventExpTaken = 0;
+    db.saveCharacter(owner(a.id), ch);
+    assert.deepEqual([db.getCharacter(a.id).eventExp, db.getCharacter(a.id).eventExpTaken], [500, 0], 'the total is never taken from a save');
+    // it takes the reward: EXP and the counter are saved together
+    ch = db.getCharacter(a.id);
+    ch.exp = 540; ch.eventExpTaken = 500;
+    db.saveCharacter(owner(a.id), ch);
+    const now = db.getCharacter(a.id);
+    assert.deepEqual([now.exp, now.eventExpTaken], [540, 500]);
+    // a forged counter cannot pass the total (and a save always writes the EXP and the counter together, so they stay consistent)
+    ch.eventExpTaken = 9999;
+    db.saveCharacter(owner(a.id), ch);
+    assert.equal(db.getCharacter(a.id).eventExpTaken, 500);
+  });
+
+  it('the same request twice raises the total once', () => {
+    const a = character(15);
+    const grant = () => db.transaction(() => db.addExpTx(a.id, 300, 'event', 'r8', 'ev:r8:' + a.id + ':exp'));
+    assert.equal(grant().total, 300);
+    assert.deepEqual(grant(), { dup: true, total: 300 });
+    assert.equal(db.getCharacter(a.id).eventExp, 300);
+  });
+
+  it('a character that logs in after the event has the total and the counter in its payload (nothing to replay)', () => {
+    const T = server({ alwaysOpen: true });
+    const a = character(15);
+    T.join(a);
+    T.win();
+    const ch = db.getCharacter(a.id); // what a login loads: itemRev is already current, so a replay finds nothing
+    assert.ok(ch.eventExp > 0 && ch.eventExpTaken === 0, 'owed: total above taken');
+    assert.deepEqual(db.changesSince(a.id, ch.itemRev), [], 'the item replay is empty at the current revision');
     T.dg.close();
   });
 });

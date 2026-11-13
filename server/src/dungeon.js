@@ -9,9 +9,10 @@
 //   dg_enter { d }  at the keeper -> dg_go { inst, d, floors, map, floor, t0, now } (the highest floor reached)
 //   dg_next {}      at a floor's exit -> dg_go for the next floor
 //   -> ev_state { open, start, end, now } (on connect, when it opens/closes) · ev_rank { top, rank, dmg, end, now }
-//   -> ev_end { win, top, rank, dmg, items, queued, exp } then dg_go { map: from, x, closed: true } for those still inside
-//      (items: what was delivered; queued: rewards kept for later because the bag was full; exp: shown only, it arrives as
-//      a ledger row through `chg`) · ev_claim { items, left } when queued rewards are delivered later
+//   -> ev_end { win, top, rank, dmg, items, queued, exp, expTotal } then dg_go { map: from, x, closed: true } for those
+//      still inside (items: what was delivered; queued: rewards kept for later because the bag was full; exp: this run's
+//      EXP, shown; expTotal: the character's running event EXP total, the client applies what it has not taken yet)
+//      · ev_claim { items, left } when queued rewards are delivered later
 //   errors dg_err { why: far | level | closed | not_clear | exit | none | unknown }
 import crypto from 'node:crypto';
 import { DUNGEONS, rollFloors, rankTier, eventWindow } from '../../shared/data/dungeons.js';
@@ -70,8 +71,9 @@ export function createDungeons({ players, send, toAll, cleared, closeRooms = () 
   }
 
   // The run is over: everyone who took part gets a reward (win or lose), the top N by damage get more.
-  // Items and EXP are committed in one transaction (ledger rows, so they reach the client exactly once, online through
-  // `chg` and offline at the next login). An item that does not fit the bag is kept (event_pending) and delivered later.
+  // Items and EXP are committed in one transaction: items as ledger rows (they reach the client through `chg` or the
+  // next login), EXP as a running total the client takes once (db/events.js). An item that does not fit the bag is kept
+  // (event_pending) and delivered later.
   function finish(run, win) {
     if (run.done) return;
     run.done = true;
@@ -95,8 +97,8 @@ export function createDungeons({ players, send, toAll, cleared, closeRooms = () 
       items.forEach((item, i) => reqs.push({ charId, item, opts: { reason: 'event', ref: run.id, reqId: `ev:${run.id}:${charId}:${i}` } }));
       if (exp > 0) exps.push({ charId, n: exp, ref: run.id, reqId: `ev:${run.id}:${charId}:exp` });
     }
-    let status;
-    try { status = db.grantEventRewards({ items: reqs, exp: exps }); } catch (e) { console.error('event rewards failed', e); status = reqs.map(() => 'lost'); }
+    let status, expTotal = {};
+    try { ({ status, expTotal } = db.grantEventRewards({ items: reqs, exp: exps })); } catch (e) { console.error('event rewards failed', e); status = reqs.map(() => 'lost'); }
     reqs.forEach((r, i) => {
       const p = per.get(r.charId);
       if (status[i] === 'ok') p.got.push([r.item.id, r.item.qty]); else if (status[i] === 'queued') p.queued++;
@@ -107,7 +109,7 @@ export function createDungeons({ players, send, toAll, cleared, closeRooms = () 
       if (!s) continue; // offline: items and EXP are in the ledger, the change replay brings them on the next login
       if (p.queued) s.evPending = true;
       pushChanges(s);
-      send(s, { t: 'ev_end', d: run.d, win, top: topView, rank: p.place, dmg: run.dmg.get(charId) || 0, items: p.got, queued: p.queued, exp: p.exp });
+      send(s, { t: 'ev_end', d: run.d, win, top: topView, rank: p.place, dmg: run.dmg.get(charId) || 0, items: p.got, queued: p.queued, exp: p.exp, expTotal: expTotal[charId] ?? s.ch?.eventExp ?? 0 });
       if (s.dungeon === run.id) { s.dungeon = null; send(s, { t: 'dg_go', map: d.from, x: keeperX(d), closed: true }); }
     }
     closeRooms(run.id); // the floors' monsters are no longer needed (they were kept for the whole run)
