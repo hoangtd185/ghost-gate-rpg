@@ -29,7 +29,8 @@ export function createTrades({ db, players, send, pushChanges }) {
       send(side.s, { t: 'trade_end', id: t.id, why, by: by && by !== side.s ? by.name : null });
     }
   };
-  const near = (a, b) => a.map && a.map === b.map && Math.abs(a.x - b.x) <= T.range;
+  // same room (a map, or the same party's copy of a dungeon floor) and close enough
+  const near = (a, b) => a.map && (a.room || a.map) === (b.room || b.map) && Math.abs(a.x - b.x) <= T.range;
 
   function ask(s, m) {
     const target = players.get(String(m.to || ''));

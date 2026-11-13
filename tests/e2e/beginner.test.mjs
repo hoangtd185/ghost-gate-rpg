@@ -1,7 +1,7 @@
 // New player flow: prologue m1–m4, tutorial quests (movement, potions, stats, skills, forge) and NPC chatter.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { launch, newPage, openGame, talk, click, runDialog, esc, quest, shot } from './helpers.mjs';
+import { launch, newPage, openGame, talk, click, runDialog, esc, quest, shot, until } from './helpers.mjs';
 
 const NPC_X = { elder: 220, healer: 560, smith: 760, constable: 980, lan: 640, priest: 1180 };
 
@@ -30,10 +30,17 @@ describe('beginner flow', { timeout: 300_000 }, () => {
 
   it('tut_move: three double jumps', async () => {
     await visit('elder'); await accept('tut_move'); await esc(page);
+    // Wait for the game state between the presses instead of fixed delays: a slow machine (CI) drops frames, and a
+    // jump pressed before the player landed, or a second press that comes too late, would not count
     for (let i = 0; i < 3; i++) {
-      await page.keyboard.press('Space'); await page.waitForTimeout(180);
-      await page.keyboard.press('Space'); await page.waitForTimeout(900);
+      assert.ok(await until(page, '__game().player.onGround', 4000), 'standing on the ground');
+      await page.keyboard.press('Space');
+      assert.ok(await until(page, '!__game().player.onGround', 2000), 'the jump started');
+      await page.waitForTimeout(120);
+      await page.keyboard.press('Space');
+      assert.ok(await until(page, '__game().player.jumps >= 2', 2000), 'the double jump happened');
     }
+    assert.ok(await until(page, '((__game().ch.quests.tut_move || {}).p || 0) >= 3', 3000), 'three double jumps counted');
     await visit('elder'); await turnIn('tut_move');
     assert.equal((await quest(page, 'tut_move'))?.s, 'done');
   });

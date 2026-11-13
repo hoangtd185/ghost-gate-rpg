@@ -23,6 +23,7 @@ export const RenderWorld = {
       drawPortal(ctx, pt.x - cam, GROUND_Y, t, locked ? '#8a6a6a' : pt.color);
       if (locked) this.drawSeal(ctx, pt.x - cam, GROUND_Y - 22);
     }
+    if (this.map.dungeon) this.drawDungeon(ctx, cam, t);
 
     // poison areas
     for (const z of this.zones) {
@@ -138,6 +139,10 @@ export const RenderWorld = {
     if (this.nearPortal && !p.dead) {
       const lk = this.nearPortal.lock && questStatus(this.ch, this.nearPortal.lock) !== 'done';
       this.hint(ctx, lk ? `🔒 ${this.nearPortal.label} · Phong ấn` : `↑  ${this.nearPortal.label}`, this.nearPortal.x - cam, GROUND_Y - 66);
+    }
+    else if (this.nearExit && !p.dead) {
+      const ex = this.map.exit;
+      this.hint(ctx, !this.dungeonOpen() ? (this.map.goal === 'break' ? '🔒 Phá mục tiêu để mở cổng' : '🔒 Diệt hết quái để mở cổng') : this.lastFloor() ? '↑  Rời ải' : '↑  Tầng tiếp theo', ex.x - cam, ex.y - 66);
     }
     else if (this.nearNpc && !p.dead) this.hint(ctx, 'E / ↑  Nói chuyện', this.nearNpc.cx - cam, this.nearNpc.y - 38);
     // damage numbers

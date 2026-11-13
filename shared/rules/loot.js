@@ -53,6 +53,20 @@ export function rollDrops(kill, cls, table = null) {
   return out;
 }
 
+// Server event rewards (data/dungeons.js): [[id, qty]] -> item entries for one character. 'W2' / 'GEM1' placeholders
+// resolve for the class, outfits are Legendary, other equipment rolls at least Fine (with its bonus stats).
+export function rewardEntries(list, cls) {
+  const out = [];
+  for (const [id0, qty] of list || []) {
+    const id = resolveItemId(id0, cls), it = ITEMS[id];
+    if (!it) continue;
+    if (it.slot === 'outfit') out.push({ id, qty: 1, r: 3, b: {} });
+    else if (it.type === 'equip') { const roll = rollEquip(id, 0, 1); out.push({ id, qty: 1, r: roll.r, b: roll.bonus }); }
+    else out.push({ id, qty, r: 0, b: {} });
+  }
+  return out;
+}
+
 // EXP for one kill, adjusted for the level gap (killing far weaker monsters gives little)
 export function killExp(baseExp, playerLv, mobLv) {
   const diff = playerLv - mobLv;

@@ -75,7 +75,7 @@ export const DropsWorld = {
     const p = this.player;
     for (const d of this.drops) {
       d.t += dt;
-      if (!d.onGround) { stepBody(d, dt, this.map.platforms, this.map.width); if (d.onGround) d.vx = 0; }
+      if (!d.onGround) { stepBody(d, dt, this.platforms, this.map.width); if (d.onGround) d.vx = 0; }
       if (d.t > 0.45 && !p.dead && !d.taken && overlap({ x: p.x - 6, y: p.y, w: p.w + 12, h: p.h }, d)) this.pickupDrop(d, p.cx, p.y);
     }
     if (this.pet) this.pet.update(dt);

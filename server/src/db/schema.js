@@ -68,16 +68,32 @@ CREATE TABLE IF NOT EXISTS item_ledger (
   at           INTEGER NOT NULL,
   character_id TEXT NOT NULL,
   rev          INTEGER NOT NULL,
-  kind         TEXT NOT NULL,                -- gain | loss | gold | ingots | rejected
+  kind         TEXT NOT NULL,                -- gain | loss | gold | ingots | exp | rejected
   item_uid     TEXT,
   item_id      TEXT,
   qty          INTEGER NOT NULL DEFAULT 0,   -- items: quantity; gold, ingots: signed amount
   entry        TEXT,                         -- JSON item for gains (what the client adds)
-  reason       TEXT NOT NULL,                -- drop | trade | save | premium | checkin | kill | quest
+  reason       TEXT NOT NULL,                -- drop | trade | save | premium | checkin | kill | quest | event
   ref          TEXT,                         -- drop id, trade id, partner, why a save was refused
   req_id       TEXT UNIQUE                   -- idempotency key: the same request never applies twice
 );
 CREATE INDEX IF NOT EXISTS idx_ledger_char ON item_ledger(character_id, rev);
+
+-- Server events: the windows that already ran (a restart must not start a second run in one), and event rewards that
+-- could not be delivered yet (full bag), kept under their request id until the character can take them.
+CREATE TABLE IF NOT EXISTS event_windows (
+  dungeon      TEXT NOT NULL,
+  start        INTEGER NOT NULL,
+  PRIMARY KEY (dungeon, start)
+);
+CREATE TABLE IF NOT EXISTS event_pending (
+  req_id       TEXT PRIMARY KEY,
+  character_id TEXT NOT NULL,
+  item         TEXT NOT NULL,                -- JSON { id, qty, r, b }
+  ref          TEXT,                         -- the event run
+  at           INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pending_char ON event_pending(character_id);
 `;
 
 // Upgrade older databases: add new columns without losing data
@@ -91,6 +107,10 @@ export function migrate(db) {
   // Nguyên Bảo (premium currency) and the last daily check-in ({ day, streak } JSON): only the server changes them
   if (!cols.includes('ingots')) db.exec('ALTER TABLE characters ADD COLUMN ingots INTEGER NOT NULL DEFAULT 0');
   if (!cols.includes('checkin')) db.exec('ALTER TABLE characters ADD COLUMN checkin TEXT');
+  // EXP from server events: event_exp is a running total only the server raises; event_exp_taken is how much of it the
+  // character already took (saved by the client together with its EXP and level), see server/src/db/events.js
+  if (!cols.includes('event_exp')) db.exec('ALTER TABLE characters ADD COLUMN event_exp INTEGER NOT NULL DEFAULT 0');
+  if (!cols.includes('event_exp_taken')) db.exec('ALTER TABLE characters ADD COLUMN event_exp_taken INTEGER NOT NULL DEFAULT 0');
   const icols = db.prepare('PRAGMA table_info(items)').all().map((c) => c.name);
   if (!icols.includes('enhance')) db.exec('ALTER TABLE items ADD COLUMN enhance INTEGER NOT NULL DEFAULT 0');
   if (!icols.includes('el')) db.exec('ALTER TABLE items ADD COLUMN el TEXT');

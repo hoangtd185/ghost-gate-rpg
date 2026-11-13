@@ -91,12 +91,12 @@ async function freePort() {
   });
 }
 
-export async function startServer() {
+export async function startServer(env = {}) {
   const port = await freePort();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qmq-e2e-'));
   const proc = spawn(process.execPath, ['server/src/index.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, NODE_ENV: 'development', LOGIN_LIMIT_PER_MIN: '1000', API_LIMIT_PER_MIN: '10000' },
+    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, NODE_ENV: 'development', LOGIN_LIMIT_PER_MIN: '1000', API_LIMIT_PER_MIN: '10000', ...env },
     stdio: 'ignore',
   });
   // Wait for the server process to exit before removing its data folder: on Windows the

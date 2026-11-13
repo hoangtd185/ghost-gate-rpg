@@ -98,6 +98,7 @@ export const ActionsUI = {
       case 'respawn': this.close(); w.respawn(); break;
       case 'pet': this.togglePet(); break;
       case 'forge': this.open = 'forge'; this.forgeMsg = null; this.renderWin(); break;
+      case 'dungeon': this.close(); w.enterDungeon(d.d); break;
       case 'craftwin': this.open = 'craft'; this.craftMsg = null; this.renderWin(); break;
       case 'csel': this.craftSel = d.r; this.craftMsg = null; this.renderWin(); break;
       case 'craft': {
