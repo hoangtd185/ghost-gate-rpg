@@ -228,6 +228,7 @@ export const PanelsUI = {
   },
 
   winDeath() {
+    if (this.world?.dg) return `<div class="death"><h2>Bạn đã gục ngã</h2><p>Trong sự kiện không mất kinh nghiệm.</p><button data-act="respawn">Hồi sinh tại chỗ</button></div>`;
     return `<div class="death"><h2>Bạn đã gục ngã</h2><p>Mất ${fmtNum(this.deathLoss || 0)} điểm kinh nghiệm.</p><button data-act="respawn">Hồi sinh tại làng</button></div>`;
   },
 

@@ -19,6 +19,10 @@ export const WISP_PAL = {
       ctx.fillStyle = '#fff0a0';
       for (const [x, y] of [[9, 8], [21, 8]]) { ctx.beginPath(); ctx.moveTo(x - 1.5, y + 3); ctx.lineTo(x + sw * 0.5, y - 2); ctx.lineTo(x + 1.5, y + 3); ctx.fill(); }
     } },
+  // Black dust (event): a sooty cloud with red eyes
+  dust: { glow: 'rgba(80,60,90,0.5)', glow0: 'rgba(30,20,40,0)', c0: '#8a7a8a', c1: '#3a2e3e', c2: '#120c16', line: '#06040a', shadow: '#000000', eye: '#ff3a3a' },
+  // Blue Flame Core (event): a cold blue fire
+  core: { glow: 'rgba(110,170,255,0.7)', glow0: 'rgba(40,90,255,0)', c0: '#ffffff', c1: '#7ab8ff', c2: '#2a50d8', line: '#0a1a5a', shadow: '#0a2a8a', eye: '#04103a' },
 };
 
 export function wisp(pal = WISP_PAL.wisp) {

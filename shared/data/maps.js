@@ -23,6 +23,7 @@ export const MAPS = {
       { id: 'lan', x: 640, after: 'st7', hideWhile: 'st18' }, // appears after being rescued, goes missing again at the end of Chapter 3
       { id: 'priest', x: 1180, until: 'st13' },
       { id: 'embroiderer', x: 1330 }, // leaves the village in Chapter 3
+      { id: 'yangak_keeper', x: 1255 }, // server event Xâm Lăng Dương Ác
     ],
     spawns: [],
     spawnX: 380,
@@ -199,3 +200,139 @@ for (const m of Object.values(MAPS)) {
   for (const p of m.platforms) p.y -= LIFT;
   for (const s of m.spawns) if (s.y !== GROUND_Y) s.y -= LIFT;
 }
+
+
+// ===== Server event "Xâm Lăng Dương Ác" (Invasion of Yangak, data/dungeons.js). Added after the shift above:
+// coordinates are final. Each run picks its floors at random from the pools in data/dungeons.js.
+// dungeon: which event the floor belongs to (only reachable through it, see server/src/dungeon.js)
+// goal: 'reach' (get to the exit) | 'clear' (kill every monster) | 'break' (destroy the `targets`) | 'boss' (kill everything)
+// exit: { x, y } the gate to the next floor, standing on surface y · noRespawn: dead monsters stay dead
+// traps: see game/traps.js
+const portalOut = { x: 40, to: 'village', toX: 1255, label: 'Rời ải' };
+const ygFloor = (m) => ({ minLv: 12, dungeon: 'yangak', noRespawn: true, spawnX: 90, portals: [portalOut], spawns: [], traps: [], ...m });
+const teethGates = [0, 1, 2, 4, 5, 6, 8, 9, 10]; // every fourth gate (3, 7, 11) is a safe zone
+Object.assign(MAPS, {
+  // ----- Phase 1 -----
+  // Stone steps up to a gate at the top while rocks fall from the ceiling
+  yg_jump: ygFloor({
+    name: 'Dương Ác · Bậc Đá Rơi', theme: 'hell', width: 1280, goal: 'reach',
+    platforms: [{ x: 170, y: 252, w: 100 }, { x: 320, y: 208, w: 100 }, { x: 470, y: 164, w: 100 }, { x: 620, y: 122, w: 110 }, { x: 790, y: 164, w: 100 }, { x: 940, y: 122, w: 100 }, { x: 1090, y: 84, w: 130 }],
+    exit: { x: 1160, y: 84 },
+    traps: [
+      { kind: 'drop', x: 345, w: 40, period: 2.4, fall: 0.9 },
+      { kind: 'drop', x: 495, w: 40, period: 2.4, fall: 0.9, offset: 0.8 },
+      { kind: 'drop', x: 655, w: 40, period: 2.4, fall: 0.9, offset: 1.6 },
+      { kind: 'drop', x: 820, w: 40, period: 2.8, fall: 0.9, offset: 0.4 },
+      { kind: 'drop', x: 965, w: 40, period: 2.8, fall: 0.9, offset: 1.8 },
+      { kind: 'drop', x: 1130, w: 40, period: 3, fall: 1, offset: 1 },
+    ],
+  }),
+  // White spear demons: kill them all to open the way
+  yg_white: ygFloor({
+    name: 'Dương Ác · Bạch Thương Trận', theme: 'graveyard', width: 1500, goal: 'clear',
+    platforms: [{ x: 300, y: 240, w: 170 }, { x: 650, y: 190, w: 170 }, { x: 1000, y: 240, w: 170 }],
+    exit: { x: 1440, y: GROUND_Y },
+    spawns: [{ mob: 'yg_spearman', x1: 250, x2: 1350, y: GROUND_Y, count: 6 }, { mob: 'yg_spearman', x1: 650, x2: 820, y: 190, count: 2 }],
+    traps: [{ kind: 'spikes', x: 560, y: GROUND_Y, w: 70, period: 3, up: 1 }, { kind: 'spikes', x: 900, y: GROUND_Y, w: 70, period: 3, up: 1, offset: 1.5 }],
+  }),
+  // An iron door blocks the way: break it (faster together). Black dust drifts around; climbing the pillar skips them.
+  yg_door: ygFloor({
+    name: 'Dương Ác · Hắc Trần Môn', theme: 'temple', width: 1400, goal: 'break', targets: ['yg_door'],
+    platforms: [{ x: 500, y: 240, w: 80 }, { x: 560, y: 186, w: 80 }, { x: 620, y: 132, w: 80 }, { x: 760, y: 132, w: 260 }],
+    exit: { x: 1330, y: GROUND_Y },
+    spawns: [{ mob: 'yg_door', x1: 1160, x2: 1160, y: GROUND_Y, count: 1 }, { mob: 'yg_dust', x1: 250, x2: 1100, y: GROUND_Y, count: 5 }],
+  }),
+  // A maze of rolling fireballs: one touch nearly kills
+  yg_fireballs: ygFloor({
+    name: 'Dương Ác · Hỏa Cầu Mê Lộ', theme: 'volcano', width: 1500, goal: 'reach',
+    platforms: [{ x: 300, y: 236, w: 300 }, { x: 700, y: 196, w: 300 }, { x: 1100, y: 236, w: 250 }],
+    exit: { x: 1440, y: GROUND_Y },
+    traps: [
+      { kind: 'fireball', x: 220, y: GROUND_Y, w: 1180, period: 4.5 },
+      { kind: 'fireball', x: 220, y: GROUND_Y, w: 1180, period: 4.5, offset: 1.5 },
+      { kind: 'fireball', x: 220, y: GROUND_Y, w: 1180, period: 4.5, offset: 3 },
+      { kind: 'fireball', x: 300, y: 236, w: 300, period: 2.6 },
+      { kind: 'fireball', x: 700, y: 196, w: 300, period: 2.6, offset: 1.3 },
+      { kind: 'fireball', x: 1100, y: 236, w: 250, period: 2.2, offset: 0.6 },
+    ],
+  }),
+  // Phase 1 boss: the Armored Gate. Lasers sweep the ledges (a glint first), gas spills near the gate, and
+  // unblockable spears rise from the floor: jump to a ledge.
+  yg_gate: ygFloor({
+    name: 'Dương Ác · Thiết Giáp Môn', theme: 'hell', width: 1280, goal: 'boss',
+    platforms: [{ x: 200, y: 236, w: 150 }, { x: 450, y: 180, w: 150 }, { x: 700, y: 236, w: 150 }, { x: 450, y: 124, w: 150 }],
+    exit: { x: 1220, y: GROUND_Y },
+    spawns: [{ mob: 'yg_gate', x1: 1020, x2: 1020, y: GROUND_Y, count: 1 }],
+    traps: [
+      { kind: 'laser', x: 200, y: 236, w: 150, period: 5, up: 0.9 },
+      { kind: 'laser', x: 450, y: 180, w: 150, period: 5, up: 0.9, offset: 1.7 },
+      { kind: 'laser', x: 700, y: 236, w: 150, period: 5, up: 0.9, offset: 3.3 },
+      { kind: 'laser', x: 450, y: 124, w: 150, period: 5, up: 0.9, offset: 2.5 },
+      { kind: 'gas', x: 870, y: GROUND_Y, w: 150, h: 90, period: 6, up: 3 },
+      { kind: 'spikes', x: 110, y: GROUND_Y, w: 760, period: 7, up: 1.5, offset: 2, dmg: 0.9 },
+    ],
+  }),
+  // ----- Phase 2 -----
+  // Monster nursery: rows of teeth snap shut from above (some nearly kill, some bite less), green gas slows,
+  // every fourth gate is safe
+  yg_teeth: ygFloor({
+    name: 'Dương Ác · Ấu Quỷ Sào', theme: 'temple', width: 1700, goal: 'reach',
+    platforms: [],
+    exit: { x: 1640, y: GROUND_Y },
+    traps: [
+      ...teethGates.map((i) => ({ kind: 'teeth', x: 200 + i * 125, y: GROUND_Y, w: 50, h: 130, period: 3.2, up: 1, offset: i * 0.45, dmg: i % 2 ? 0.9 : 0.35 })),
+      { kind: 'gas', x: 640, y: GROUND_Y, w: 110, h: 70, period: 4, up: 2, slow: true },
+      { kind: 'gas', x: 1140, y: GROUND_Y, w: 110, h: 70, period: 4, up: 2, offset: 2, slow: true },
+    ],
+  }),
+  // Hatchery: smash every egg and the half-silver men that guard them
+  yg_hatchery: ygFloor({
+    name: 'Dương Ác · Noãn Sào', theme: 'swamp', width: 1400, goal: 'clear',
+    platforms: [{ x: 300, y: 240, w: 160 }, { x: 650, y: 190, w: 160 }, { x: 1000, y: 240, w: 160 }],
+    exit: { x: 1340, y: GROUND_Y },
+    spawns: [
+      { mob: 'yg_egg', x1: 250, x2: 1250, y: GROUND_Y, count: 4 },
+      { mob: 'yg_egg', x1: 650, x2: 800, y: 190, count: 2 },
+      { mob: 'yg_halfman', x1: 300, x2: 1250, y: GROUND_Y, count: 4 },
+    ],
+  }),
+  // Climb to the Blue Flame Core at the top and destroy it
+  yg_core: ygFloor({
+    name: 'Dương Ác · Lam Hỏa Tâm', theme: 'icecave', width: 1280, goal: 'break', targets: ['yg_core'],
+    platforms: [{ x: 150, y: 250, w: 110 }, { x: 300, y: 206, w: 110 }, { x: 450, y: 162, w: 110 }, { x: 300, y: 118, w: 110 }, { x: 470, y: 76, w: 220 }],
+    exit: { x: 1220, y: GROUND_Y },
+    spawns: [{ mob: 'yg_core', x1: 570, x2: 570, y: 76, count: 1 }, { mob: 'water_ghost', x1: 300, x2: 900, y: 162, count: 3 }],
+    traps: [{ kind: 'drop', x: 330, w: 40, period: 3, fall: 1 }, { kind: 'drop', x: 480, w: 40, period: 3, fall: 1, offset: 1.5 }],
+  }),
+  // Demon pillars with huge health that keep calling poisonous black dust: break all three
+  yg_pillars: ygFloor({
+    name: 'Dương Ác · Quỷ Trụ', theme: 'graveyard', width: 1500, goal: 'break', targets: ['yg_pillar'],
+    platforms: [{ x: 600, y: 230, w: 120 }, { x: 950, y: 230, w: 120 }],
+    exit: { x: 1440, y: GROUND_Y },
+    spawns: [{ mob: 'yg_pillar', x1: 450, x2: 450, y: GROUND_Y, count: 1 }, { mob: 'yg_pillar', x1: 820, x2: 820, y: GROUND_Y, count: 1 }, { mob: 'yg_pillar', x1: 1190, x2: 1190, y: GROUND_Y, count: 1 }],
+  }),
+  // Spinning fire wheels that appear and vanish: a touch takes 90% of your health
+  yg_wheels: ygFloor({
+    name: 'Dương Ác · Hỏa Luân Trận', theme: 'volcano', width: 1600, goal: 'reach',
+    platforms: [{ x: 380, y: 230, w: 160 }, { x: 760, y: 200, w: 160 }, { x: 1140, y: 230, w: 160 }],
+    exit: { x: 1540, y: GROUND_Y },
+    traps: [
+      ...[260, 600, 980, 1340].map((x, i) => ({ kind: 'wheel', x, y: GROUND_Y, w: 40, period: 3, up: 1.6, offset: i * 0.75 })),
+      ...[440, 820, 1200].map((x, i) => ({ kind: 'wheel', x, y: [230, 200, 230][i], w: 40, period: 3.4, up: 1.6, offset: 1.5 + i * 0.6 })),
+    ],
+  }),
+  // ----- Before the end: stone giants, then the Silver Guard -----
+  yg_giants: ygFloor({
+    name: 'Dương Ác · Thạch Cự Nhân', theme: 'icecave', width: 1400, goal: 'clear',
+    platforms: [{ x: 350, y: 236, w: 160 }, { x: 850, y: 236, w: 160 }],
+    exit: { x: 1340, y: GROUND_Y },
+    spawns: [{ mob: 'yg_giant', x1: 300, x2: 1250, y: GROUND_Y, count: 5 }],
+  }),
+  yg_silver: ygFloor({
+    name: 'Dương Ác · Ngân Vệ Tướng', theme: 'temple', decor: 'altar', width: 1280, goal: 'boss',
+    platforms: [{ x: 160, y: 220, w: 160 }, { x: 960, y: 220, w: 160 }, { x: 560, y: 164, w: 160 }],
+    exit: { x: 1220, y: GROUND_Y },
+    spawns: [{ mob: 'yg_silver', x1: 760, x2: 900, y: GROUND_Y, count: 1 }],
+    traps: [{ kind: 'spikes', x: 330, y: GROUND_Y, w: 80, period: 4, up: 1.2 }, { kind: 'spikes', x: 840, y: GROUND_Y, w: 80, period: 4, up: 1.2, offset: 2 }],
+  }),
+});

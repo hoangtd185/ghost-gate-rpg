@@ -38,7 +38,7 @@ export function createParties({ players, send }) {
   function invite(s, m) {
     const target = players.get(String(m.to || ''));
     if (!target || target === s) return send(s, { t: 'party_err', why: 'nobody' });
-    if (target.map !== s.map || Math.abs(target.x - s.x) > P.inviteRange) return send(s, { t: 'party_err', why: 'far' });
+    if ((target.room || target.map) !== (s.room || s.map) || Math.abs(target.x - s.x) > P.inviteRange) return send(s, { t: 'party_err', why: 'far' });
     if (partyOf(target.id)) return send(s, { t: 'party_err', why: 'has_party', name: target.name });
     const mine = partyOf(s.id);
     if (mine && mine.leader !== s.id) return send(s, { t: 'party_err', why: 'not_leader' });

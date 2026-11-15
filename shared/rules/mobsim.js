@@ -20,8 +20,9 @@ export class MobState {
   constructor(id, x, standY, range, spawnRef, opt = {}) {
     const base = MONSTERS[id];
     const named = opt.named ? NAMED[opt.named] : null;
-    const chief = !named && !base.boss && !!opt.chief;
-    const elite = !named && !base.boss && !chief && (opt.elite ?? Math.random() < eliteChance(base.lv));
+    const fixed = base.behavior === 'static'; // doors, eggs, pillars: never chieftains or elites
+    const chief = !named && !base.boss && !fixed && !!opt.chief;
+    const elite = !named && !base.boss && !fixed && !chief && (opt.elite ?? Math.random() < eliteChance(base.lv));
     const LB = GAME.monsters.levelBonus, PL = GAME.monsters.perLevel, EL = GAME.monsters.elite;
     const bonus = named || base.boss ? 0 : (opt.lvBonus ?? randInt(0, base.lv >= 13 ? LB.maxFromLv13 : LB.max));
     const lv = named ? named.lv : base.lv + bonus;
@@ -48,7 +49,7 @@ export class MobState {
     this.id = id; this.uid = opt.uid || 0; this.lvBonus = bonus;
     this.def = { ...base, lv, name, drops, affix, hp: Math.round(hp), atk: Math.round(atk), def: Math.round(df), exp: Math.round(exp), gold };
     this.elite = elite; this.chief = chief; this.named = opt.named || null; this.namedDef = named;
-    this.scale = scale; this.tint = named ? named.tint : chief ? 'saturate(1.5) contrast(1.08) brightness(0.96)' : elite ? 'saturate(1.35) brightness(1.08)' : null;
+    this.scale = scale; this.tint = named ? named.tint : chief ? 'saturate(1.5) contrast(1.08) brightness(0.96)' : elite ? 'saturate(1.35) brightness(1.08)' : base.tint || null;
     this.affix = new Set(affix);
     this.tier = smartTier(lv);
     this.w = Math.round(base.w * scale); this.h = Math.round(base.h * scale);
@@ -85,18 +86,27 @@ const mobRoomAbove = (m) => m.y > 90;
 
 // ===== The monsters of one map =====
 // opts: { make(id, x, standY, range, group, opt) -> monster (default MobState), spawn: spawn the map's groups (default true),
-//         fieldBosses: run field-boss timers (default true), poisonTick(m): host-side poison damage (default: absolute) }
+//         fieldBosses: run field-boss timers (default true), poisonTick(m): host-side poison damage (default: absolute),
+//         onDamage(by, dealt, m): a player's damage was applied (hits and poison ticks; the same number that goes to dmgBy) }
 export class MobSim {
   constructor(mapId, opts = {}) {
     this.mapId = mapId; this.map = MAPS[mapId];
     this.make = opts.make || ((...a) => new MobState(...a));
     this.poisonTick = opts.poisonTick || ((m) => this.damage(m, m.poisonDmg, m.poisonBy, { poison: true }));
+    this.onDamage = opts.onDamage || null;
     this.fieldBosses = opts.fieldBosses !== false;
     this.time = 0; this.nextUid = 1;
     this.monsters = []; this.timers = []; this.events = [];
     this.namedT = opts.namedT || {};
     this.groups = this.map.spawns.map((s) => ({ ...s, alive: 0 }));
     if (opts.spawn !== false) for (const g of this.groups) for (let i = 0; i < g.count; i++) this.spawnGroup(g, 0.05 * i);
+  }
+
+  // Event floors: are all the monsters dead and none waiting to spawn? With `targets` (monster ids), only those count
+  // (a door to break, while the black dust around it may live on).
+  cleared(targets = null) {
+    const counts = (id) => !targets || targets.includes(id);
+    return this.groups.every((g) => g.alive <= 0 || !counts(g.mob)) && !this.monsters.some((m) => !m.dead && counts(m.id));
   }
 
   emit(type, data) { this.events.push({ type, ...data }); }
@@ -195,6 +205,7 @@ export class MobSim {
     m.lastHitT = this.time;
     if (by && by.player) {
       m.dmgBy.set(by.id, (m.dmgBy.get(by.id) || 0) + dmg);
+      this.onDamage?.(by, dmg, m);
       const first = !m.aggro;
       m.hitByPlayer = true;
       if (!opts.poison || !m.aggro) { m.aggro = by.id; m.aggroT = 8; }
@@ -202,7 +213,7 @@ export class MobSim {
       if (first && m.tier >= 2) {
         for (const o of this.monsters) if (o !== m && !o.dead && !o.aggro && !o.def.boss && Math.abs(o.cx - m.cx) < 220) { o.aggro = by.id; o.aggroT = 8; this.text(o, '!', '#ffdd55', 10); }
       }
-      if (!m.def.boss && m.def.behavior !== 'float' && by.cx !== undefined && !opts.poison) m.knock = (m.cx < by.cx ? -1 : 1) * 60;
+      if (!m.def.boss && m.def.behavior !== 'float' && m.def.behavior !== 'static' && by.cx !== undefined && !opts.poison) m.knock = (m.cx < by.cx ? -1 : 1) * 60;
     }
     if (m.hp <= 0) { this.kill(m, by); res.killed = true; }
     return res;
@@ -227,6 +238,7 @@ export class MobSim {
     const g = m.spawnRef;
     if (g) {
       g.alive--;
+      if (this.map.noRespawn) { this.emit('die', { m, by }); return; } // dungeon floors stay cleared
       const delay = m.def.boss ? BOSS_RESPAWN : rand(...GAME.monsters.respawnSec);
       this.after(delay, () => { if (this.groups.includes(g)) this.spawnGroup(g); });
     }
@@ -253,6 +265,7 @@ export class MobSim {
     if (m.maxShield && m.shield <= 0) { m.shieldT += dt; if (m.shieldT >= 10) { m.shield = m.maxShield; m.shieldT = 0; this.emit('fx', { kind: 'ring', x: m.cx, y: m.cy, dur: 0.5, data: { color: '#ffd84a', r: m.w * 0.8 } }); } }
     if (m.affix.has('regen') && this.time - m.lastHitT > 3 && m.hp < m.maxHp) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.03 * dt);
     if (d.behavior === 'boss') return this.updateBoss(m, dt, dist, p, players);
+    if (d.behavior === 'static') return this.updateStatic(m, dt, p);
     const sameFloor = !!p && Math.abs(p.standY - m.standY) < 12 && p.onGround;
     // charges on sight (tier 1+)
     if (!m.aggro && p && m.tier >= 1 && m.alpha >= 1) {
@@ -377,6 +390,23 @@ export class MobSim {
     if (m.windup > 0 && p) m.facing = p.cx > m.cx ? 1 : -1;
     m.x = clamp(m.x + m.vx * dt, m.range[0], m.range[1]);
     if (m.x <= m.range[0] + 0.5 || m.x >= m.range[1] - 0.5) { m.walkDir = -(m.walkDir || 1); if (m.charging > 0) m.charging = 0; }
+  }
+
+  // Objects that never move (doors, eggs, pillars, cores, the Armored Gate). Some keep calling minions while a player
+  // is around (def.summon every def.summonEvery seconds, at most GAME.dungeon.summonMax alive).
+  updateStatic(m, dt, p) {
+    const d = m.def;
+    m.vx = 0;
+    if (!d.summon || !p) return;
+    m.summonT = (m.summonT ?? d.summonEvery) - dt;
+    if (m.summonT > 0) return;
+    m.summonT = d.summonEvery;
+    if (this.monsters.filter((x) => !x.dead && x.summoner === m.uid).length >= GAME.dungeon.summonMax) return;
+    const w = this.make(d.summon, clamp(m.cx + rand(-60, 60), 20, this.map.width - 40), GROUND_Y, [20, this.map.width - 40], null, { elite: false, lvBonus: 0 });
+    w.summoner = m.uid; w.aggro = p.id; w.aggroT = 30;
+    if (MONSTERS[d.summon].behavior === 'float') { w.y = m.y + rand(0, 30); w.homeY = GROUND_Y - 80; }
+    this.add(w);
+    this.emit('fx', { kind: 'poof', x: w.cx, y: w.cy, dur: 0.5, data: { color: '#6a5a7a' } });
   }
 
   updateBoss(m, dt, dist, p) {

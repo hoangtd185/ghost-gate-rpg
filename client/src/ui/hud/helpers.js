@@ -26,7 +26,7 @@ export function npcMapName(npcId) {
 // Good map to grind on: the highest recommended level the player can already enter
 export function grindMap(ch) {
   const opened = (m) => Object.values(MAPS).every((mp) => mp.portals.every((pt) => pt.to !== m || ((!pt.lock || questStatus(ch, pt.lock) === 'done') && (!pt.req || questStatus(ch, pt.req) === 'done'))));
-  const list = Object.entries(MAPS).filter(([id, m]) => m.spawns.length && !m.spawns.some((sp) => sp.mob === 'boss' || sp.mob === 'qilin' || sp.mob === 'blood_demon') && (m.minLv || 1) <= ch.level + 1 && opened(id));
+  const list = Object.entries(MAPS).filter(([id, m]) => m.spawns.length && !m.dungeon && !m.spawns.some((sp) => sp.mob === 'boss' || sp.mob === 'qilin' || sp.mob === 'blood_demon') && (m.minLv || 1) <= ch.level + 1 && opened(id));
   list.sort((a, b) => (b[1].minLv || 1) - (a[1].minLv || 1));
   return list.length ? list[0][1].name : null;
 }

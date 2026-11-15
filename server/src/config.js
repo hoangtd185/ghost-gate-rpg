@@ -30,6 +30,10 @@ export const config = {
   apiLimitPerMin: num(env.API_LIMIT_PER_MIN, 240),
   trustProxy: bool(env.TRUST_PROXY, false), // enable when behind a proxy (Railway, Render, Nginx) to get the real client IP
   corsOrigin: env.CORS_ORIGIN || '', // empty = only the game page itself may call the API
+  // Server events (Xâm Lăng Dương Ác): open all the time instead of on schedule, and/or end each run after N seconds.
+  // For local play and tests only; the schedule itself is GAME.dungeon.schedule in shared/config.js
+  eventAlwaysOpen: bool(env.EVENT_ALWAYS_OPEN, false),
+  eventRunSec: num(env.EVENT_RUN_SEC, 0),
 };
 
 // Production requires a long enough TOKEN_SECRET: never let the server generate a key that is lost when the container restarts

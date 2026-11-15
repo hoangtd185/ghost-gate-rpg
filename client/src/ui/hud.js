@@ -15,6 +15,7 @@ import { NpcUI } from './hud/npc.js';
 import { ForgeUI } from './hud/forge.js';
 import { TradeUI } from './hud/trade.js';
 import { ActionsUI } from './hud/actions.js';
+import { EventUI } from './hud/event.js';
 
 export class GameUI {
   constructor(root, input, callbacks) {
@@ -30,6 +31,7 @@ export class GameUI {
       </div>
       <div class="hud-map"><div id="hMap"></div><small id="hOnline"></small></div>
       <div class="hud-party" id="hParty" hidden></div>
+      <div class="hud-event" id="hEvent" hidden></div>
       <canvas class="hud-mini" id="hMini" width="160" height="56"></canvas>
       <div class="hud-chat" id="hChat"><div class="chat-log" id="chatLog"></div>
         <form id="chatForm" autocomplete="off"><input id="chatIn" maxlength="80" placeholder="Enter để chat · bắt đầu bằng ! để chat kênh thế giới" aria-label="Tin nhắn chat"></form></div>
@@ -113,6 +115,7 @@ export class GameUI {
   detach() {
     this.world = null; this.close(); this.party = null; this.renderParty();
     this.premiumIdle(); this.premReq = null; // the shop's pending request (Vạn Bảo Các)
+    this.ev = {}; this.evRank = null; this.renderEvent();
     this.trade = null;
     this.root.querySelectorAll('#tradeAsk, #partyAsk').forEach((el) => el.remove());
   }
@@ -210,6 +213,7 @@ export class GameUI {
     const bf = $('#hBuffs', this.root);
     const html = p.buffs.map((b) => `<span title="${escapeHtml(b.name)}">${SKILL_GLYPH[b.sid]}<small>${Math.ceil(b.t)}</small></span>`).join('');
     if (bf._h !== html) { bf.innerHTML = html; bf._h = html; }
+    this.renderEvent();
     this.drawMinimap();
   }
 
@@ -305,10 +309,10 @@ export class GameUI {
     w.hidden = false;
     const body = {
       inv: () => this.winInventory(), char: () => this.winChar(), skill: () => this.winSkills(), quest: () => this.winQuests(),
-      sys: () => this.winSystem(), npc: () => this.winNpc(), craft: () => this.winCraft(), shop: () => this.winShop(), death: () => this.winDeath(), forge: () => this.winForge(), dialog: () => this.winDialog(), trade: () => this.winTrade(),
+      sys: () => this.winSystem(), npc: () => this.winNpc(), craft: () => this.winCraft(), shop: () => this.winShop(), death: () => this.winDeath(), evend: () => this.winEvEnd(), forge: () => this.winForge(), dialog: () => this.winDialog(), trade: () => this.winTrade(),
       premium: () => this.winPremium(),
     }[this.open]();
-    const titles = { inv: 'Túi đồ', char: 'Nhân vật', skill: 'Kỹ năng', quest: 'Nhiệm vụ', sys: 'Hệ thống', npc: '', shop: 'Cửa hàng', death: '', forge: 'Lò rèn của Anh Sắt', craft: 'Tú Nương · Chế tạo', dialog: '', trade: 'Giao dịch', premium: 'Vạn Bảo Các' };
+    const titles = { inv: 'Túi đồ', char: 'Nhân vật', skill: 'Kỹ năng', quest: 'Nhiệm vụ', sys: 'Hệ thống', npc: '', shop: 'Cửa hàng', death: '', evend: '', forge: 'Lò rèn của Anh Sắt', craft: 'Tú Nương · Chế tạo', dialog: '', trade: 'Giao dịch', premium: 'Vạn Bảo Các' };
     const title = this.open === 'npc' ? NPCS[this.npcId].name : this.open === 'shop' ? NPCS[this.shopNpc].name + ' · Cửa hàng' : titles[this.open];
     w.className = 'win w-' + this.open;
     w.innerHTML = (title ? `<header><h2>${escapeHtml(title)}</h2>${this.open === 'death' ? '' : '<button class="x" data-act="close" aria-label="Đóng">✕</button>'}</header>` : '') + `<div class="wb">${body}</div>`;
@@ -320,4 +324,4 @@ export class GameUI {
 
 // Vạn Bảo Các (premium shop) window and actions
 Object.assign(GameUI.prototype, PremiumUI);
-Object.assign(GameUI.prototype, PanelsUI, NpcUI, ForgeUI, TradeUI, ActionsUI);
+Object.assign(GameUI.prototype, PanelsUI, NpcUI, ForgeUI, TradeUI, ActionsUI, EventUI);

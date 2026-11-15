@@ -488,3 +488,32 @@ button.sock.full:hover { outline: 2px solid #ff9a8a; }
 .hud-party .pm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hud-party .pm.me b { color: var(--gold); }
 .hud-party small { color: var(--muted); }
+
+/* ===== Server event (Xâm Lăng Dương Ác): live damage ranking and results ===== */
+.in-event .hud-track { display: none; }
+.hud-event { position: absolute; right: 1.2em; top: 10.4em; width: 15em; background: linear-gradient(#1a0e10e6, #120e16d9); border: 1px solid #7a3a2a; border-radius: 6px; padding: .4em .6em .5em; font-size: .82em; z-index: 2; pointer-events: none !important; box-shadow: 0 0 12px #e8443a33; }
+.hud-event header { display: flex; justify-content: space-between; align-items: baseline; color: #ffb27a; font-family: var(--font-display); }
+.hud-event header .t { font-family: inherit; color: var(--paper); font-variant-numeric: tabular-nums; }
+.hud-event .fl { color: var(--muted); font-size: .9em; margin-bottom: .25em; }
+.hud-event ol, .evend ol { list-style: none; margin: 0; padding: 0; }
+.hud-event li, .evend li { display: grid; grid-template-columns: 1.6em 1fr auto; gap: .3em; align-items: center; padding: .05em 0; }
+.hud-event li i, .evend li i { font-style: normal; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hud-event li b, .evend li b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.hud-event li span, .evend li span { font-variant-numeric: tabular-nums; color: #ffcf9a; }
+.hud-event li.p1 i, .evend li.p1 i { color: #ffd36a; } .hud-event li.p2 i, .evend li.p2 i { color: #d8e0ea; } .hud-event li.p3 i, .evend li.p3 i { color: #e09a5a; }
+.hud-event li.me b, .evend li.me b { color: var(--gold); }
+.hud-event li.none, .evend li.none { display: block; color: var(--muted); }
+.hud-event .mine { margin-top: .3em; padding-top: .3em; border-top: 1px solid #7a3a2a88; color: var(--paper); }
+.w-evend { width: min(28em, calc(100% - 2em)); }
+.evend { text-align: center; }
+.evend > small { color: #ffb27a; letter-spacing: .08em; text-transform: uppercase; }
+.evend h2 { font-family: var(--font-display); font-size: 2.2em; margin: .1em 0 .2em; }
+.evend.win h2 { color: #ffd36a; text-shadow: 0 0 14px #ffb02a88; } .evend.lose h2 { color: #c8b8d8; }
+.evend h3 { margin: .8em 0 .3em; color: var(--muted); font-size: .9em; text-transform: uppercase; letter-spacing: .06em; }
+.evend ol { text-align: left; max-width: 20em; margin: 0 auto; }
+.evitems { display: flex; flex-wrap: wrap; gap: .35em; justify-content: center; }
+.evitem { padding: .2em .6em; border: 1px solid var(--line); border-radius: 999px; background: var(--ink-3); font-size: .9em; }
+.evitem.exp { color: #8fe8a0; }
+.evend button { margin-top: 1em; padding: .45em 1.4em; border-radius: 999px; border: 1px solid #e8b05a; background: linear-gradient(#d89a3a, #a3661f); font-weight: 700; }
+@media (max-width: 760px) { .hud-event { top: 6.5em; width: 12em; font-size: .75em; } }
+.evend .evnote { margin: .7em 0 0; color: #ffb27a; font-size: .85em; }

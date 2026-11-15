@@ -95,6 +95,7 @@ function enterGame(ch, isNew) {
   }, onSaveResult);
   const hooks = {
     toast: (m, k) => ui.toast(m, k),
+    banner: (html) => ui.banner(html),
     chat: (n, m, t) => ui.addChat(n, m, t),
     openNpc: (id) => ui.openNpc(id),
     death: (loss) => ui.showDeath(loss),
@@ -108,6 +109,7 @@ function enterGame(ch, isNew) {
   };
   world = new GameWorld(ch, hooks);
   ui.attach(world);
+  world.takeEventExp(ch.eventExp); // EXP from server events that ended while this character was offline
   if (storage.kind === 'api') {
     net = new Realtime(storage, {
       chat: (name, text, type) => ui.addChat(name, text, type),
@@ -115,6 +117,7 @@ function enterGame(ch, isNew) {
       toast: (m, k) => ui.toast(m, k),
       trade: (m) => ui.onTrade(m),
       party: (m) => ui.onParty(m),
+      event: (m) => ui.onEvent(m),
       premium: (m) => ui.onPremium(m),
     });
     net.attach(world);

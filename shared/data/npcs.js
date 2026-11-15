@@ -105,6 +105,13 @@ export const NPCS = {
     look: { robe: '#c8243a', trim: '#ffd6a0', inner: '#ffe8f0', pants: '#8a1a2a', hair: '#17110c', hairStyle: 1, skin: '#f0e4e8', eye: '#3a1a2a', crown: { kind: 'fairy', c: '#ffd76a' } },
     quests: ['wq_bride2', 'wq_bride3', 'wq_bride4a'],
   },
+  // Keeper of the server event Xâm Lăng Dương Ác (data/dungeons.js)
+  yangak_keeper: {
+    name: 'Thủ Ải', title: 'Dương Ác Thủ Vệ',
+    look: { robe: '#3a2a4a', trim: '#e2b85c', pants: '#1e1626', hair: '#d8d4cc', hairStyle: 3, skin: '#e0b48c', beard: true, hat: 'helm', hatColor: '#5a4a6a' },
+    dungeon: 'yangak',
+    quests: [],
+  },
   // Only appears in dialogue (portrait)
   old_master: {
     name: 'Vong Hồn Sư Phụ', title: 'Chưởng môn Huyền Môn',

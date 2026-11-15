@@ -5,6 +5,7 @@ import { NAMED } from '../../../shared/data/affixes.js';
 import { buildMapGraphics, VIEW_W } from '../gfx/backgrounds.js';
 import { Player, NPC, MOVE_SPEED } from './entities.js';
 import { stepBody } from '../../../shared/rules/physics.js';
+import { solidCrumbles, trapHit } from './traps.js';
 import { Pet } from './pet.js';
 import { calcStats, questStatus, npcPresent, questEvent } from '../../../shared/rules/character.js';
 import { npcLine, pickBanter } from './chatter.js';
@@ -17,6 +18,8 @@ import { CombatWorld } from './world/combat.js';
 import { DropsWorld } from './world/drops.js';
 import { FxWorld } from './world/fx.js';
 import { RenderWorld } from './world/render.js';
+import { EventWorld } from './world/event.js';
+import { EventGfxWorld } from './world/eventgfx.js';
 
 export class GameWorld {
   constructor(ch, hooks) {
@@ -32,7 +35,9 @@ export class GameWorld {
     this.net = null;
     this.pet = null;
     this.recalc();
-    this.loadMap(ch.map in MAPS ? ch.map : 'village', ch.x);
+    // a dungeon floor is only reachable through its keeper: a save made inside one starts in the village
+    if (ch.map in MAPS && !MAPS[ch.map].dungeon) this.loadMap(ch.map, ch.x);
+    else this.loadMap('village', MAPS.village.spawnX);
     if (ch.pet && ch.pet.on) this.pet = new Pet(this);
   }
 
@@ -47,6 +52,9 @@ export class GameWorld {
     const map = MAPS[id];
     this.mapId = id; this.map = map;
     this.ch.map = id;
+    if (!map.dungeon) this.dg = null; // left the dungeon (see enterDungeon / dungeonGo)
+    this.platforms = map.platforms; // plus the crumbling slabs that hold right now (dungeon floors, see update)
+    this.nearExit = false;
     this.remotes.clear();
     this.pendingPicks.clear(); // answers still arrive; a picked item comes in as an item change
     this.net?.entered(); // ask the server for this map's players (also when re-entering the same map)
@@ -159,6 +167,7 @@ export class GameWorld {
     this.timers = this.timers.filter((t) => t.t > 0);
     due.forEach((t) => t.fn());
 
+    if (this.map.traps) this.platforms = [...this.map.platforms, ...solidCrumbles(this.map.traps, this.trapTime())];
     this.updatePlayer(dt, input);
     this.sim.update(dt, this.player.dead ? [] : [this.player], this.projs);
     this.updateRemoteMobs(dt);
@@ -197,7 +206,7 @@ export class GameWorld {
     p.buffs = p.buffs.filter((b) => b.t > 0);
     if (p.buffs.length !== before) { this.recalc(); this.hooks.changed(); }
 
-    if (p.dead) { p.vx = 0; stepBody(p, dt, this.map.platforms, this.map.width); return; }
+    if (p.dead) { p.vx = 0; stepBody(p, dt, this.platforms, this.map.width); return; }
 
     // Dash (Ảnh Sát)
     if (p.dashT > 0) {
@@ -261,8 +270,10 @@ export class GameWorld {
       }
     }
     if (input.isDown('down') && !input.isDown('ctrl') && p.onGround && !move && p.atkT <= 0) p.sitting = true;
-    stepBody(p, dt, this.map.platforms, this.map.width);
+    stepBody(p, dt, this.platforms, this.map.width);
     p.updateAnim(dt);
+    // dungeon traps (each client hurts its own player, like monster contact)
+    if (this.map.traps) { const tr = trapHit(this.map.traps, this.trapTime(), p); if (tr) this.trapHurt(tr); }
 
     // Skills
     if (input.isDown('attack')) this.castSkill(0);
@@ -275,8 +286,11 @@ export class GameWorld {
     // Portals + NPCs
     this.nearPortal = this.portals.find((pt) => Math.abs(pt.x - p.cx) < 30 && p.standY === GROUND_Y);
     this.nearNpc = this.npcs.find((n) => Math.abs(n.cx - p.cx) < 36 && Math.abs(n.y - p.y) < 20);
+    const ex = this.map.exit;
+    this.nearExit = !!ex && p.onGround && Math.abs(ex.x - p.cx) < 30 && Math.abs(p.standY - ex.y) < 4;
     if (input.wasPressed('up') || input.wasPressed('interact')) {
       if (this.nearPortal && this.portalCd <= 0) { this.usePortal(this.nearPortal); return; }
+      if (this.nearExit && this.portalCd <= 0) { this.dungeonNext(); return; }
       if (this.nearNpc) { this.hooks.openNpc(this.nearNpc.id); input.clear(); }
     }
 
@@ -296,7 +310,7 @@ export class GameWorld {
     // Collision with monsters
     if (p.invuln <= 0) {
       for (const m of this.monsters) {
-        if (m.dead || m.alpha < 0.8) continue;
+        if (m.dead || m.alpha < 0.8 || m.def.harmless) continue; // doors, eggs, pillars do not hurt on touch
         if (overlap(this.hitboxOf(m), p)) { this.hurtPlayer(m.def.atk * (m.enraged ? 1.5 : 1) * (m.charging > 0 ? 1.3 : 1), m.cx < p.cx ? 1 : -1, m.def.el, m); break; }
       }
     }
@@ -335,4 +349,4 @@ export class GameWorld {
   }
 }
 
-Object.assign(GameWorld.prototype, NetWorld, CombatWorld, DropsWorld, FxWorld, RenderWorld);
+Object.assign(GameWorld.prototype, NetWorld, CombatWorld, DropsWorld, FxWorld, RenderWorld, EventWorld, EventGfxWorld);

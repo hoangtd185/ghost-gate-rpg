@@ -248,7 +248,8 @@ export const CombatWorld = {
   playerDie() {
     const p = this.player, ch = this.ch;
     ch.hp = 0; p.dead = true; p.poisonT = 0; p.slowT = 0;
-    const lose = Math.floor(expToNext(ch.level) * GAME.player.deathExpLoss);
+    // in an event you get back up on the same floor and lose nothing (see respawn)
+    const lose = this.map.dungeon ? 0 : Math.floor(expToNext(ch.level) * GAME.player.deathExpLoss);
     ch.exp = Math.max(0, ch.exp - lose);
     this.hooks.death(lose);
   },
@@ -277,6 +278,9 @@ export const CombatWorld = {
       const k = this.stats.pas.killHeal / 100;
       ch.hp = Math.min(this.stats.maxHp, ch.hp + this.stats.maxHp * k); ch.mp = Math.min(this.stats.maxMp, ch.mp + this.stats.maxMp * k);
     }
+    // an offline practice run of a server event gives no EXP, gold, drops, Nguyên Bảo or quest credit (the death
+    // effects above and the floor state, which the simulation keeps, are already done)
+    if (this.dg && !this.net) { this.hooks.changed('bars'); return; }
     const exp = killExp(m.def.exp, ch.level, m.def.lv);
     this.giveExp(exp);
     // gold
@@ -352,7 +356,16 @@ export const CombatWorld = {
   },
 
   respawn() {
-    const p = this.player;
+    const p = this.player, D = GAME.dungeon;
+    if (this.map.dungeon) { // back on your feet where you fell (a few seconds untouchable): the run goes on
+      p.dead = false; p.invuln = D.reviveInvuln;
+      this.ch.hp = Math.floor(this.stats.maxHp * D.reviveHp);
+      this.ch.mp = Math.floor(this.stats.maxMp * D.reviveHp);
+      p.vx = 0; p.vy = 0;
+      this.addFx('levelup', p.cx, p.y + p.h, 1, {});
+      this.hooks.changed();
+      return;
+    }
     p.dead = false; p.invuln = 2;
     this.ch.hp = Math.floor(this.stats.maxHp * GAME.player.respawnHpMp);
     this.ch.mp = Math.floor(this.stats.maxMp * GAME.player.respawnHpMp);

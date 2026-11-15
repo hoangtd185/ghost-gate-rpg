@@ -14,6 +14,7 @@ It plays like an MMO. On the Node server, real players on the same map see each 
 - **Gem sockets**: 5 gem types × 3 grades, socket, unsocket and fuse gems
 - **Crafting** at the embroiderer NPC: outfits and consumables from farmed materials
 - **9 outfits (cosmetic slot)** with capes, crowns, fox ears and tails, animated silk ribbons and auras. Rare drops from bosses, some craftable
+- **Server event "Xâm Lăng Dương Ác"** (vượt ải): Saturday and Sunday 15:00 the whole server runs 9 floors of traps, monsters and gates up to the Silver Guard. Live top 10 by damage; everyone who took part is rewarded, the top 10 get more
 - **Flowing capes (own slot, worn with an outfit)**: simulated cloth that trails while running
 - **Vạn Bảo Các (premium shop)**: capes, outfits and utilities for Nguyên Bảo, earned in game only (daily check-in, chieftains, field bosses, chapter finales); live try-on preview; online the server owns the balance
 - **Main story "Huyền Môn Phong Ấn"**: a prologue + 3 chapters (32 quests), voiced-style dialogue with character portraits, an in-story choice that changes the ending, story-gated zones that require leveling up
@@ -304,6 +305,8 @@ The server loads `.env` on startup with Node's built-in `process.loadEnvFile` (n
 | `API_LIMIT_PER_MIN` | `240` | Max API requests per minute per IP |
 | `TRUST_PROXY` | `false` | Turn on behind a proxy (Railway, Render, Nginx) so rate limits use the real player IP |
 | `CORS_ORIGIN` | empty | Only set when the game page and the API live on different origins |
+| `EVENT_ALWAYS_OPEN` | `false` | Local play and tests: keep the server event open all the time (a run starts when the first player joins) instead of Saturday and Sunday 15:00 |
+| `EVENT_RUN_SEC` | `0` | Local play and tests: end each event run after this many seconds (`0` = at the end of its window) |
 
 ## Security and publishing to GitHub
 
@@ -349,6 +352,7 @@ shared/                 code and data used by BOTH the browser and the Node serv
   util.js               small helpers (clamp, rand, pick, fmtNum, escapeHtml...)
   data/                 GAME DATA: classes, skills, items, monsters, maps, NPCs, quests, bots
     premium.js          Vạn Bảo Các offers and tabs
+    dungeons.js         server events: Xâm Lăng Dương Ác (schedule rules, phases, rewards, ranking tiers)
     world.js            world quest chains (choices, flags)
     story.js            main story: speakers, chapters, order; the quests are in story/ (prologue, chapter1-3, scenes, tutorial)
     chatter.js          everyday NPC lines and NPC-to-NPC conversations
@@ -376,29 +380,33 @@ client/
       icons.js          item icons and projectiles
       backgrounds.js    map graphics builder and portals (backgrounds/ has theme, scenery, ground)
     game/
+      traps.js          event traps on a shared clock: spikes, flames, teeth, lasers, gas, wheels, rocks, fireballs, slabs, mud
       entities.js       player, monster sprites (their state lives in rules/mobsim.js), drops, projectiles
       world.js          GameWorld core: map loading, update loop, player movement
-      world/            the rest of GameWorld: combat, drops, net (online glue), fx (particles, weather), render
+      world/            the rest of GameWorld: combat, drops, net (online glue), fx (particles, weather), render,
+                        event (server event floors: trap clock, exits) and eventgfx (drawing traps and gates)
       bots.js           fake-player bot AI and chat
       chatter.js        picks context-aware NPC lines without repeating
     ui/                 login screens, skill glyphs, and the in-game UI:
       hud.js            GameUI core: HUD bars, toasts, chat, minimap, window switching
-      hud/              the windows: panels (inventory, character, skills, quests), npc (dialogue, shop, quests), forge, trade, actions
+      hud/              the windows: panels (inventory, character, skills, quests), npc (dialogue, shop, quests), forge, trade, actions,
+                        event (server event: keeper button, live damage ranking, results)
       premium.js        Vạn Bảo Các window: balance, check-in, offers, try-on preview
     storage/            the 3 storage backends (API / Claude / browser)
     net/realtime.js     WebSocket client: position sync, other players, chat, loot, trades, reconnect
     style.css
 server/src/
   index.js              HTTP server, API routing, security headers, rate limits, static files
+  dungeon.js            server event: schedule, one run for everyone, floors, exits, damage ranking, rewards
   realtime.js           WebSocket server at /ws: presence, movement, chat, loot, trades, premium requests
   premium.js            Vạn Bảo Các: purchases, check-in, quest and kill Nguyên Bảo (server owns the balance)
-  mobs.js               shared monsters: one simulation per map, hits, rewards
+  mobs.js               shared monsters: one simulation per room (a map, or an event floor of a run), hits, rewards
   party.js              parties
   loot.js               personal loot: drops, pickup commit queue
   trade.js              player-to-player trades
   config.js             reads environment variables and .env
   db.js                 SQLite schema, migrations, character read / write
-  db/                   the rest of the database: schema, helpers, items (custody, trades, ledger), premium (ingots)
+  db/                   the rest of the database: schema, helpers, items (custody, trades, ledger), premium (ingots), events (server event windows, EXP counters, queued rewards)
   auth.js               password hashing (scrypt), login tokens (HMAC)
 tools/
   build.mjs             bundles the client into one HTML file
@@ -534,6 +542,22 @@ On phones, touch buttons appear automatically the first time you touch the scree
 
 **Chieftains** (`CHIEF` in `shared/data/affixes.js`): now and then (1.5% per spawn, max one per map) a regular monster spawns as a bigger "Đầu Lĩnh" with ×7 HP, harder hits and better drops.
 
+**Server event Xâm Lăng Dương Ác** (`shared/data/dungeons.js`, floors in `shared/data/maps.js`, traps in `client/src/game/traps.js`, server in `server/src/dungeon.js`)
+
+Every **Saturday and Sunday at 15:00 (Vietnam time) for 30 minutes** the gate of the demon city opens for the whole server. World chat warns 5 and 1 minutes before. Talk to Thủ Ải in the village (level 12+) and choose *Tham chiến*: everyone who joins runs the same floors together. Each floor's exit opens when its goal is met, then press ↑ at the gate. A run has 9 floors:
+
+| Phase | Floors (picked at random each run) | Goal |
+|---|---|---|
+| 1 | Bậc Đá Rơi (always first: climb while rocks fall) + two of Bạch Thương Trận (white spearmen), Hắc Trần Môn (break the iron door, dust drifts around), Hỏa Cầu Mê Lộ (rolling fireballs) | reach / clear / break |
+| Gate | Thiết Giáp Môn: the Armored Gate, ledge lasers (a glint first), gas, spears rising from the floor | boss |
+| 2 | three of Ấu Quỷ Sào (teeth snap shut, every 4th gate is safe, slowing gas), Noãn Sào (eggs and half-silver men), Lam Hỏa Tâm (climb to the flame core and break it), Quỷ Trụ (three pillars that keep calling dust), Hỏa Luân Trận (fire wheels that take 90% HP) | reach / clear / break |
+| End | Thạch Cự Nhân (stone giants), then Ngân Vệ Tướng, the Silver Guard | clear, boss |
+
+Traps warn before they strike and run on a clock shared by everyone on the floor, so you can wait for the right moment. Their damage is a share of max HP (`GAME.dungeon`). Dying inside costs no EXP: you get up where you fell.
+
+The server ranks every player's damage to the event's monsters; a panel shows the live **top 10** and your place. When the Silver Guard falls (win) or time runs out (loss) **everyone who took part** gets a reward: Đá Cường Hóa ×2, Bình Máu Lớn ×5 and a quarter of a level of EXP; a win adds a gem, Sương Đêm and another quarter level. The top 10 get more: 1st Hắc Long Bào + a top-grade gem + Bùa Bảo Hộ ×3; 2nd–3rd a top-grade gem, Sương Đêm ×2, Bùa Bảo Hộ ×2; 4th–10th two gems and a Bùa Bảo Hộ. Offline the keeper offers a practice run of the same floors, without rewards.
+
+**Named bosses** (`NAMED` in `data/affixes.js`)
 **Named bosses** (`NAMED` in `shared/data/affixes.js`)
 
 - Story bosses: Bù Nhìn Đầu Đàn, Lão Đăng Quỷ, Băng Dực Vương, Huyết Thi Tướng. They only appear while the matching quest is active.

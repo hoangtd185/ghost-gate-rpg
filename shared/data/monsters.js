@@ -122,6 +122,63 @@ export const MONSTERS = {
     },
     drops: [['mat_dew', 1], ['out_blood_moon', 0.04], ['mat_mask', 1], ['W7', 0.5], ['hp_l', 1], ['mp_l', 1], ['stone', 1], ['stone', 1], ['stone', 0.7], ['protect', 0.6], ['GEM2', 1], ['GEM3', 0.3]],
   },
+
+  // ===== Server event Xâm Lăng Dương Ác (data/dungeons.js) =====
+  // behavior 'static': objects that never move (doors, eggs, pillars, cores, the Armored Gate); harmless: touching
+  // them does not hurt; summon + summonEvery: keeps calling minions (max 4 alive); tint: recolors the borrowed sprite
+  yg_spearman: {
+    name: 'Bạch Thương Quỷ', lv: 15, hp: 700, atk: 48, def: 12, exp: 150, gold: [20, 40],
+    behavior: 'walk', w: 22, h: 32, speed: 46, tint: 'saturate(0) brightness(1.7)', res: { thunder: -0.3 },
+    drops: [['hp_l', 0.1], ['stone', 0.05]],
+  },
+  yg_dust: {
+    affix: ['poison'],
+    name: 'Hắc Trần', lv: 15, hp: 380, atk: 40, def: 6, exp: 90, gold: [10, 20],
+    behavior: 'float', w: 18, h: 18, speed: 34, drops: [['mp_l', 0.08]],
+  },
+  yg_door: {
+    name: 'Cổng Sắt Quỷ Thành', lv: 15, hp: 6000, atk: 0, def: 20, exp: 400, gold: [0, 0],
+    behavior: 'static', harmless: true, w: 56, h: 90, speed: 0, res: { poison: 0.8 }, drops: [],
+  },
+  yg_gate: {
+    name: 'Thiết Giáp Môn', lv: 17, hp: 24000, atk: 0, def: 24, exp: 3000, gold: [300, 600],
+    behavior: 'static', boss: true, harmless: true, w: 110, h: 150, speed: 0, res: { fire: 0.2, ice: 0.2, thunder: 0.2, poison: 0.6 },
+    drops: [['stone', 1], ['GEM2', 0.5], ['protect', 0.3]],
+  },
+  yg_egg: {
+    name: 'Quỷ Noãn', lv: 15, hp: 500, atk: 0, def: 4, exp: 60, gold: [0, 0],
+    behavior: 'static', harmless: true, w: 24, h: 28, speed: 0, drops: [],
+  },
+  yg_halfman: {
+    name: 'Bán Ngân Nhân', lv: 16, hp: 900, atk: 52, def: 14, exp: 180, gold: [20, 40],
+    behavior: 'hop', w: 22, h: 32, speed: 60, tint: 'saturate(0.2) brightness(1.4) contrast(1.1)', drops: [['hp_l', 0.1]],
+  },
+  yg_core: {
+    name: 'Lam Hỏa Tâm', lv: 16, hp: 5000, atk: 0, def: 16, exp: 500, gold: [0, 0],
+    behavior: 'static', harmless: true, w: 26, h: 28, speed: 0, res: { ice: 0.8, fire: -0.3 }, drops: [],
+  },
+  yg_pillar: {
+    name: 'Quỷ Trụ', lv: 16, hp: 7000, atk: 0, def: 18, exp: 500, gold: [0, 0],
+    behavior: 'static', harmless: true, w: 40, h: 120, speed: 0, summon: 'yg_dust', summonEvery: 6, drops: [],
+  },
+  yg_giant: {
+    affix: ['enrage'],
+    name: 'Thạch Cự Nhân', lv: 17, hp: 2600, atk: 66, def: 26, exp: 420, gold: [40, 80],
+    behavior: 'walk', w: 30, h: 34, speed: 26, tint: 'sepia(0.6) saturate(0.6) brightness(0.9)', drops: [['stone', 0.2]],
+  },
+  // final: killing it ends the event as a victory (server/src/dungeon.js)
+  yg_silver: {
+    name: 'Ngân Vệ Tướng', lv: 18, hp: 40000, atk: 70, def: 28, exp: 9000, gold: [2000, 4000],
+    behavior: 'boss', boss: true, final: true, w: 64, h: 76, speed: 44, tint: 'saturate(0) brightness(1.5) contrast(1.15)',
+    res: { fire: 0.2, ice: 0.2, thunder: -0.2, poison: 0.3 }, proj: 'ghostfire', summon: 'yg_spearman',
+    lines: {
+      aggro: 'Lũ phàm nhân dám bước vào Dương Ác Thành?',
+      shoot: ['Ngân hỏa!', 'Tan biến đi!', 'Hừ!'],
+      summon: 'Bạch Thương Quỷ, ra đây!',
+      rage: 'Thành này sẽ không bao giờ thất thủ!!',
+    },
+    drops: [['mat_dew', 1], ['stone', 1], ['stone', 1], ['GEM2', 1], ['protect', 0.5]],
+  },
 };
 
 // Random gem drops: GEM1/GEM2/GEM3 = random gem of grade 1/2/3

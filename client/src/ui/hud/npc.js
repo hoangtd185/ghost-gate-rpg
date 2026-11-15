@@ -38,6 +38,7 @@ export const NpcUI = {
     }
     if (npc.shop) html += `<button data-act="shop">Mua bán</button>`;
     if (npc.forge) html += `<button data-act="forge"><em>✦</em> Lò rèn · Cường hóa, ép ngọc</button>`;
+    if (npc.dungeon) html += this.eventButton(npc.dungeon);
     if (npc.craft) html += `<button data-act="craftwin"><em>✿</em> Chế tạo · Thêu ngoại trang</button>`;
     if (npc.premium) html += `<button class="storybtn" data-act="premwin"><em>◆</em> Vạn Bảo Các · Áo choàng, ngoại trang</button>`;
     html += `<button class="ghost" data-act="close">Tạm biệt</button></div>`;

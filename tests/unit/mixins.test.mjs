@@ -9,19 +9,23 @@ import { CombatWorld } from '../../client/src/game/world/combat.js';
 import { DropsWorld } from '../../client/src/game/world/drops.js';
 import { FxWorld } from '../../client/src/game/world/fx.js';
 import { RenderWorld } from '../../client/src/game/world/render.js';
+import { EventWorld } from '../../client/src/game/world/event.js';
+import { EventGfxWorld } from '../../client/src/game/world/eventgfx.js';
 import { PanelsUI } from '../../client/src/ui/hud/panels.js';
 import { NpcUI } from '../../client/src/ui/hud/npc.js';
 import { ForgeUI } from '../../client/src/ui/hud/forge.js';
 import { TradeUI } from '../../client/src/ui/hud/trade.js';
 import { ActionsUI } from '../../client/src/ui/hud/actions.js';
+import { EventUI } from '../../client/src/ui/hud/event.js';
 import { PremiumUI } from '../../client/src/ui/premium.js';
 import { ItemsDb } from '../../server/src/db/items.js';
 import { PremiumDb } from '../../server/src/db/premium.js';
+import { EventsDb } from '../../server/src/db/events.js';
 
 const CLASSES = {
-  GameWorld: { file: 'client/src/game/world.js', parts: { NetWorld, CombatWorld, DropsWorld, FxWorld, RenderWorld } },
-  GameUI: { file: 'client/src/ui/hud.js', parts: { PanelsUI, NpcUI, ForgeUI, TradeUI, ActionsUI, PremiumUI } },
-  GameDb: { file: 'server/src/db.js', parts: { ItemsDb, PremiumDb } },
+  GameWorld: { file: 'client/src/game/world.js', parts: { NetWorld, CombatWorld, DropsWorld, FxWorld, RenderWorld, EventWorld, EventGfxWorld } },
+  GameUI: { file: 'client/src/ui/hud.js', parts: { PanelsUI, NpcUI, ForgeUI, TradeUI, ActionsUI, PremiumUI, EventUI } },
+  GameDb: { file: 'server/src/db.js', parts: { ItemsDb, PremiumDb, EventsDb } },
 };
 
 // method names declared directly in `class Name { ... }` (two-space indent), read from the source
