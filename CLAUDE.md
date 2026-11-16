@@ -39,6 +39,7 @@ Debug in the browser console (file://, localhost or `?debug`): `__game()` return
 | New outfit part | Draw helper in `client/src/gfx/humanoid/outfit.js` |
 | New cape | An item with `slot: 'cape'` and a `cape` look in `shared/data/items.js` (options at the top of `client/src/gfx/cape.js`); cloth feel in `GAME.cape` |
 | World quest chains (Genshin-style side stories, choices, branches) | `shared/data/world.js` (chains + quests), NPCs in `shared/data/npcs.js`, their spots in `shared/data/maps.js` |
+| New pet | `shared/data/pets.js` (name, lines, how to get it), a draw function registered in `PET_DRAW` (`client/src/gfx/pet.js`), and a quest with `reward.pet` |
 | Premium shop offers, Nguyên Bảo amounts | `shared/data/premium.js` (offers), `GAME.premium` (check-in, kills, chapter rewards), `reward.ingots` on quests |
 | Monster behaviour (AI, affixes, bosses, spawns) | `shared/rules/mobsim.js` (runs offline and on the server) |
 | Damage formulas (player hits, skill multipliers, reach) | `shared/rules/combat.js` (runs offline and on the server) |

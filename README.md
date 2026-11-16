@@ -21,7 +21,7 @@ It plays like an MMO. On the Node server, real players on the same map see each 
 - Tutorial quests, side quests, daily bounty quests, daily gifts, titles shown above the character
 - **World quests** (Genshin style): four story chains found around the world, two cheerful and two dark, each ending with a choice that changes how the story ends; rewards include Nguyên Bảo, titles and a cape
 - Context-aware NPC dialogue (story progress, time of day, class, pet, gear…) and NPCs that chat with each other
-- A pet ghost (Tiểu Quỷ) that follows you and picks up loot in range, even on high platforms
+- Pets that follow you and pick up loot in range, even on high platforms: the ghost Tiểu Quỷ (first quest) and the three-tailed fox cub Tiểu Hồ (the fisherman's quest *Hồ Ly Lạc Mẹ*); switch between the ones you own in the character window, P calls or rests the pet
 - Double jump and variable jump height
 - Chibi characters with big heads and big eyes. Every graphic is drawn in code; no art from any other game is used
 - **Plain JavaScript on a canvas**, with a small Node server (`node:http`, `node:sqlite`, `node:crypto`). One runtime dependency, `ws` (WebSocket, multiplayer), so run `npm install` before starting the server; external libraries are allowed when they earn their place (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))

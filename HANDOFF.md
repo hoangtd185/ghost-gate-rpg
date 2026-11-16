@@ -103,7 +103,7 @@ client/src/
   game/entities.js   Player / Monster (MobState + sprite) / NPC / Drop / Projectile / RemotePlayer, lookFor
   game/bots.js       fake players (hunt, chat, change maps, reply to the player)
   game/chatter.js    context-aware NPC lines (no repeats) and NPC-to-NPC banter
-  game/pet.js        the imp pet that picks up drops
+  game/pet.js        the pet that follows the player and picks up drops (which one: shared/data/pets.js)
   gfx/               canvas drawing: humanoid.js + humanoid/ (chibi characters: frames, parts, outfit), cape.js (flowing capes),
                      monsters.js + monsters/ (one file per region), backgrounds.js + backgrounds/ (theme, scenery, ground),
                      icons.js, pet.js, draw.js (toolkit)
@@ -267,7 +267,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
   - Earned only in game (`GAME.premium`): daily check-in (10, +40 on every 7th day in a row; the day starts at midnight Vietnam time), chieftains (+2) and field bosses (+5) for the top damage group, quests with `reward.ingots` (chapter finales st7/st12/st18: 30).
   - Rules shared by both sides in `shared/rules/premium.js` (`checkinReward`, `killIngots`, `questIngots`, offers; `buyLocal` / `checkinLocal` offline). Window and try-on preview in `ui/premium.js` (mixed into `GameUI`).
   - Online the server owns the balance: `characters.ingots` and `checkin` columns, never taken from saves; every change is an `ingots` ledger row replayed through `chg`. `server/src/premium.js` handles `prem` messages (buy / checkin / claim) and kill rewards. See docs/MULTIPLAYER.md §4b.
-- **Pet**: `imp` (Tiểu Quỷ), from side quest `q_pet`. It picks up drops.
+- **Pets** (`shared/data/pets.js`, sprites in `client/src/gfx/pet.js`): `imp` (Tiểu Quỷ, from `q_pet`) and `fox_kit` (Tiểu Hồ, from the fisherman's `q_fox_pet`). They pick up drops. `ch.pet = { id, on, owned }`: one pet is out or resting, `owned` lists every pet the character has; `cleanPet` keeps known pets only (on load and in the server's save). Switch in the character window (`petsel`), P calls or rests.
 
 ## 5. Conventions and rules
 
