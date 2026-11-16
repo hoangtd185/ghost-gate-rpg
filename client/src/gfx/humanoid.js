@@ -3,7 +3,7 @@
 import { makeSheet, shade, rgba, paint, shadeIn, ellipse, rrect, radial, linear, OUTLINE } from './draw.js';
 import { HUM_W, HUM_H, HUM_FEET, SIDE, TOP, POSES, HUM_FRAMES } from './humanoid/frames.js';
 import { drawLeg, armJoints, drawArm, drawWeapon, faceShape, drawEye, drawBackHair, drawFrontHair, drawHat } from './humanoid/parts.js';
-import { drawCape, drawTail, drawSash, drawPattern, drawFur, drawShoulder, drawHood, drawEars, drawCrown, drawHalfMask } from './humanoid/outfit.js';
+import { drawCape, drawTail, drawNineTails, drawSash, drawPattern, drawFur, drawShoulder, drawHood, drawEars, drawCrown, drawHalfMask } from './humanoid/outfit.js';
 export { HUM_W, HUM_H, HUM_FEET, HUM_FRAMES, capeAnchor } from './humanoid/frames.js';
 
 function drawBody(ctx, x, y, look, hemSwing) {
@@ -81,6 +81,7 @@ export function drawHumanoid(ctx, look, f) {
   if (look.cape) drawCape(ctx, bodyX, bodyY, look.cape, sw);
   if (look.sash) drawSash(ctx, bodyX, bodyY, look.sash, sw, b);
   if (look.tail) drawTail(ctx, bodyX, bodyY + 4, look.tail, sw);
+  if (look.tails) drawNineTails(ctx, bodyX, bodyY + 4, look.tails, sw);
   // back hair + back arm + legs
   // upper body pitched forward around the hips (run); legs stay upright
   const pitch = () => { if (P.tilt) { ctx.translate(bodyX, hipY); ctx.rotate(P.tilt); ctx.translate(-bodyX, -hipY); } };

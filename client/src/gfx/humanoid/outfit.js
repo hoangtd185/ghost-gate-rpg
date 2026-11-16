@@ -1,5 +1,6 @@
-// Humanoid outfit details: cape, tail, sash, robe patterns, fur, shoulders, hood, ears, crown, half mask
+// Humanoid outfit details: cape, tail, nine tails, sash, robe patterns, fur, shoulders, hood, ears, crown, half mask
 import { shade, rgba, paint, ellipse, rrect, poly, linear, OUTLINE } from '../draw.js';
+import { GAME } from '../../../../shared/config.js';
 
 // ---------------- outfit details ----------------
 // Cape on the back, flowing backward while running
@@ -45,6 +46,43 @@ export function drawTail(ctx, x, y, color, sw) {
   ctx.strokeStyle = rgba(shade(color, -0.45), 0.5); ctx.lineWidth = 0.6;
   ctx.beginPath(); ctx.moveTo(x - 6, y + 11); ctx.quadraticCurveTo(x - 13, y + 11, x - 16 - sw, y + 5); ctx.stroke();
   ctx.restore();
+}
+
+// One fluffy tail of the fan: a leaf shape from the base along `ang` (radians, 0 = forward, PI = straight back,
+// PI / 2 = up), `len` long and `wid` wide, the tip curling by `curl`; the end fades into the tip colour
+function fanTail(ctx, bx, by, ang, len, wid, curl, c, tip) {
+  const dx = Math.cos(ang), dy = -Math.sin(ang); // along the tail (canvas y grows downward)
+  const nx = -dy, ny = dx; // across it
+  const at = (k, off) => [bx + dx * len * k + nx * off, by + dy * len * k + ny * off];
+  const [tx, ty] = at(1, curl);
+  const p = new Path2D();
+  p.moveTo(...at(0, -wid * 0.28));
+  p.bezierCurveTo(...at(0.3, -wid * 1.05), ...at(0.96, -wid * 0.95 + curl * 0.8), tx, ty); // fat body, rounded tip
+  p.bezierCurveTo(...at(1.0, wid * 0.7 + curl), ...at(0.36, wid * 1.0), ...at(0, wid * 0.28));
+  p.closePath();
+  const [mx, my] = at(0.62, curl * 0.3);
+  paint(ctx, p, linear(ctx, bx, by, tx, ty, [[0, shade(c, -0.3)], [0.5, c], [0.7, shade(c, 0.16)], [0.85, tip], [1, tip]]), OUTLINE, 0.8);
+  // a soft highlight along the upper side, and one fur line
+  ctx.save(); ctx.clip(p);
+  ctx.strokeStyle = rgba('#ffffff', 0.26); ctx.lineWidth = wid * 0.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(...at(0.2, -wid * 0.4)); ctx.quadraticCurveTo(mx - nx * wid * 0.5, my - ny * wid * 0.5, ...at(0.9, curl * 0.8 - wid * 0.15)); ctx.stroke();
+  ctx.strokeStyle = rgba(shade(c, -0.5), 0.35); ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(...at(0.12, wid * 0.1)); ctx.quadraticCurveTo(mx + nx * wid * 0.35, my + ny * wid * 0.35, ...at(0.7, curl * 0.5 + wid * 0.2)); ctx.stroke();
+  ctx.restore(); ctx.lineCap = 'butt';
+}
+
+// Nine fox tails fanned out behind the back (look.tails = { n, c, tip }): the outer ones are drawn first and are
+// shorter, the middle one last and longest, so the fan reads as one shape. sw (the walk swing) makes them sway.
+export function drawNineTails(ctx, x, y, t, sw) {
+  const F = GAME.tailFan, n = Math.max(1, t.n || F.count), c = t.c, tip = t.tip || '#ffffff';
+  const bx = x - 2.5, by = y + 9; // the base hides behind the hips
+  const order = [...Array(n).keys()].sort((a, b) => Math.abs(b - (n - 1) / 2) - Math.abs(a - (n - 1) / 2)); // outer first
+  for (const i of order) {
+    const k = n > 1 ? i / (n - 1) : 0.5, mid = 1 - Math.abs(k - 0.5) * 2; // 0 at the edges, 1 in the middle
+    const ang = F.from + (F.to - F.from) * k + sw * F.sway * (0.6 + k);
+    const len = F.len * (F.edge + (1 - F.edge) * mid);
+    fanTail(ctx, bx, by, ang, len, F.wid * (0.85 + 0.15 * mid), (k - 0.5) * F.curl + sw * 0.6, i % 2 ? shade(c, -0.07) : c, tip);
+  }
 }
 
 // Fairy silk sash looping behind the back, both ends flying

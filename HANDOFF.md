@@ -233,7 +233,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 | Id | Name |
 |---|---|
 | out_wisp_hood | Ma Trơi Tinh Nghịch |
-| out_fox | Hồ Ly Y |
+| out_fox | Cửu Vĩ Hồ Y (nine tails: look `tails`, drawn by `drawNineTails`, tuned in `GAME.tailFan`) |
 | out_black_dragon | Hắc Long Bào |
 | out_jade_lotus | Thanh Liên Tiên Y |
 | out_rainbow_fairy | Nghê Thường Tiên Y |

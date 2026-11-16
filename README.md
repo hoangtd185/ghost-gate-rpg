@@ -568,7 +568,7 @@ The server ranks every player's damage to the event's monsters; a panel shows th
 | Outfit | Level | Source |
 |---|---|---|
 | Ma Trơi Tinh Nghịch | 1 | Wisps (extremely rare), Cửu Vĩ Hồ Vương, elites |
-| Hồ Ly Y | 10 | Cửu Vĩ Hồ Vương 7%, crafting |
+| Cửu Vĩ Hồ Y (nine fox tails fanned out behind the back) | 10 | Cửu Vĩ Hồ Vương 7%, crafting |
 | Hắc Long Bào | 14 | Hắc Quỷ Vương 3%, Cương Thi Vương 6% |
 | Nghê Thường Tiên Y (white fairy) | 15 | Crafting · 1.5–2% from Tuyết Sơn Ma Vương, Băng Dực Vương, Bạch Diện Quỷ Chủ |
 | Đào Hoa Tiên Y (pink fairy) | 15 | Crafting · 1.5–2% from Cửu Vĩ Hồ Vương, Cương Thi Vương |
@@ -600,7 +600,7 @@ A cape is a small cloth simulation (`gfx/cape.js`, tuned in `GAME.cape`): it han
 |---|---|
 | Đào Hoa Tiên Y | 40 Cánh Đào Ma, 20 Đuôi Hồ Ly, 20 Lửa Ma Trơi, 1 Tiên Lộ, 15,000 gold |
 | Nghê Thường Tiên Y | 40 Tơ Băng Tằm, 20 Lông Tuyết Hồ, 15 Băng Tinh, 2 Tiên Lộ, 30,000 gold |
-| Hồ Ly Y | 60 Đuôi Hồ Ly, 15 Cánh Đào Ma, 1 Tiên Lộ, 10,000 gold |
+| Cửu Vĩ Hồ Y | 60 Đuôi Hồ Ly, 15 Cánh Đào Ma, 1 Tiên Lộ, 10,000 gold |
 | Large HP ×5 / Large MP ×5 / Enhancement Stone / Protection Charm / random grade-1 gem | common monster materials |
 
 Materials: **Cánh Đào Ma** (ghost peach petal: fox spirits 6%, scarecrows 5%, wisps 3%), **Tơ Băng Tằm** (ice silk: ice bats 8%, snow foxes 5%, yetis 4%), **Tiên Lộ** (fairy dew: guaranteed from field and chapter bosses, 50% from story bosses, 8% from elites). A new recipe is one more line in `RECIPES`.

@@ -34,6 +34,7 @@ export const CHIEF = GAME.monsters.chief;
 // Named monsters: based on a species, with multiplied HP/attack, bigger and recolored
 //   quest: story boss, only appears while that quest is active (killing it counts for the quest)
 //   every: field boss, respawns after [min, max] seconds while you are on that map
+//   sprite: its own sprite sheet (a MAKERS key in client/src/gfx/monsters.js) instead of the species' one
 export const NAMED = {
   // ----- story bosses -----
   nb_scarecrow: {
@@ -63,7 +64,7 @@ export const NAMED = {
 
   // ----- field bosses: spawn on a timer, drop outfits -----
   fb_fox: {
-    mob: 'fox', name: 'Cửu Vĩ Hồ Vương', lv: 12, hp: 24, atk: 1.7, scale: 2.1, map: 'forest', x: 1500, every: [240, 420],
+    mob: 'fox', sprite: 'fox9', name: 'Cửu Vĩ Hồ Vương', lv: 12, hp: 24, atk: 1.7, scale: 2.1, map: 'forest', x: 1500, every: [240, 420],
     tint: 'hue-rotate(160deg) saturate(1.4) brightness(1.15)', affix: ['blink', 'regen'],
     lines: { appear: 'Chín đuôi rung lên… Cửu Vĩ Hồ Vương đã thức giấc!', die: 'Hồ Vương tan thành chín đốm lửa.' },
     drops: [['out_fox', 0.07], ['out_peach_fairy', 0.02], ['out_wisp_hood', 0.03], ['mat_dew', 1], ['GEM2', 1], ['stone', 1], ['stone', 0.5], ['protect', 0.3], ['acc_bead', 0.4]],

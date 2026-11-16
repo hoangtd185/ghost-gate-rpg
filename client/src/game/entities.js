@@ -120,7 +120,7 @@ export class Player extends Humanoid {
 export class Monster extends MobState {
   constructor(id, x, standY, range, spawnRef, opt = {}) {
     super(id, x, standY, range, spawnRef, opt);
-    this.sheet = monsterSheet(id);
+    this.sheet = monsterSheet(this.namedDef?.sprite || id); // a named boss may have its own sprite (NAMED[...].sprite)
   }
   draw(ctx, camX, time) {
     const s = this.sheet;
