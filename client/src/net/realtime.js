@@ -92,7 +92,7 @@ export class Realtime {
   // We used a buff skill: the server's damage formula needs it too
   cast(sid) { this.send({ t: 'cast', sid }); }
   party(type, data = {}) { this.send({ t: 'party_' + type, ...data }); }
-  // Party dungeon: 'enter' { d } at the keeper, 'next' at a floor's exit (the server answers dg_go or dg_err)
+  // Server event: 'enter' { d } at the keeper, 'next' at a floor's exit (the server answers dg_go or dg_err)
   dungeon(type, data = {}) { this.send({ t: 'dg_' + type, ...data }); }
   // Pick up a server drop. Returns false if it could not be sent right now.
   pick(id) { if (!this.ready) return false; this.send({ t: 'pick', id }); return true; }

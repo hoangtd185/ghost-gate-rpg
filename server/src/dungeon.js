@@ -26,8 +26,7 @@ const keeperX = (d) => (MAPS[d.from].npcs || []).find((n) => n.id === d.npc)?.x 
 const sys = (text) => ({ t: 'chat', ch: 'world', id: 'sys', from: 'Hệ thống', text });
 
 // opts.alwaysOpen: the event is open all the time, a run starts when someone enters (tests, local play) ·
-// opts.runSec: a run lasts this long instead
-// of until the window closes (tests)
+// opts.runSec: a run lasts this long instead of until the window closes (tests)
 export function createDungeons({ players, send, toAll, cleared, closeRooms = () => {}, db, pushChanges, alwaysOpen = false, runSec = 0, now = () => Date.now() }) {
   const runs = new Map(); // dungeon id -> the current run
   const byId = new Map(); // run id -> run

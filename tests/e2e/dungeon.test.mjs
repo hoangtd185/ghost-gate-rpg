@@ -214,15 +214,18 @@ describe('event (online, whole server)', { timeout: 240_000 }, () => {
       await A.page.waitForTimeout(600);
     }
     assert.ok(await E(A, () => __game().remoteMobs.size > 0), 'found monsters');
-    for (let n = 0; n < 6; n++) {
-      const m = await E(A, () => { const m = [...__game().remoteMobs.values()].find((x) => !x.dead); return m && { uid: m.uid, x: Math.round(m.cx) }; });
+    // Stand ON the monster (it may be up on a platform, and it moves: the server checks reach on both axes against the
+    // position it last received) and hit until the server has counted some damage
+    const ranked = "!document.querySelector('#hEvent').hidden && document.querySelector('#hEvent .mine b').textContent === '1'";
+    for (let n = 0; n < 30 && !(await A.page.evaluate(ranked)); n++) {
+      const m = await E(A, () => { const m = [...__game().remoteMobs.values()].find((x) => !x.dead); return m && { uid: m.uid, x: Math.round(m.cx), feet: Math.round(m.y + m.h) }; });
       if (!m) break;
-      await E(A, (m) => { const p = __game().player; p.x = m.x - 7; }, m);
-      await A.page.waitForTimeout(150);
+      await E(A, (m) => { const p = __game().player; p.x = m.x - 7; p.y = m.feet - p.h; p.vy = 0; }, m);
+      await A.page.waitForTimeout(250); // at least two position updates (10 per second)
       await E(A, (uid) => __game().net.hit({ uid, sid: 'sw_basic' }), m.uid);
       await A.page.waitForTimeout(250);
     }
-    assert.ok(await until(A.page, "!document.querySelector('#hEvent').hidden && document.querySelector('#hEvent .mine b').textContent === '1'", 5000), 'A ranks first');
+    assert.ok(await until(A.page, ranked, 5000), 'A ranks first');
     assert.match(await A.page.locator('#hEvent ol').textContent(), /Alpha/);
     await shot(A.page, 'event_online_rank.png');
   });

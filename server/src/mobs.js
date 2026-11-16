@@ -1,6 +1,5 @@
-// Shared monsters (online): one simulation per room that has players on it (a map, or one party's copy of a dungeon
-// floor, see dungeon.js), running client/src/game/mobsim.js (the same
-// AI the offline game uses). Players see the same monsters; their hits are applied here; when a monster dies the
+// Shared monsters (online): one simulation per room that has players on it (a map, or a floor of a server event's
+// run, see dungeon.js), running shared/rules/mobsim.js (the same AI the offline game uses). Players see the same monsters; their hits are applied here; when a monster dies the
 // server splits the reward:
 //   - EXP: by damage share between "groups" (a party, or a player on their own). A party's share is split evenly
 //     between its members on the map; a solo player keeps theirs. Each player's part is adjusted for level gap.
@@ -46,14 +45,14 @@ const snapOf = (m) => [m.uid, Math.round(m.x), Math.round(m.y), m.facing, Math.r
 
 // Events the clients need (objects replaced by uids)
 function publicEvent(e) {
-  const { m, by, type, ...rest } = e; // eslint-disable-line no-unused-vars
+  const { m, by, type, ...rest } = e; // `by` is taken out so it is not sent
   if (type === 'shoot' || type === 'slam') return { type, ...rest, src: m ? m.uid : rest.src };
   return { type, ...rest };
 }
 
 // onDamage(s, dealt): a player hit a monster (server events rank damage) · onDie(room, m): a monster died
 export function createMobs({ players, send, loot, parties, premium, onDamage, onDie }) {
-  // One simulation per room: a map, or one party's copy of a dungeon floor (see dungeon.js). Messages carry the
+  // One simulation per room: a map, or a floor of a server event's run (see dungeon.js). Messages carry the
   // map id (clients compare it with the map they are on); the room only decides who receives them.
   const rooms = new Map(); // room -> { map, sim, empty (ms since nobody is there, or 0), snapT, last: Map uid -> snapshot key }
   const roomOf = (s) => s.room || s.map;
@@ -172,7 +171,7 @@ export function createMobs({ players, send, loot, parties, premium, onDamage, on
     cleared: (room, targets = null) => !!rooms.get(room)?.sim.cleared(targets),
 
     // { t:'hit', uid, sid }: the player's own hit detection says skill `sid` hit monster `uid`.
-    // The server computes the damage itself (game/combat.js) from the saved character, buffs and the skill's level.
+    // The server computes the damage itself (shared/rules/combat.js) from the saved character, buffs and the skill's level.
     hit(s, m) {
       const e = rooms.get(roomOf(s));
       const mob = e && e.sim.monsters.find((x) => x.uid === +m.uid && !x.dead);

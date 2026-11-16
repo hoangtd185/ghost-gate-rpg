@@ -9,7 +9,8 @@
 //                     dg_enter {d} · dg_next {} (server event, dungeon.js)
 //                     prem {op: buy {offer, req} | checkin | claim {quest}}
 //   server -> client  welcome {id, online, eventExp} · snap {map, players} · join · leave · st · look · chat · online · kicked · error
-//                     dg_go {inst, d, map, floor, t0, now} | {map, x, done | lost} · dg_err {why}
+//                     dg_go {inst, d, floors, map, floor, t0, now} | {map, x, closed | lost} · dg_err {why}
+//                     ev_state {d, open, start, end, now} · ev_rank {d, top, rank, dmg, end, now} · ev_end {…} · ev_claim {items, left}
 //                     mobs {map, list} · mspawn {map, m} · ms {map, s} · mev {map, list} · mhit {map, uid, by, dmg, ab, crit, em, el} · mdie {map, uid, by} · mkill {map, uid, exp, gold?, drops?}
 //                     chg {list, rev} · loot {k, drops} · drops {map, drops} · pick {id, ok, why?}
 //                     party_ask · party_state · party_err · trade_ask · trade_open · trade_state · trade_end · trade_err
@@ -52,7 +53,7 @@ export function attachRealtime(server, { db, secret, event = {} }) {
   const players = new Map(); // charId -> session
   const pub = (s) => ({ id: s.id, name: s.name, ...s.app, x: s.x, y: s.y, vx: s.vx, f: s.f, a: s.a });
   const send = (s, msg) => { if (s.ws.readyState === 1) s.ws.send(JSON.stringify(msg)); };
-  // Players are grouped by room: the map itself, or one party's copy of a dungeon floor (dungeon.js room())
+  // Players are grouped by room: the map itself, or a floor of a server event's run (dungeon.js room())
   const inRoom = (room, except) => [...players.values()].filter((o) => o.room === room && o !== except);
   const toRoom = (room, msg, except) => { const data = JSON.stringify(msg); for (const o of inRoom(room, except)) if (o.ws.readyState === 1) o.ws.send(data); };
   const toAll = (msg) => { const data = JSON.stringify(msg); for (const o of players.values()) if (o.ws.readyState === 1) o.ws.send(data); };
@@ -92,7 +93,7 @@ export function attachRealtime(server, { db, secret, event = {} }) {
   function applyPos(s, m) {
     const map = String(m.map || '');
     if (!MAPS[map]) return;
-    // a dungeon floor the player may not be on (skipping ahead, an instance that closed): ignored, sent home
+    // an event floor the player may not be on (skipping ahead, a run that ended): ignored, sent home
     if (!dungeons.allows(s, map)) return dungeons.sendHome(s, map);
     if (MAPS[map].dungeon) s.dgResumeUntil = 0; // back on its floor: the resume is over
     s.x = clamp(num(m.x), 0, MAPS[map].width); s.y = clamp(num(m.y), -200, 400);
@@ -150,7 +151,7 @@ export function attachRealtime(server, { db, secret, event = {} }) {
         // one connection per character: the newest wins (e.g. a refreshed tab)
         const old = players.get(ch.id);
         if (old) { send(old, { t: 'kicked', reason: 'elsewhere' }); old.ws.close(4000, 'elsewhere'); leave(old); }
-        // dungeon: the party dungeon instance this character is still in (a reconnect goes back into it)
+        // dungeon: the server event run this character is still in (a reconnect goes back into it, see onConnect)
         s = { ws, id: ch.id, uid: user.uid, name: ch.name, ch, buffs: [], stats: null, app: appearanceOf(ch), map: null, room: null, dungeon: dungeons.instanceOf(ch.id), x: 0, y: 0, vx: 0, f: 1, a: 'idle',
           dirty: false, posAt: 0, savedAt: 0, savedTimer: null, enterAt: 0, enterTimer: null, pendingEnter: null, chatTokens: NET.chatBurst, chatAt: Date.now(), rev: Math.max(0, Math.floor(num(m.rev))) };
         players.set(s.id, s);
