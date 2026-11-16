@@ -4,7 +4,8 @@ import { makeSheet, shade, rgba, paint, shadeIn, ellipse, rrect, radial, linear,
 import { HUM_W, HUM_H, HUM_FEET, SIDE, TOP, POSES, HUM_FRAMES } from './humanoid/frames.js';
 import { drawLeg, armJoints, drawArm, drawWeapon, faceShape, drawEye, drawBackHair, drawFrontHair, drawHat } from './humanoid/parts.js';
 import { drawCape, drawTail, drawNineTails, drawSash, drawPattern, drawFur, drawShoulder, drawHood, drawEars, drawCrown, drawHalfMask } from './humanoid/outfit.js';
-export { HUM_W, HUM_H, HUM_FEET, HUM_FRAMES, capeAnchor } from './humanoid/frames.js';
+export { HUM_W, HUM_H, HUM_FEET, HUM_FRAMES, capeAnchor, tailAnchor } from './humanoid/frames.js';
+export { drawNineTails } from './humanoid/outfit.js';
 
 function drawBody(ctx, x, y, look, hemSwing) {
   const robe = look.robe, trim = look.trim;

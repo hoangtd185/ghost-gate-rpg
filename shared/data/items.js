@@ -154,7 +154,7 @@ export function unsocketCost(g) { return 150 * g * g; }
 // ===== Outfits: separate equipment slot, replaces the whole look, rare boss drops =====
 // look: extra details drawn on the character (see gfx/humanoid.js)
 //   cape · shoulder pads · fur collar · pattern on the robe · sash (flying silk sash)
-//   tail (one fox tail) · tails { n, c, tip } (a fan of fox tails, GAME.tailFan) · ears (fox ears) · hood · crown (dragon/lotus/phoenix) · halfmask
+//   tail (one fox tail) · tails { n, c, tip } (a fan of fox tails, flowing live in game, GAME.tailFan) · ears (fox ears) · hood · crown (dragon/lotus/phoenix) · halfmask
 //   aura (drawn in game): glow + particles around the body · wisps: two will-o'-wisps circling around
 Object.assign(ITEMS, {
   out_wisp_hood: { name: 'Ma Trơi Tinh Nghịch', type: 'equip', slot: 'outfit', lv: 1, color: '#3fa891', price: 0,

@@ -233,7 +233,7 @@ tests/e2e/           node --test + playwright-core acceptance scenarios (helpers
 | Id | Name |
 |---|---|
 | out_wisp_hood | Ma Trơi Tinh Nghịch |
-| out_fox | Cửu Vĩ Hồ Y (nine tails: look `tails`, drawn by `drawNineTails`, tuned in `GAME.tailFan`) |
+| out_fox | Cửu Vĩ Hồ Y (nine tails: look `tails`, drawn by `drawNineTails`, tuned in `GAME.tailFan`. Each tail is an S-curve with a travelling wave; in the game the fan is drawn live behind the sprite by `Humanoid.drawTails`, like the capes, and swept back while running; the sprite sheet has a still version for portraits and previews) |
 | out_black_dragon | Hắc Long Bào |
 | out_jade_lotus | Thanh Liên Tiên Y |
 | out_rainbow_fairy | Nghê Thường Tiên Y |

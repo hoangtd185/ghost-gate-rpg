@@ -568,7 +568,7 @@ The server ranks every player's damage to the event's monsters; a panel shows th
 | Outfit | Level | Source |
 |---|---|---|
 | Ma Trơi Tinh Nghịch | 1 | Wisps (extremely rare), Cửu Vĩ Hồ Vương, elites |
-| Cửu Vĩ Hồ Y (nine fox tails fanned out behind the back) | 10 | Cửu Vĩ Hồ Vương 7%, crafting |
+| Cửu Vĩ Hồ Y (nine flowing fox tails fanned out behind the back) | 10 | Cửu Vĩ Hồ Vương 7%, crafting |
 | Hắc Long Bào | 14 | Hắc Quỷ Vương 3%, Cương Thi Vương 6% |
 | Nghê Thường Tiên Y (white fairy) | 15 | Crafting · 1.5–2% from Tuyết Sơn Ma Vương, Băng Dực Vương, Bạch Diện Quỷ Chủ |
 | Đào Hoa Tiên Y (pink fairy) | 15 | Crafting · 1.5–2% from Cửu Vĩ Hồ Vương, Cương Thi Vương |

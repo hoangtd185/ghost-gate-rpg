@@ -110,13 +110,19 @@ export const GAME = {
   // ----- Nine fox tails (outfit look `tails`, gfx/humanoid/outfit.js): a fan behind the back -----
   tailFan: {
     count: 9,
-    from: 1.3, to: 3.5, // the fan's first and last tail (radians: 0 = forward, PI / 2 = straight up, PI = straight back)
-    len: 28, // length of the middle tail (px in the sprite)
-    edge: 0.74, // the outer tails are this share of it
-    wid: 5.6, // half width of a tail at its widest
-    curl: 8, // how far the tips curl outward (px), more toward the edges
+    from: 1.2, to: 3.42, // the fan's first and last tail (radians: 0 = forward, PI / 2 = straight up, PI = straight back)
+    len: 29, // length of the middle tail (px in the sprite)
+    edge: 0.76, // the outer tails are this share of it
+    wid: 5.4, // half width of a tail at its widest
+    curl: 1.1, // how much the outer tails bend along their length (radians at the tip; the middle one stays straight)
+    wave: 0.5, // size of the S-wave along a tail (radians at the tip)
+    waves: 3.4, // how much of a wave fits along one tail (radians of phase from base to tip)
+    waveSpeed: 2.4, // how fast the wave travels (radians per second): the tails flow
     sway: 0.05, // radians per unit of walk swing
+    trailSpeed: 190, // speed (px/s) at which the fan is fully swept back
+    trail: 0.45, // running sweeps the fan this far toward straight back (0 = not at all, 1 = fully)
   },
+
 
   // ----- Capes: cloth simulation (gfx/cape.js) -----
   cape: {
