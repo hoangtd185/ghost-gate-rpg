@@ -85,7 +85,7 @@ export function drawHumanoid(ctx, look, f) {
   // upper body pitched forward around the hips (run); legs stay upright
   const pitch = () => { if (P.tilt) { ctx.translate(bodyX, hipY); ctx.rotate(P.tilt); ctx.translate(-bodyX, -hipY); } };
   ctx.save(); pitch();
-  if (!look.hood) drawBackHair(ctx, look.hairStyle, look.hair, hcx, hcy);
+  if (!look.hood) drawBackHair(ctx, look.hairStyle, look.hair, hcx, hcy, look.trim);
   drawArm(ctx, bodyX - 3.6, bodyY + 1.2, P.b1, P.b2, robe, trim, skin, true);
   if (look.shoulder) drawShoulder(ctx, bodyX - 3.6, bodyY + 1.4, look.shoulder, true);
   ctx.restore();
@@ -152,7 +152,7 @@ export function drawHumanoid(ctx, look, f) {
   if (look.halfmask) drawHalfMask(ctx, hcx, hcy);
   if (look.hood) drawHood(ctx, hcx, hcy, look.hood);
   else {
-    drawFrontHair(ctx, look.hairStyle, look.hair, hcx, hcy);
+    drawFrontHair(ctx, look.hairStyle, look.hair, hcx, hcy, look.trim);
     if (look.ears) drawEars(ctx, hcx, hcy, look.ears, false);
   }
   if (look.crown) drawCrown(ctx, hcx, hcy, look.crown);

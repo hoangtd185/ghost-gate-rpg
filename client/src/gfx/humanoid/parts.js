@@ -169,7 +169,8 @@ export function drawEye(ctx, x, y, s, iris, state) {
 }
 
 // Hair behind the head (drawn before the face)
-export function drawBackHair(ctx, style, hair, cx, cy) {
+// band: colour of the headband (style 2), the robe's trim
+export function drawBackHair(ctx, style, hair, cx, cy, band = '#c8c8d0') {
   const dk = shade(hair, -0.22);
   if (style === 3) { paint(ctx, ellipse(cx - 2.5, cy + 0.5, 8.5, 8.8), hair, OUTLINE, 0.9); return; }
   // hair mass at the nape, puffed out and hanging down to the chin
@@ -193,15 +194,28 @@ export function drawBackHair(ctx, style, hair, cx, cy) {
     paint(ctx, ellipse(cx - 11.5, cy - 1.5, 4.8, 4.6), linear(ctx, 0, cy - 6, 0, cy + 3, [[0, shade(hair, 0.2)], [1, hair]]), OUTLINE, 1);
     ctx.strokeStyle = '#e2b85c'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(cx - 18, cy - 3.5); ctx.lineTo(cx - 6, cy + 1); ctx.stroke();
     paint(ctx, ellipse(cx - 18.2, cy - 3.6, 1, 1), '#e2b85c', null);
-  } else if (style === 2) { // headband tails flowing behind
+  } else if (style === 2) { // a short ponytail tied high at the back, and the two tails of the headband
     const t = new Path2D();
-    t.moveTo(cx - 9, cy - 4); t.quadraticCurveTo(cx - 16, cy - 6, cx - 21, cy - 1.5); t.quadraticCurveTo(cx - 16, cy - 1.5, cx - 9.5, cy); t.closePath();
-    paint(ctx, t, shade(hair, 0.15), OUTLINE, 0.8);
+    t.moveTo(cx - 9.2, cy - 7.4);
+    t.bezierCurveTo(cx - 15.5, cy - 9.2, cx - 18.6, cy - 1.5, cx - 15.4, cy + 6.4); // sweeps out and down
+    t.quadraticCurveTo(cx - 13.6, cy + 3.4, cx - 12.8, cy + 0.2); // the tip curls back in
+    t.bezierCurveTo(cx - 12.4, cy - 2.2, cx - 11, cy - 3.6, cx - 9, cy - 3.2);
+    t.closePath();
+    paint(ctx, t, linear(ctx, cx - 18, 0, cx - 9, 0, [[0, dk], [1, shade(hair, 0.12)]]), OUTLINE, 0.9);
+    ctx.strokeStyle = rgba(shade(hair, 0.45), 0.5); ctx.lineWidth = 0.55;
+    ctx.beginPath(); ctx.moveTo(cx - 10.8, cy - 6.2); ctx.quadraticCurveTo(cx - 16, cy - 4.5, cx - 14.8, cy + 3.2); ctx.stroke();
+    for (const [mx, my, ex, ey] of [[cx - 15.5, cy - 7.2, cx - 19.6, cy - 3.2], [cx - 14.6, cy - 4.2, cx - 18.2, cy + 0.6]]) {
+      for (const [col, w] of [[OUTLINE, 2.3], [band, 1.3]]) {
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(cx - 9.6, cy - 5.6); ctx.quadraticCurveTo(mx, my, ex, ey); ctx.stroke();
+      }
+    }
+    ctx.lineCap = 'butt';
   }
 }
 
 // Bangs + front hair (drawn after the face)
-export function drawFrontHair(ctx, style, hair, cx, cy) {
+export function drawFrontHair(ctx, style, hair, cx, cy, band = '#c8c8d0') {
   const hl = shade(hair, 0.38), dk = shade(hair, -0.25);
   const fill = linear(ctx, 0, cy - 12, 0, cy + 4, [[0, hl], [0.3, hair], [1, dk]]);
   if (style === 3) { // old man: silver hair combed back, small topknot
@@ -240,6 +254,12 @@ export function drawFrontHair(ctx, style, hair, cx, cy) {
   // lines between locks
   ctx.strokeStyle = rgba(shade(hair, -0.45), 0.55); ctx.lineWidth = 0.55;
   for (const [rx, ry] of roots.slice(1)) { ctx.beginPath(); ctx.moveTo(rx, ry); ctx.quadraticCurveTo(rx + 0.6, ry - 3, rx - 1.5, ry - 6); ctx.stroke(); }
+  if (style === 2) { // headband over the hair (its tails are drawn with the back hair)
+    for (const [col, w] of [[OUTLINE, 2.5], [band, 1.5]]) {
+      ctx.strokeStyle = col; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(cx - 10.4, cy - 5.2); ctx.quadraticCurveTo(cx + 0.5, cy - 9.6, cx + 10.8, cy - 5.4); ctx.stroke();
+    }
+  }
   ctx.restore();
   if (style === 0) { // topknot + red string
     paint(ctx, ellipse(cx - 1.5, cy - 13, 3.8, 3.4), linear(ctx, 0, cy - 17, 0, cy - 9, [[0, shade(hair, 0.3)], [1, hair]]), OUTLINE, 1);
