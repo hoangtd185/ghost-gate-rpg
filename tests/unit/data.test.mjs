@@ -14,6 +14,7 @@ import { MAIN_ORDER, SCENES, SPEAKERS } from '../../shared/data/story.js';
 import { CHATTER, BANTER } from '../../shared/data/chatter.js';
 import { LEGACY_CLS, LEGACY_MAP, LEGACY_PET, LEGACY_QUEST, legacyItem, legacySkill } from '../../shared/data/legacy.js';
 import { DUNGEONS, dungeonFloors } from '../../shared/data/dungeons.js';
+import { PETS } from '../../shared/data/pets.js';
 
 test('events: keepers, phases, floors, the final boss and rewards point at things that exist', () => {
   for (const [id, d] of Object.entries(DUNGEONS)) {
@@ -107,7 +108,7 @@ test('quests: givers, targets, requirements and dialogue speakers exist', () => 
     if (q.type === 'talk') assert.ok(NPCS[q.target], `${id} talk target ${q.target}`);
     if (q.type === 'kill') assert.ok(MONSTERS[q.target] || NAMED[q.target], `${id} kill target ${q.target}`);
     if (q.drop) assert.ok(MONSTERS[q.drop.mob], `${id} drop mob ${q.drop.mob}`);
-    if (q.reward?.pet) assert.ok(q.reward.pet === 'imp', `${id} pet ${q.reward.pet}`);
+    if (q.reward?.pet) assert.ok(PETS[q.reward.pet], `${id} pet ${q.reward.pet}`);
     assert.deepEqual(missing(linesOf(q).map((l) => l[0]), (s) => speakers.has(s)), [], `${id} speakers`);
   }
   assert.deepEqual(missing(MAIN_ORDER, (q) => QUESTS[q]), [], 'MAIN_ORDER');

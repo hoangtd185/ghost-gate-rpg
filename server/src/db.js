@@ -4,6 +4,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { QUESTS } from '../../shared/data/npcs.js';
 import { todayKey } from '../../shared/rules/character.js';
+import { cleanPet } from '../../shared/data/pets.js';
 import { int, num, str, rowToEntry, cleanFlags } from './db/helpers.js';
 import { SCHEMA, migrate } from './db/schema.js';
 
@@ -130,7 +131,7 @@ export class GameDb {
       int(ch.level, 1), int(ch.exp), num(ch.hp, 1), num(ch.mp, 1), str(ch.map || 'village', 20), num(ch.x, 380),
       int(s.str), int(s.dex), int(s.int), int(s.vit), int(ch.statPoints), int(ch.skillPoints),
       JSON.stringify(ch.skills || {}),
-      ch.pet && ch.pet.id ? JSON.stringify({ id: str(ch.pet.id, 20), on: ch.pet.on !== false }) : null,
+      cleanPet(ch.pet) ? JSON.stringify(cleanPet(ch.pet)) : null, // { id, on, owned }: known pets only
       ch.title ? str(ch.title, 40) : null,
       JSON.stringify(cleanFlags(ch.flags)),
       num(ch.playTime), Date.now(), id, userId,

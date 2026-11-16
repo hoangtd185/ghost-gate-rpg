@@ -5,6 +5,7 @@ import { ELEMENTS } from '../../../../shared/data/elements.js';
 import { QUESTS } from '../../../../shared/data/npcs.js';
 import { CHAPTERS, SCENES } from '../../../../shared/data/story.js';
 import { RECIPES } from '../../../../shared/data/recipes.js';
+import { PETS } from '../../../../shared/data/pets.js';
 import { equipEntry, unequip, removeEntry, addItem, sellPrice, upgradeSkill, addStat, entryName, socketGem, unsocketGem, fuseGems, learnPassive, resetSkills, craft } from '../../../../shared/rules/character.js';
 import { escapeHtml } from '../../../../shared/util.js';
 import { $, itemName } from './helpers.js';
@@ -97,6 +98,7 @@ export const ActionsUI = {
       case 'logout': this.cb.logout(); break;
       case 'respawn': this.close(); w.respawn(); break;
       case 'pet': this.togglePet(); break;
+      case 'petsel': if (w.choosePet(d.p)) { this.toast(`Đổi sang ${PETS[d.p].name}`); this.renderWin(); this.cb.save(); } break;
       case 'forge': this.open = 'forge'; this.forgeMsg = null; this.renderWin(); break;
       case 'dungeon': this.close(); w.enterDungeon(d.d); break;
       case 'craftwin': this.open = 'craft'; this.craftMsg = null; this.renderWin(); break;
@@ -151,7 +153,7 @@ export const ActionsUI = {
     const ch = this.ch;
     if (!ch.pet) { this.toast('Chưa có pet. Gặp Trưởng Làng nhận nhiệm vụ Bạn Đồng Hành Nhỏ', 'warn'); return; }
     this.world.setPet(!ch.pet.on);
-    this.toast(ch.pet.on ? 'Tiểu Quỷ: "Em đây, chủ nhân!"' : 'Tiểu Quỷ đi nghỉ rồi');
+    this.toast(ch.pet.on ? PETS[ch.pet.id].call : PETS[ch.pet.id].rest);
     if (this.open === 'char') this.renderWin();
     this.cb.save();
   },

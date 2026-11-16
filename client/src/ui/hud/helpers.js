@@ -4,6 +4,7 @@ import { ELEMENTS } from '../../../../shared/data/elements.js';
 import { QUESTS } from '../../../../shared/data/npcs.js';
 import { MAIN_ORDER } from '../../../../shared/data/story.js';
 import { MAPS } from '../../../../shared/data/maps.js';
+import { PETS } from '../../../../shared/data/pets.js';
 import { questStatus, resolveItemId, entryName } from '../../../../shared/rules/character.js';
 import { escapeHtml, fmtNum } from '../../../../shared/util.js';
 
@@ -60,7 +61,7 @@ export function rewardText(q, cls) {
     const id = resolveItemId(id0, cls); parts.push(`${ITEMS[id].name}${n > 1 ? ' ×' + n : ''}`);
   }
   for (const [id] of r.random || []) parts.push(`có thể có ${ITEMS[id].name}`);
-  if (r.pet) parts.push('pet Tiểu Quỷ');
+  if (r.pet) parts.push('pet ' + PETS[r.pet].name);
   if (r.title) parts.push(`danh hiệu 「${r.title}」`);
   if (r.ingots && !q.daily) parts.push(`${r.ingots} Nguyên Bảo`);
   return parts.join(' · ');

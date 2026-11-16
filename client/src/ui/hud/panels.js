@@ -6,6 +6,7 @@ import { NPCS, QUESTS } from '../../../../shared/data/npcs.js';
 import { CHAPTERS } from '../../../../shared/data/story.js';
 import { WORLD_CHAINS } from '../../../../shared/data/world.js';
 import { RECIPES } from '../../../../shared/data/recipes.js';
+import { PETS, ownedPets } from '../../../../shared/data/pets.js';
 import { fillText } from '../../game/chatter.js';
 import { iconForItem } from '../../gfx/icons.js';
 import { entryStats, unequip, sellPrice, canEquip, questStatus, questProgress, INV_SIZE, entryElement, questTurnIn, passiveBlock, resetCost } from '../../../../shared/rules/character.js';
@@ -105,9 +106,18 @@ export const PanelsUI = {
       <div class="resrow"><span class="muted small">Hệ vũ khí</span>${elTag(st.el) || '<span class="muted small">Không</span>'}</div>
       <div class="resrow">${ELEMENT_IDS.map((el) => `<span class="res" style="--c:${ELEMENTS[el].color}" title="Kháng ${ELEMENTS[el].name}">${ELEMENTS[el].glyph}<b>${st.res[el]}%</b></span>`).join('')}</div>
       ${ch.title ? `<p class="titlep">Danh hiệu: <b>「${escapeHtml(ch.title)}」</b></p>` : ''}
-      <div class="petbox">${ch.pet
-        ? `<p><b>Tiểu Quỷ</b> <span class="muted small">${ch.pet.on ? 'đang theo bạn, tự nhặt đồ trong tầm' : 'đang nghỉ'}</span></p><button data-act="pet">${ch.pet.on ? 'Cất Tiểu Quỷ' : 'Gọi Tiểu Quỷ'} <kbd>P</kbd></button>`
-        : '<p class="muted small">Chưa có pet. Làm nhiệm vụ <b>Bạn Đồng Hành Nhỏ</b> ở Trưởng Làng để nhận Tiểu Quỷ, con ma nhỏ nhặt đồ giúp bạn.</p>'}</div></div></div>`;
+      <div class="petbox">${this.petBox()}</div></div></div>`;
+  },
+
+  // The pet row of the character window: the pet that is out (or resting), the other pets owned, and how to get more
+  petBox() {
+    const pet = this.ch.pet;
+    if (!pet) return '<p class="muted small">Chưa có pet. Làm nhiệm vụ <b>Bạn Đồng Hành Nhỏ</b> ở Trưởng Làng để nhận Tiểu Quỷ, con ma nhỏ nhặt đồ giúp bạn.</p>';
+    const name = PETS[pet.id].name, owned = ownedPets(pet);
+    const others = owned.filter((id) => id !== pet.id).map((id) => `<button class="ghost" data-act="petsel" data-p="${id}">Đổi sang ${escapeHtml(PETS[id].name)}</button>`).join('');
+    const missing = Object.keys(PETS).filter((id) => !owned.includes(id)).map((id) => `<p class="muted small">Chưa có <b>${escapeHtml(PETS[id].name)}</b>: ${escapeHtml(PETS[id].src)}</p>`).join('');
+    return `<p><b>${escapeHtml(name)}</b> <span class="muted small">${pet.on ? 'đang theo bạn, tự nhặt đồ trong tầm' : 'đang nghỉ'}</span></p>
+      <button data-act="pet">${pet.on ? 'Cất' : 'Gọi'} ${escapeHtml(name)} <kbd>P</kbd></button>${others}${missing}`;
   },
 
   winSkills() {

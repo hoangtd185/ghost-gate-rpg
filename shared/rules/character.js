@@ -5,6 +5,7 @@ import { ITEMS, socketCount } from '../data/items.js';
 import { ELEMENT_IDS, MAX_RES } from '../data/elements.js';
 import { QUESTS, RETIRED_QUESTS } from '../data/npcs.js';
 import { MAIN_ORDER } from '../data/story.js';
+import { cleanPet } from '../data/pets.js';
 import { migrateLegacy } from '../data/legacy.js';
 import { makeId } from '../util.js';
 import { GAME } from '../config.js';
@@ -67,7 +68,7 @@ export function normalizeCharacter(ch) {
   for (const e of [...ch.inventory, ...Object.values(ch.equip)]) {
     if (e && e.g) e.g = e.g.filter((id) => ITEMS[id] && ITEMS[id].type === 'gem').slice(0, socketCount(e));
   }
-  ch.pet = ch.pet && ch.pet.id ? { id: ch.pet.id, on: ch.pet.on !== false } : null;
+  ch.pet = cleanPet(ch.pet); // { id, on, owned } with known pets only
   ch.title = ch.title || null;
   ch.level = ch.level || 1; ch.exp = ch.exp || 0; ch.gold = ch.gold || 0;
   ch.statPoints = ch.statPoints || 0; ch.skillPoints = ch.skillPoints || 0;

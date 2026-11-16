@@ -1,18 +1,19 @@
-// Imp pet: follows the player and flies over to pick up drops in range
+// A pet (shared/data/pets.js): follows the player and flies over to pick up drops in range
 import { petSheet } from '../gfx/pet.js';
 import { drawFrame } from '../gfx/draw.js';
 import { pick, rand } from '../../../shared/util.js';
 import { GAME } from '../../../shared/config.js';
+import { PETS } from '../../../shared/data/pets.js';
 
-export const PET_NAME = 'Tiểu Quỷ';
 const PICK_RANGE = GAME.pet.pickRange; // pickup range, measured from the player
 const FLY_SPEED = GAME.pet.flySpeed;
-const PET_LINES = ['Để em nhặt cho!', 'Của chủ nhân nè~', 'Hihi, lấp lánh quá', 'Đồ rơi kìa!', 'Em giỏi không?'];
 
 export class Pet {
   constructor(world) {
     this.w = world;
-    this.sheet = petSheet();
+    this.id = PETS[world.ch.pet?.id] ? world.ch.pet.id : 'imp';
+    this.def = PETS[this.id];
+    this.sheet = petSheet(this.id);
     this.t = 0; this.happyT = 0; this.facing = 1;
     this.target = null; this.say = null; this.chatT = rand(20, 40);
     this.warp();
@@ -64,16 +65,16 @@ export class Pet {
       const ok = this.w.pickupDrop(this.target, this.x, this.y);
       if (ok) {
         this.happyT = 0.6;
-        this.w.burst(this.x, this.y, '#f0e0ff', 6, 50, { shape: 'star' });
-        if (Math.random() < 0.18) this.say = { text: pick(PET_LINES), t: 2.5 };
+        this.w.burst(this.x, this.y, this.def.color, 6, 50, { shape: 'star' });
+        if (Math.random() < 0.18) this.say = { text: pick(this.def.lines), t: 2.5 };
       } else this.target.petSkip = true;
       this.target = null;
     }
     // talks now and then
     this.chatT -= dt;
-    if (this.chatT <= 0) { this.chatT = rand(30, 60); if (!this.say) this.say = { text: pick(['Chủ nhân cố lên!', 'Đánh quái vui ghê', 'Em đói…', '♪ la la ♪']), t: 2.5 }; }
+    if (this.chatT <= 0) { this.chatT = rand(30, 60); if (!this.say) this.say = { text: pick(this.def.idle), t: 2.5 }; }
     // light sparkle
-    if (Math.random() < dt * 4) this.w.spark(this.x + rand(-6, 6), this.y + rand(0, 10), { vy: rand(-12, -4), color: '#e8dcff', size: rand(1, 2), life: 0.6, shape: 'star', drag: 0.97 });
+    if (Math.random() < dt * 4) this.w.spark(this.x + rand(-6, 6), this.y + rand(0, 10), { vy: rand(-12, -4), color: this.def.color, size: rand(1, 2), life: 0.6, shape: 'star', drag: 0.97 });
   }
 
   draw(ctx, cam) {
@@ -88,7 +89,7 @@ export class Pet {
   }
 
   drawLabel(ctx, cam) {
-    this.w.nameTag(ctx, PET_NAME, this.x - cam, this.y + 19, '#e8dcff', 7);
+    this.w.nameTag(ctx, this.def.name, this.x - cam, this.y + 19, this.def.color, 7);
     if (this.say) this.w.bubble(ctx, this.say.text, this.x - cam, this.y - 14);
   }
 }

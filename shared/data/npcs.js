@@ -37,7 +37,7 @@ export const NPCS = {
     name: 'Ngư Ông', title: 'Lão Chài',
     look: { robe: '#5a6a4a', trim: '#d9c27a', pants: '#2a3020', hair: '#d8d4cc', hairStyle: 3, skin: '#d9a57a', beard: true, hat: 'conical', hatColor: '#d9c27a' },
     shop: ['hp_s', 'hp_l', 'mp_s', 'mp_l', 'scroll_home'],
-    quests: ['st6', 'q_frog', 'q_water_ghost', 'wq_carp1', 'wq_carp2', 'wq_carp3'],
+    quests: ['st6', 'q_frog', 'q_fox_pet', 'q_water_ghost', 'wq_carp1', 'wq_carp2', 'wq_carp3'],
   },
   huntress: {
     name: 'Thợ Săn', title: 'A Tuyết',
@@ -172,6 +172,23 @@ export const QUESTS = {
       ['fisherman', 'Viên Độc Châu này lão vớt được dưới đáy đầm, cầm lấy.'],
     ],
     reward: { exp: 1800, gold: 600, items: [['stone', 3], ['orb_poison', 1]] },
+  }),
+  // A second pet: the fox kit (data/pets.js)
+  q_fox_pet: side({
+    name: 'Hồ Ly Lạc Mẹ', npc: 'fisherman', lv: 9, requires: 'q_frog', type: 'collect', target: 'mat_slime', count: 5,
+    text: 'Mang cho Ngư Ông 5 Nhớt Ếch Độc để nấu thuốc giải cho cáo con.',
+    hint: 'Ếch Độc ở Đầm Lầy Sương Mù rơi Nhớt Ếch Độc. Có nhiều pet thì đổi pet trong cửa sổ Nhân vật (C).',
+    intro: [
+      ['fisherman', 'Sáng nay lão kéo lưới lên, thấy một con cáo con ba đuôi mắc trong đó, run cầm cập.'],
+      ['fisherman', 'Nó bị ếch độc cắn, lạc mẹ mấy hôm rồi. Lão thương mà không có thuốc.'],
+      ['fisherman', 'Lấy độc trị độc: mang cho lão năm phần Nhớt Ếch Độc, lão nấu thuốc giải cho nó.'],
+    ],
+    outro: [
+      ['sys', 'Cáo con uống xong bát thuốc, hắt xì một cái ra đốm lửa nhỏ, rồi dụi đầu vào chân bạn.'],
+      ['fisherman', 'Ha ha, nó nhận con làm chủ rồi đấy. Mẹ nó chắc về núi từ lâu, con nuôi nó đi.'],
+      ['fisherman', 'Mở cửa sổ Nhân vật là đổi được giữa nó với Tiểu Quỷ.'],
+    ],
+    reward: { exp: 900, gold: 300, pet: 'fox_kit', items: [] },
   }),
   q_water_ghost: side({
     name: 'Bóng Ma Dưới Nước', npc: 'fisherman', lv: 10, requires: 'q_frog', type: 'kill', target: 'water_ghost', count: 10,

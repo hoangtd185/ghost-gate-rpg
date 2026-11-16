@@ -3,6 +3,7 @@ import { ITEMS, STAT_NAMES, isLookSlot } from '../../../../shared/data/items.js'
 import { NPCS, QUESTS } from '../../../../shared/data/npcs.js';
 import { SPEAKERS, CHAPTERS, SCENES, MAIN_ORDER } from '../../../../shared/data/story.js';
 import { WORLD_CHAINS } from '../../../../shared/data/world.js';
+import { PETS } from '../../../../shared/data/pets.js';
 import { npcLine, fillText } from '../../game/chatter.js';
 import { humanoidSheet, HUM_W } from '../../gfx/humanoid.js';
 import { monsterSheet } from '../../gfx/monsters.js';
@@ -207,11 +208,10 @@ export const NpcUI = {
       if (w.net) w.claimQuest(qid); else ch.ingots = (ch.ingots || 0) + ingots;
       got.push(`${ingots} Nguyên Bảo`);
     }
-    if (q.reward.pet && !ch.pet) {
-      ch.pet = { id: q.reward.pet, on: false };
-      w.setPet(true);
-      got.push('pet Tiểu Quỷ');
-      this.banner('<small>Bạn đồng hành mới</small>Tiểu Quỷ');
+    if (q.reward.pet && w.addPet(q.reward.pet)) {
+      const name = PETS[q.reward.pet].name;
+      got.push('pet ' + name);
+      this.banner(`<small>Bạn đồng hành mới</small>${name}`);
     }
     this.npcMsg = q.done || null;
     w.refreshNpcs();

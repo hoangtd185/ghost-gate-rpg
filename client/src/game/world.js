@@ -7,6 +7,7 @@ import { Player, NPC, MOVE_SPEED } from './entities.js';
 import { stepBody } from '../../../shared/rules/physics.js';
 import { solidCrumbles, trapHit } from './traps.js';
 import { Pet } from './pet.js';
+import { PETS, ownedPets } from '../../../shared/data/pets.js';
 import { calcStats, questStatus, npcPresent, questEvent } from '../../../shared/rules/character.js';
 import { npcLine, pickBanter } from './chatter.js';
 import { BotManager } from './bots.js';
@@ -344,8 +345,28 @@ export class GameWorld {
   setPet(on) {
     if (!this.ch.pet) return;
     this.ch.pet.on = on;
-    if (on && !this.pet) { this.pet = new Pet(this); this.addFx('poof', this.pet.x, this.pet.y, 0.5, { color: '#e8dcff' }); }
-    if (!on && this.pet) { this.addFx('poof', this.pet.x, this.pet.y, 0.5, { color: '#e8dcff' }); this.pet = null; }
+    if (on && !this.pet) { this.pet = new Pet(this); this.addFx('poof', this.pet.x, this.pet.y, 0.5, { color: this.pet.def.color }); }
+    if (!on && this.pet) { this.addFx('poof', this.pet.x, this.pet.y, 0.5, { color: this.pet.def.color }); this.pet = null; }
+  }
+
+  // A new pet joins (a quest reward): it is owned from now on and comes out at once
+  addPet(id) {
+    const owned = ownedPets(this.ch.pet);
+    if (!PETS[id] || owned.includes(id)) return false;
+    this.ch.pet = { id, on: true, owned: [...owned, id] };
+    this.pet = null; this.setPet(true);
+    return true;
+  }
+
+  // Switch to another pet the character owns; it comes out if a pet was out
+  choosePet(id) {
+    const pet = this.ch.pet;
+    if (!pet || pet.id === id || !ownedPets(pet).includes(id)) return false;
+    const out = !!this.pet;
+    if (out) this.setPet(false);
+    pet.id = id;
+    if (out) this.setPet(true);
+    return true;
   }
 }
 
