@@ -3,7 +3,7 @@ import { GROUND_Y } from '../../../shared/data/maps.js';
 import { MONSTERS } from '../../../shared/data/monsters.js';
 import { CLASSES } from '../../../shared/data/classes.js';
 import { ITEMS } from '../../../shared/data/items.js';
-import { humanoidSheet, capeAnchor, HUM_W, HUM_FEET } from '../gfx/humanoid.js';
+import { humanoidSheet, capeAnchor, tailAnchor, drawNineTails, HUM_W, HUM_FEET } from '../gfx/humanoid.js';
 import { CapeCloth } from '../gfx/cape.js';
 import { monsterSheet } from '../gfx/monsters.js';
 import { drawFrame, shade } from '../gfx/draw.js';
@@ -24,10 +24,10 @@ export class Humanoid {
     this.atkT = 0; this.hurtT = 0;
     this.setLook(look);
   }
-  // the flowing cape is drawn live (gfx/cape.js), so it is left out of the cached sprite sheet
+  // the flowing cape (gfx/cape.js) and a fan of fox tails are drawn live, so they are left out of the cached sprite sheet
   setLook(look) {
     this.look = look;
-    const { liveCape, ...sheetLook } = look;
+    const { liveCape, tails, ...sheetLook } = look;
     this.sheet = humanoidSheet(sheetLook);
     if (liveCape && !this.cloth) this.cloth = new CapeCloth();
   }
@@ -57,9 +57,20 @@ export class Humanoid {
     const cape = this.look.liveCape;
     ctx.save();
     if (alpha < 1) ctx.globalAlpha = alpha;
+    if (this.look.tails) this.drawTails(ctx, dx, dy, f);
     if (cape) this.drawCape(ctx, camX, f, cape);
     drawFrame(ctx, this.sheet, f, dx, dy, this.facing < 0);
     if (cape) this.cloth.drawClasp(ctx, camX, cape, this.facing < 0 ? -1 : 1);
+    ctx.restore();
+  }
+  // The fan of fox tails behind the sprite, flowing with time and swept back while running
+  drawTails(ctx, dx, dy, f) {
+    const [ax, ay] = tailAnchor(f), face = this.facing < 0 ? -1 : 1;
+    const speed = Math.min(1, Math.abs(this.vx || 0) / GAME.tailFan.trailSpeed);
+    this.tailTrail = (this.tailTrail || 0) + (speed - (this.tailTrail || 0)) * 0.12; // eased, so the fan opens and closes softly
+    ctx.save();
+    ctx.translate(face > 0 ? dx + ax : dx + HUM_W - ax, dy + ay); ctx.scale(face, 1);
+    drawNineTails(ctx, 0, 0, this.look.tails, 0, performance.now() / 1000, this.tailTrail);
     ctx.restore();
   }
   // Moves the cloth with the body (time since the last frame drawn), then draws it behind the sprite
@@ -120,7 +131,7 @@ export class Player extends Humanoid {
 export class Monster extends MobState {
   constructor(id, x, standY, range, spawnRef, opt = {}) {
     super(id, x, standY, range, spawnRef, opt);
-    this.sheet = monsterSheet(id);
+    this.sheet = monsterSheet(this.namedDef?.sprite || id); // a named boss may have its own sprite (NAMED[...].sprite)
   }
   draw(ctx, camX, time) {
     const s = this.sheet;

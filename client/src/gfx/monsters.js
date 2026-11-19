@@ -13,6 +13,7 @@ const MAKERS = {
   blood_jiangshi: () => jiangshi(JIANG_PAL.blood_jiangshi), maskghost, blood_demon: bloodDemon,
   water_ghost: () => wisp(WISP_PAL.water_ghost), fire_spirit: () => wisp(WISP_PAL.fire_spirit), snowfox: () => fox(FOX_PAL.snowfox),
   frog, yeti, icebat, golem, lava, qilin,
+  fox9: () => fox(FOX_PAL.fox, 9), // Cửu Vĩ Hồ Vương (NAMED.fb_fox.sprite)
   // event (Xâm Lăng Dương Ác): borrowed sprites are recolored by the monster's `tint`
   yg_spearman: () => jiangshi(), yg_halfman: () => jiangshi(), yg_giant: golem, yg_silver: boss,
   yg_dust: () => wisp(WISP_PAL.dust), yg_core: () => wisp(WISP_PAL.core),

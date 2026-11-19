@@ -154,15 +154,16 @@ export function unsocketCost(g) { return 150 * g * g; }
 // ===== Outfits: separate equipment slot, replaces the whole look, rare boss drops =====
 // look: extra details drawn on the character (see gfx/humanoid.js)
 //   cape · shoulder pads · fur collar · pattern on the robe · sash (flying silk sash)
-//   tail (fox tail) · ears (fox ears) · hood · crown (dragon/lotus/phoenix) · halfmask
+//   tail (one fox tail) · tails { n, c, tip } (a fan of fox tails, flowing live in game, GAME.tailFan) · ears (fox ears) · hood · crown (dragon/lotus/phoenix) · halfmask
 //   aura (drawn in game): glow + particles around the body · wisps: two will-o'-wisps circling around
 Object.assign(ITEMS, {
   out_wisp_hood: { name: 'Ma Trơi Tinh Nghịch', type: 'equip', slot: 'outfit', lv: 1, color: '#3fa891', price: 0,
     stats: { hp: 50, mp: 50, crit: 2 }, src: 'Ma Trơi (cực hiếm), Cửu Vĩ Hồ Vương',
     look: { robe: '#3fa891', trim: '#e8fff9', inner: '#2a7a6a', pants: '#1e4a44', hood: { c: '#3fa891', ghost: true }, wisps: '#8ff4dc' } },
-  out_fox: { name: 'Hồ Ly Y', type: 'equip', slot: 'outfit', lv: 10, color: '#e8833a', price: 0,
+  // The Nine-Tailed Fox King's robe: nine tails fanned out behind the back
+  out_fox: { name: 'Cửu Vĩ Hồ Y', type: 'equip', slot: 'outfit', lv: 10, color: '#e8833a', price: 0,
     stats: { hp: 90, atk: 8, crit: 3 }, src: 'Cửu Vĩ Hồ Vương (Rừng Ma Trơi)',
-    look: { robe: '#e8833a', trim: '#fff1d8', inner: '#fff1d8', pants: '#5a2a1a', ears: '#e8833a', tail: '#e8833a', fur: '#fff6ea', pattern: { kind: 'cloud', c: '#fff1d8' } } },
+    look: { robe: '#e8833a', trim: '#fff1d8', inner: '#fff1d8', pants: '#5a2a1a', ears: '#e8833a', tails: { n: 9, c: '#f08a3c', tip: '#fff6ea' }, fur: '#fff6ea', pattern: { kind: 'cloud', c: '#fff1d8' }, aura: '#ffd9a8' } },
   out_black_dragon: { name: 'Hắc Long Bào', type: 'equip', slot: 'outfit', lv: 14, color: '#2a2430', price: 0,
     stats: { atk: 18, def: 10, hp: 130 }, src: 'Hắc Quỷ Vương, Cương Thi Vương (Nghĩa Địa Cổ)',
     look: { robe: '#17131e', trim: '#e2b85c', inner: '#7a1420', pants: '#0e0c12', cape: { c: '#8a1420', t: '#e2b85c' }, shoulder: '#2a2430', pattern: { kind: 'dragon', c: '#e2b85c' }, crown: { kind: 'dragon', c: '#e2b85c' }, aura: '#ffcf6a' } },

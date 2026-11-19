@@ -64,19 +64,31 @@ export const FOX_PAL = {
     } },
 };
 
-export function fox(pal = FOX_PAL.fox) {
+// tails: 2 for a normal fox; the Nine-Tailed Fox King has a fan of 9
+export function fox(pal = FOX_PAL.fox, tails = 2) {
   return withHurt(44, 32, 4, (ctx, f) => {
     const step = [0, 1, 0, -1][f], bob = f % 2 ? -0.6 : 0;
     const { fur, furD, cream } = pal;
     ctx.fillStyle = rgba('#000000', 0.25); ctx.beginPath(); ctx.ellipse(22, 30.5, 13, 1.6, 0, 0, 7); ctx.fill();
-    // two tails
-    for (const [ox, oy, r] of [[0, 0, 0], [3, 2, 0.25]]) {
+    // tails: two side by side, or a fan turning around the base of the tail (outer ones first, the middle one on top)
+    const tailShape = (ox, oy, r) => {
       const t = new Path2D();
       t.moveTo(14 + ox, 19 + oy + bob);
       t.bezierCurveTo(6 + ox, 20 + oy, 1 + ox, 12 + oy, 4 + ox, 5 + oy + r * 4);
       t.bezierCurveTo(7 + ox, 8 + oy, 10 + ox, 11 + oy, 15 + ox, 15 + oy + bob);
       t.closePath();
       paint(ctx, t, linear(ctx, 4, 4, 14, 18, [[0, cream], [0.3, fur], [1, furD]]), OUTLINE, 0.9);
+    };
+    if (tails <= 2) { tailShape(0, 0, 0); tailShape(3, 2, 0.25); }
+    else {
+      const order = [...Array(tails).keys()].sort((a, b) => Math.abs(b - (tails - 1) / 2) - Math.abs(a - (tails - 1) / 2));
+      for (const i of order) {
+        const k = i / (tails - 1); // 0 = lowest (pointing back), 1 = highest (over the back)
+        ctx.save();
+        ctx.translate(15, 18 + bob); ctx.rotate(-0.62 + k * 1.3 + step * 0.04 * (k - 0.5)); ctx.translate(-15, -18 - bob);
+        tailShape(0, 0, 0);
+        ctx.restore();
+      }
     }
     // hind + front legs
     const leg = (x, d, c) => paint(ctx, rrect(x + d, 23 + bob, 3.2, 6.5 - Math.abs(d) * 0.3, 1.5), c, OUTLINE, 0.8);

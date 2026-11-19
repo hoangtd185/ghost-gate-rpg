@@ -1,5 +1,6 @@
-// Humanoid outfit details: cape, tail, sash, robe patterns, fur, shoulders, hood, ears, crown, half mask
+// Humanoid outfit details: cape, tail, nine tails, sash, robe patterns, fur, shoulders, hood, ears, crown, half mask
 import { shade, rgba, paint, ellipse, rrect, poly, linear, OUTLINE } from '../draw.js';
+import { GAME } from '../../../../shared/config.js';
 
 // ---------------- outfit details ----------------
 // Cape on the back, flowing backward while running
@@ -45,6 +46,57 @@ export function drawTail(ctx, x, y, color, sw) {
   ctx.strokeStyle = rgba(shade(color, -0.45), 0.5); ctx.lineWidth = 0.6;
   ctx.beginPath(); ctx.moveTo(x - 6, y + 11); ctx.quadraticCurveTo(x - 13, y + 11, x - 16 - sw, y + 5); ctx.stroke();
   ctx.restore();
+}
+
+// One fluffy tail of the fan. Its spine starts at the base along `ang` (radians, 0 = forward, PI / 2 = up, PI = straight
+// back), turns by `bend` toward the tip and carries a wave that travels from the base to the tip (`phase`), so the
+// tail is an S that sways. Thin at the base, fattest past the middle, round at the tip, which fades into `tip`.
+function fanTail(ctx, bx, by, ang, len, wid, bend, phase, c, tip) {
+  const F = GAME.tailFan, N = 9, L = [], R = [];
+  let x = bx, y = by, a = ang;
+  for (let i = 0; i <= N; i++) {
+    const k = i / N;
+    a = ang + bend * k * k + Math.sin(phase - k * F.waves) * F.wave * k;
+    if (i) { x += Math.cos(a) * len / N; y -= Math.sin(a) * len / N; }
+    const w = wid * (0.24 + 0.76 * Math.pow(Math.sin(Math.PI * Math.min(1, 0.06 + 0.82 * Math.pow(k, 0.72))), 0.6)); // still wide at the end: a brush, not a blade
+    const nx = Math.sin(a), ny = Math.cos(a); // across the spine
+    L.push([x + nx * w, y + ny * w]); R.push([x - nx * w, y - ny * w]);
+  }
+  const ex = Math.cos(a) * wid * 1.25, ey = -Math.sin(a) * wid * 1.25; // how far the round cap bulges past the last point
+  const tx = x + ex * 0.75, ty = y + ey * 0.75;
+  const p = new Path2D();
+  const through = (pts) => { for (let i = 1; i < pts.length - 1; i++) p.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2); };
+  p.moveTo(L[0][0], L[0][1]); through(L); p.lineTo(L[N][0], L[N][1]);
+  p.bezierCurveTo(L[N][0] + ex, L[N][1] + ey, R[N][0] + ex, R[N][1] + ey, R[N][0], R[N][1]); // round cap
+  R.reverse(); through(R); p.lineTo(R[N][0], R[N][1]);
+  p.closePath();
+  paint(ctx, p, linear(ctx, bx, by, tx, ty, [[0, shade(c, -0.32)], [0.4, c], [0.62, shade(c, 0.14)], [0.76, tip], [1, tip]]), OUTLINE, 0.8);
+  // a soft highlight along the spine
+  ctx.save(); ctx.clip(p);
+  ctx.strokeStyle = rgba('#ffffff', 0.24); ctx.lineWidth = wid * 0.5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo((L[2][0] * 3 + R[N - 2][0]) / 4, (L[2][1] * 3 + R[N - 2][1]) / 4);
+  for (let i = 3; i < N; i++) ctx.lineTo((L[i][0] * 3 + R[N - i][0]) / 4, (L[i][1] * 3 + R[N - i][1]) / 4);
+  ctx.stroke();
+  ctx.restore(); ctx.lineCap = 'butt';
+}
+
+// Nine fox tails fanned out behind the back (look.tails = { n, c, tip }): the outer ones are drawn first and are
+// shorter, the middle one last and longest, so the fan reads as one shape. Each tail is an S-curve; `time` (seconds)
+// makes the waves travel so the fan flows, each tail a little out of step. sw: the walk swing · trail (0..1): how much
+// the fan is swept back by running. In the sprite sheet (portraits, previews) it is drawn once with time 0; in the
+// game it is drawn live behind the character (Humanoid.draw).
+export function drawNineTails(ctx, x, y, t, sw = 0, time = 0, trail = 0) {
+  const F = GAME.tailFan, n = Math.max(1, t.n || F.count), c = t.c, tip = t.tip || '#ffffff';
+  const bx = x - 2.5, by = y + 9; // the base hides behind the hips
+  const order = [...Array(n).keys()].sort((a, b) => Math.abs(b - (n - 1) / 2) - Math.abs(a - (n - 1) / 2)); // outer first
+  for (const i of order) {
+    const k = n > 1 ? i / (n - 1) : 0.5, mid = 1 - Math.abs(k - 0.5) * 2; // 0 at the edges, 1 in the middle
+    let ang = F.from + (F.to - F.from) * k + sw * F.sway * (0.6 + k);
+    ang += (Math.PI * 1.02 - ang) * trail * F.trail; // running: the fan closes toward straight back
+    const len = F.len * (F.edge + (1 - F.edge) * mid);
+    const bend = (0.5 - k) * F.curl; // the upper tails curl up and over, the lower ones dip and lift at the tip
+    fanTail(ctx, bx, by, ang, len, F.wid * (0.84 + 0.16 * mid), bend, time * F.waveSpeed + i * 1.7, i % 2 ? shade(c, -0.07) : c, tip);
+  }
 }
 
 // Fairy silk sash looping behind the back, both ends flying

@@ -37,6 +37,12 @@ export const POSES = [
 export const HUM_FRAMES = { idle: [0, 1, 0, 1, 0, 2], walk: [3, 4, 5, 6, 7, 8], jump: [9], atk: [10, 11], hurt: [12], sit: [13], run: [14, 15, 16, 17, 18, 19] };
 
 // Back of the neck in sheet pixels for frame f (where a flowing cape is pinned, see gfx/cape.js)
+// Where a fan of tails is rooted in frame f (sheet pixels): the same point drawHumanoid passes to drawNineTails
+export function tailAnchor(f) {
+  const P = POSES[f] || POSES[0];
+  return [24.5 + P.lean * 0.6 + SIDE, 27.5 + P.bob + 4 + TOP];
+}
+
 export function capeAnchor(f) {
   const P = POSES[f] || POSES[0];
   const bodyX = 24.5 + P.lean * 0.6, bodyY = 27.5 + P.bob, hipY = 41 + P.bob;
