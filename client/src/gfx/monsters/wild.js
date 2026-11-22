@@ -82,6 +82,8 @@ export function fox(pal = FOX_PAL.fox, tails = 2) {
     if (tails <= 2) { tailShape(0, 0, 0); tailShape(3, 2, 0.25); }
     else {
       const order = [...Array(tails).keys()].sort((a, b) => Math.abs(b - (tails - 1) / 2) - Math.abs(a - (tails - 1) / 2));
+      ctx.save();
+      ctx.translate(2.5, 0); // the fan is wider than two tails: move its base back so the lowest tail stays inside the frame
       for (const i of order) {
         const k = i / (tails - 1); // 0 = lowest (pointing back), 1 = highest (over the back)
         ctx.save();
@@ -89,6 +91,7 @@ export function fox(pal = FOX_PAL.fox, tails = 2) {
         tailShape(0, 0, 0);
         ctx.restore();
       }
+      ctx.restore();
     }
     // hind + front legs
     const leg = (x, d, c) => paint(ctx, rrect(x + d, 23 + bob, 3.2, 6.5 - Math.abs(d) * 0.3, 1.5), c, OUTLINE, 0.8);

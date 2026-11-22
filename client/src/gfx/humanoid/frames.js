@@ -37,6 +37,12 @@ export const POSES = [
 export const HUM_FRAMES = { idle: [0, 1, 0, 1, 0, 2], walk: [3, 4, 5, 6, 7, 8], jump: [9], atk: [10, 11], hurt: [12], sit: [13], run: [14, 15, 16, 17, 18, 19] };
 
 // Back of the neck in sheet pixels for frame f (where a flowing cape is pinned, see gfx/cape.js)
+// How far the legs are apart in frame f: outfit parts behind the body (cape, sash, tails) swing with it
+export function walkSwing(f) {
+  const P = POSES[f] || POSES[0];
+  return (P.lf - P.lb) * 1.2;
+}
+
 // Where a fan of tails is rooted in frame f (sheet pixels): the same point drawHumanoid passes to drawNineTails
 export function tailAnchor(f) {
   const P = POSES[f] || POSES[0];

@@ -3,7 +3,7 @@ import { GROUND_Y } from '../../../shared/data/maps.js';
 import { MONSTERS } from '../../../shared/data/monsters.js';
 import { CLASSES } from '../../../shared/data/classes.js';
 import { ITEMS } from '../../../shared/data/items.js';
-import { humanoidSheet, capeAnchor, tailAnchor, drawNineTails, HUM_W, HUM_FEET } from '../gfx/humanoid.js';
+import { humanoidSheet, capeAnchor, tailAnchor, walkSwing, drawNineTails, HUM_W, HUM_FEET } from '../gfx/humanoid.js';
 import { CapeCloth } from '../gfx/cape.js';
 import { monsterSheet } from '../gfx/monsters.js';
 import { drawFrame, shade } from '../gfx/draw.js';
@@ -70,7 +70,7 @@ export class Humanoid {
     this.tailTrail = (this.tailTrail || 0) + (speed - (this.tailTrail || 0)) * 0.12; // eased, so the fan opens and closes softly
     ctx.save();
     ctx.translate(face > 0 ? dx + ax : dx + HUM_W - ax, dy + ay); ctx.scale(face, 1);
-    drawNineTails(ctx, 0, 0, this.look.tails, 0, performance.now() / 1000, this.tailTrail);
+    drawNineTails(ctx, 0, 0, this.look.tails, walkSwing(f), performance.now() / 1000, this.tailTrail);
     ctx.restore();
   }
   // Moves the cloth with the body (time since the last frame drawn), then draws it behind the sprite
