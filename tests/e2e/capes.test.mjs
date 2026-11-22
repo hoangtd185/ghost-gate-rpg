@@ -48,7 +48,7 @@ describe('capes', { timeout: 120_000 }, () => {
     assert.equal(await E('__game().ch.equip.outfit?.id'), 'out_fox', 'the outfit stays on');
     assert.ok(await page.locator('.w-inv .eqs label', { hasText: 'Áo choàng' }).count(), 'cape slot shown in the equipment panel');
     const look = await E('__game().player.look');
-    assert.ok(look.tail && look.ears, "the outfit's tail and ears are still drawn");
+    assert.ok(look.tails && look.tails.n === 9 && look.ears, "the outfit's nine tails and ears are still drawn");
     assert.equal(look.liveCape.c, '#8a6a48', 'the cape flows behind');
     await page.keyboard.press('Escape');
   });
@@ -82,6 +82,37 @@ describe('capes', { timeout: 120_000 }, () => {
     await page.keyboard.up('ArrowRight');
     assert.ok(running.back > 0, 'still behind while running');
     assert.ok(running.down < still.down - 6, `flies out instead of hanging (${still.down.toFixed(1)} -> ${running.down.toFixed(1)} px below the shoulders)`);
+  });
+
+  it('the Nine-Tailed Fox King has a nine-tail sprite of its own, and its robe fans nine tails behind the wearer', async () => {
+    const r = await E(`(() => { const w = __game(); w.loadMap('forest', 1380); w.spawnGroups = []; w.monsters = []; w.spawnNamed('fb_fox');
+      const king = w.monsters.find((m) => m.named === 'fb_fox'), plain = new window.__Monster('fox', 0, 296, [0, 10]);
+      const sheet = window.__humSheet(window.__lookFor({ cls: 'taoist', equip: { outfit: { id: 'out_fox' } } }));
+      return { own: !!king && king.sheet !== plain.sheet, frames: king ? king.sheet.frames.walk.length : 0, drawn: sheet.frames.idle.length > 0 }; })()`);
+    assert.ok(r.own, 'not the plain fox sheet');
+    assert.ok(r.frames > 0 && r.drawn, 'both sheets were built');
+    // the robe on the player: the fan is drawn live every frame (Humanoid.drawTails), not baked into the sprite sheet
+    await wear('cape', null); await wear('outfit', 'out_fox');
+    const live = await page.evaluate(() => new Promise((done) => {
+      const p = __game().player, own = p.drawTails;
+      const seen = { calls: 0, frames: new Set() };
+      p.drawTails = function (ctx, dx, dy, f) { seen.calls++; seen.frames.add(f); return own.call(this, ctx, dx, dy, f); };
+      p.vx = 120; p.anim = 'walk'; // walk frames: the fan swings with the legs
+      setTimeout(() => { p.drawTails = own; done({ calls: seen.calls, frames: seen.frames.size, tails: p.look.tails?.n }); }, 700);
+    }));
+    assert.equal(live.tails, 9);
+    assert.ok(live.calls >= 3, `drawn live, frame after frame (${live.calls} calls in 0.7 s; headless Chromium draws slowly)`);
+    // and nothing is drawn for a character without the robe
+    await wear('outfit', null);
+    const none = await page.evaluate(() => new Promise((done) => {
+      const p = __game().player, own = p.drawTails;
+      let calls = 0;
+      p.drawTails = function (...a) { calls++; return own.apply(this, a); };
+      setTimeout(() => { p.drawTails = own; done(calls); }, 300);
+    }));
+    assert.equal(none, 0, 'no tails without the robe');
+    await wear('outfit', 'out_fox');
+    await page.waitForTimeout(600); await shot(page, 'nine_tails.png'); // a preview, not the check
   });
 
   it('no page errors', () => assert.deepEqual(errors, []));
