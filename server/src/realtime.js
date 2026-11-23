@@ -10,7 +10,7 @@
 //                     prem {op: buy {offer, req} | checkin | claim {quest}}
 //   server -> client  welcome {id, online, eventExp} · snap {map, players} · join · leave · st · look · chat · online · kicked · error
 //                     dg_go {inst, d, floors, map, floor, t0, now} | {map, x, closed | lost} · dg_err {why}
-//                     ev_state {d, open, start, end, now} · ev_rank {d, top, rank, dmg, end, now} · ev_end {…} · ev_claim {items, left}
+//                     ev_state {d, open, start?, end?, now} (no start / end when a run closes) · ev_rank {d, top, rank, dmg, end, now} · ev_end {…} · ev_claim {items, left}
 //                     mobs {map, list} · mspawn {map, m} · ms {map, s} · mev {map, list} · mhit {map, uid, by, dmg, ab, crit, em, el} · mdie {map, uid, by} · mkill {map, uid, exp, gold?, drops?}
 //                     chg {list, rev} · loot {k, drops} · drops {map, drops} · pick {id, ok, why?}
 //                     party_ask · party_state · party_err · trade_ask · trade_open · trade_state · trade_end · trade_err

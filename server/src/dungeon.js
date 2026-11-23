@@ -8,7 +8,9 @@
 // final boss dies or time runs out gives every participant their reward (items committed with a ledger row, EXP).
 //   dg_enter { d }  at the keeper -> dg_go { inst, d, floors, map, floor, t0, now } (the highest floor reached)
 //   dg_next {}      at a floor's exit -> dg_go for the next floor
-//   -> ev_state { open, start, end, now } (on connect, when it opens/closes) · ev_rank { top, rank, dmg, end, now }
+//   -> ev_state { d, open: true, start, end, now } when it opens · { d, open: false, now } when a run closes (no start or
+//      end) · { d, open, start, end, now } on connect (start / end: the current or next window, null if none)
+//      · ev_rank { top, rank, dmg, end, now }
 //   -> ev_end { win, top, rank, dmg, items, queued, exp, expTotal } then dg_go { map: from, x, closed: true } for those
 //      still inside (items: what was delivered; queued: rewards kept for later because the bag was full; exp: this run's
 //      EXP, shown; expTotal: the character's running event EXP total, the client applies what it has not taken yet)
