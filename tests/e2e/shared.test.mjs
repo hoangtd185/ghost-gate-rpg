@@ -159,8 +159,13 @@ describe('shared monsters and parties (online)', { timeout: 240_000 }, () => {
   it('a monster hurts the player that touches it (client-side contact with server positions)', async () => {
     const m = await pickMob(A);
     const before = await A.page.evaluate('__game().ch.hp');
-    await A.page.evaluate((uid) => { const w = __game(), mob = w.remoteMobs.get(uid); w.player.invuln = 0; w.player.x = mob.x; w.player.y = mob.y + mob.h - w.player.h; }, m.uid);
-    assert.ok(await until(A.page, `__game().ch.hp < ${before}`, 3000));
+    // the monster walks around and the player can dodge a touch (4%): keep standing on it until one lands
+    let hurt = false;
+    for (let n = 0; n < 15 && !hurt; n++) {
+      await A.page.evaluate((uid) => { const w = __game(), mob = w.remoteMobs.get(uid); if (!mob || mob.dead) return; w.player.invuln = 0; w.player.x = mob.x; w.player.y = mob.y + mob.h - w.player.h; w.player.vy = 0; }, m.uid);
+      hurt = await until(A.page, `__game().ch.hp < ${before}`, 300);
+    }
+    assert.ok(hurt, 'touching the monster hurt');
     await A.page.evaluate('__game().player.invuln = 1e9');
   });
 
